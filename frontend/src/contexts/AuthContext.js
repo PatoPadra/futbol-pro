@@ -17,10 +17,15 @@ export function AuthProvider({ children }) {
         ...res.data,
         token,
         profile_id: res.data.profile?.id || '',
+        name: res.data.profile?.name || '',
+        has_profile: res.data.has_profile,
       });
-    } catch {
-      localStorage.removeItem('token');
-      setUser(null);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+      // On network error, keep token and retry later
     } finally {
       setLoading(false);
     }
@@ -40,6 +45,8 @@ export function AuthProvider({ children }) {
     const { token, user_id, role, profile_id, has_profile, name } = res.data;
     localStorage.setItem('token', token);
     setUser({ user_id, role, profile_id, has_profile, name, token, email });
+    // Fetch full profile data in background
+    fetchMe(token);
     return res.data;
   };
 

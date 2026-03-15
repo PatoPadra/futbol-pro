@@ -35,11 +35,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.has_profile && user?.profile?.primary_position === null) {
+    if (user && user.has_profile === false) {
       navigate('/completar-perfil');
       return;
     }
-    loadData();
+    if (user) loadData();
   }, [user]);
 
   const loadData = async () => {
