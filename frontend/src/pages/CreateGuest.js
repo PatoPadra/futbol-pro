@@ -4,30 +4,51 @@ import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Slider } from '../components/ui/slider';
-import { Check, UserPlus } from 'lucide-react';
+import { Check, UserPlus, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CreateGuest() {
   const navigate = useNavigate();
   const [positions, setPositions] = useState([]);
   const [form, setForm] = useState({ name: '', primary_position: '', estimated_level: 5 });
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     api.get('/positions').then(res => setPositions(res.data)).catch(() => {});
   }, []);
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post('/players/guest', {
+      const res = await api.post('/players/guest', {
         ...form,
         primary_position: form.primary_position || null,
       });
+      const guestId = res.data.id;
+
+      // Upload photo if provided
+      if (photo && guestId) {
+        const fd = new FormData();
+        fd.append('file', photo);
+        await api.post(`/players/${guestId}/photo`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
       toast.success('Jugador invitado creado!');
       navigate(-1);
     } catch (err) {
@@ -44,6 +65,24 @@ export default function CreateGuest() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card className="border-slate-100">
             <CardContent className="p-5 space-y-4">
+              {/* Photo upload */}
+              <div className="flex items-center gap-5">
+                <label className="cursor-pointer group" data-testid="guest-photo-upload">
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                  <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 group-hover:border-turf flex items-center justify-center overflow-hidden transition-colors">
+                    {photoPreview ? (
+                      <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="w-7 h-7 text-slate-400 group-hover:text-turf transition-colors" />
+                    )}
+                  </div>
+                </label>
+                <div className="text-sm text-slate-500">
+                  <p className="font-medium text-slate-700">Foto (opcional)</p>
+                  <p>Subi una foto para que lo reconozcan.</p>
+                </div>
+              </div>
+
               <div>
                 <Label>Nombre del invitado</Label>
                 <Input

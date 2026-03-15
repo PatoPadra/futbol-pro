@@ -322,3 +322,49 @@ async def close_registrations(match_id: str, user=Depends(get_current_user)):
         {"id": match_id}, {"$set": {"status": "cerrado"}}
     )
     return {"message": "Inscripciones cerradas"}
+
+
+@router.post("/{match_id}/duplicate")
+async def duplicate_match(match_id: str, user=Depends(get_current_user)):
+    """Duplicate a match for the next week (recurring)."""
+    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not match:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+
+    profile = await db.player_profiles.find_one(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    )
+    if user["role"] not in ["admin", "organizador"]:
+        raise HTTPException(status_code=403, detail="Solo organizadores pueden duplicar partidos")
+
+    # Calculate next week's date
+    from datetime import timedelta
+    try:
+        original_date = datetime.strptime(match["date"], "%Y-%m-%d")
+        next_date = original_date + timedelta(days=7)
+        next_date_str = next_date.strftime("%Y-%m-%d")
+    except ValueError:
+        next_date_str = match["date"]
+
+    new_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    deadline = f"{next_date_str}T12:00:00+00:00"
+
+    new_match = {
+        "id": new_id,
+        "organizer_id": profile["id"] if profile else match["organizer_id"],
+        "title": match["title"],
+        "modality": match["modality"],
+        "date": next_date_str,
+        "time": match["time"],
+        "location": match["location"],
+        "maps_link": match.get("maps_link"),
+        "deadline": deadline,
+        "status": "abierto",
+        "is_recurring": True,
+        "max_players": match["max_players"],
+        "created_at": now,
+    }
+    await db.matches.insert_one(new_match)
+
+    return {"id": new_id, "message": f"Partido duplicado para {next_date_str}"}

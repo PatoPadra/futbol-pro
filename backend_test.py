@@ -232,6 +232,81 @@ class FutbolAppTester:
     def test_admin_list_users(self):
         """Test admin list users"""
         return self.run_test("Admin List Users", "GET", "admin/users", 200)
+    
+    def test_admin_registration(self):
+        """Test padrapatricio@gmail.com gets admin role on registration"""
+        timestamp = int(datetime.now().timestamp())
+        success, response = self.run_test(
+            "Admin Email Registration",
+            "POST",
+            "auth/register", 
+            200,
+            data={
+                "email": "padrapatricio@gmail.com",
+                "password": "mipass123",
+                "name": f"Patricio Admin {timestamp}"
+            }
+        )
+        if success and response:
+            # Check if role is admin
+            if response.get('role') == 'admin':
+                print("✅ Admin role correctly assigned to padrapatricio@gmail.com")
+                return True
+            else:
+                print(f"❌ Expected admin role, got: {response.get('role')}")
+        return success
+    
+    def test_duplicate_match(self):
+        """Test duplicating a match for next week"""
+        if not self.created_match_id:
+            print("⚠️  Skipping duplicate match test - no match created")
+            return True
+        return self.run_test(
+            "Duplicate Match (+7 days)",
+            "POST",
+            f"matches/{self.created_match_id}/duplicate",
+            200
+        )
+    
+    def test_guest_creation_and_photo(self):
+        """Test creating guest and uploading photo"""
+        # First create a guest player
+        timestamp = int(datetime.now().timestamp())
+        success, response = self.run_test(
+            "Create Guest Player",
+            "POST",
+            "players/guest",
+            200,
+            data={
+                "name": f"Test Guest {timestamp}",
+                "primary_position": "Delantero",
+                "estimated_level": 6.5
+            }
+        )
+        
+        if success and response:
+            guest_id = response.get('id')
+            print(f"   Created Guest ID: {guest_id}")
+            
+            if guest_id:
+                # Try to upload a photo (this will fail without actual file, but tests the endpoint)
+                # We'll simulate the test by checking if endpoint exists and gives proper error
+                test_headers = {'Authorization': f'Bearer {self.token}'}
+                url = f"{self.base_url}/api/players/{guest_id}/photo"
+                try:
+                    # Test with no file - should give 422 (validation error) or 400
+                    response = requests.post(url, headers=test_headers, timeout=30)
+                    if response.status_code in [400, 422]:
+                        print("✅ Guest photo upload endpoint exists and validates properly")
+                        self.tests_run += 1
+                        self.tests_passed += 1
+                        return True
+                    else:
+                        print(f"⚠️  Photo endpoint gave unexpected status: {response.status_code}")
+                except Exception as e:
+                    print(f"❌ Error testing photo endpoint: {e}")
+            
+        return success
 
     def run_all_tests(self):
         """Run all backend API tests"""
@@ -270,6 +345,11 @@ class FutbolAppTester:
         # Test admin endpoints
         self.test_admin_stats()
         self.test_admin_list_users()
+        
+        # Test NEW features added in iteration 2
+        self.test_admin_registration()
+        self.test_duplicate_match()
+        self.test_guest_creation_and_photo()
 
         # Print final results
         print("\n" + "=" * 60)

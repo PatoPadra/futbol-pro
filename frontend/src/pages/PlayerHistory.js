@@ -4,7 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Trophy, Star, TrendingUp, ArrowLeft } from 'lucide-react';
+import { Trophy, Star, ArrowLeft } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function PlayerHistory() {
   const { id } = useParams();
@@ -29,6 +30,16 @@ export default function PlayerHistory() {
     };
     load();
   }, [playerId]);
+
+  // Prepare chart data (oldest to newest)
+  const chartData = [...history]
+    .filter(h => h.avg_rating != null)
+    .reverse()
+    .map(h => ({
+      fecha: h.match_date,
+      rating: h.avg_rating,
+      titulo: h.match_title,
+    }));
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -69,6 +80,61 @@ export default function PlayerHistory() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Rating Evolution Chart */}
+        {chartData.length >= 2 && (
+          <Card className="border-slate-100 mb-8">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-heading text-lg uppercase">Evolucion de Rating</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64" data-testid="rating-evolution-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 20, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="fecha"
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      angle={-30}
+                      textAnchor="end"
+                    />
+                    <YAxis
+                      domain={[0, 10]}
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      tickCount={6}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                      }}
+                      formatter={(value, name) => [`${value.toFixed(1)}`, 'Rating']}
+                      labelFormatter={(label) => `Partido: ${label}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="rating"
+                      stroke="#00C853"
+                      strokeWidth={3}
+                      dot={{ fill: '#00C853', strokeWidth: 2, r: 5 }}
+                      activeDot={{ r: 7, fill: '#FF6B00' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {chartData.length === 1 && (
+          <Card className="border-slate-100 mb-8 bg-slate-50">
+            <CardContent className="p-6 text-center text-sm text-slate-500">
+              Se necesitan al menos 2 partidos con evaluaciones para ver la evolucion de rating.
+            </CardContent>
+          </Card>
         )}
 
         {/* Position Ratings */}

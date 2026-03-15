@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Check, Shuffle, ArrowLeft } from 'lucide-react';
+import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -19,17 +19,27 @@ export default function GeneratedTeams() {
   const navigate = useNavigate();
   const [teams, setTeams] = useState(null);
   const [match, setMatch] = useState(null);
+  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editAssignments, setEditAssignments] = useState([]);
+  const [editFormationA, setEditFormationA] = useState('');
+  const [editFormationB, setEditFormationB] = useState('');
 
   const loadData = async () => {
     try {
-      const [teamsRes, matchRes] = await Promise.all([
+      const [teamsRes, matchRes, posRes] = await Promise.all([
         api.get(`/matches/${id}/teams`),
         api.get(`/matches/${id}`),
+        api.get('/positions'),
       ]);
       setTeams(teamsRes.data);
       setMatch(matchRes.data);
+      setPositions(posRes.data || []);
+      setEditAssignments(teamsRes.data.assignments || []);
+      setEditFormationA(teamsRes.data.formation_a || '');
+      setEditFormationB(teamsRes.data.formation_b || '');
     } catch (err) {
       if (err.response?.status === 404) {
         toast.error('No se han generado equipos aun');
@@ -42,10 +52,41 @@ export default function GeneratedTeams() {
 
   const profileId = user?.profile_id || user?.profile?.id;
   const isOrganizer = match && (match.organizer_id === profileId || user?.role === 'admin');
-  const teamA = teams?.assignments?.filter(a => a.team === 'A') || [];
-  const teamB = teams?.assignments?.filter(a => a.team === 'B') || [];
-  const sumA = teamA.reduce((s, a) => s + (a.score || 0), 0);
-  const sumB = teamB.reduce((s, a) => s + (a.score || 0), 0);
+
+  const currentAssignments = editMode ? editAssignments : (teams?.assignments || []);
+  const teamA = currentAssignments.filter(a => a.team === 'A');
+  const teamB = currentAssignments.filter(a => a.team === 'B');
+
+  const handleSwapPlayer = (playerId) => {
+    setEditAssignments(prev => prev.map(a =>
+      a.player_id === playerId
+        ? { ...a, team: a.team === 'A' ? 'B' : 'A', is_manual: true }
+        : a
+    ));
+  };
+
+  const handleChangePosition = (playerId, newPos) => {
+    setEditAssignments(prev => prev.map(a =>
+      a.player_id === playerId
+        ? { ...a, position: newPos, is_manual: true }
+        : a
+    ));
+  };
+
+  const handleSaveAdjustments = async () => {
+    setActionLoading('save');
+    try {
+      await api.put(`/matches/${id}/teams`, {
+        assignments: editAssignments,
+        formation_a: editFormationA || null,
+        formation_b: editFormationB || null,
+      });
+      toast.success('Equipos ajustados');
+      setEditMode(false);
+      loadData();
+    } catch (err) { toast.error('Error al guardar'); }
+    finally { setActionLoading(''); }
+  };
 
   const handleConfirm = async () => {
     setActionLoading('confirm');
@@ -67,10 +108,58 @@ export default function GeneratedTeams() {
     finally { setActionLoading(''); }
   };
 
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditAssignments(teams?.assignments || []);
+    setEditFormationA(teams?.formation_a || '');
+    setEditFormationB(teams?.formation_b || '');
+  };
+
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
   if (!teams) return null;
 
   const is11 = match?.modality === 11;
+  const availableFormations = teams.available_formations || [];
+
+  const PlayerRow = ({ a, i, teamColor }) => (
+    <div className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-player-${a.player_id}`}>
+      <Avatar className="w-9 h-9">
+        <AvatarImage src={a.player_photo ? `${API_URL}${a.player_photo}` : undefined} />
+        <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
+          {a.player_name?.substring(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
+        {editMode ? (
+          <Select value={a.position} onValueChange={v => handleChangePosition(a.player_id, v)}>
+            <SelectTrigger className="h-7 w-28 text-xs mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {positions.map(p => (
+                <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+              ))}
+              <SelectItem value="JUG" className="text-xs">Jugador</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-xs text-slate-400">{a.position}{a.is_manual ? ' (manual)' : ''}</p>
+        )}
+      </div>
+      {editMode && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-slate-400 hover:text-turf"
+          onClick={() => handleSwapPlayer(a.player_id)}
+          data-testid={`swap-player-${a.player_id}`}
+        >
+          <ArrowRightLeft className="w-4 h-4" />
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <div className="page-container max-w-5xl mx-auto" data-testid="generated-teams-page">
@@ -82,13 +171,11 @@ export default function GeneratedTeams() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Equipos</h1>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <Badge className="bg-turf/10 text-turf border-turf/20 font-semibold">
                 Balance: {(teams.balance_score * 100).toFixed(0)}%
               </Badge>
-              {teams.formation_a && (
-                <Badge variant="outline">Formacion: {teams.formation_a}</Badge>
-              )}
+              {teams.formation_a && <Badge variant="outline">Formacion: {editMode ? editFormationA : teams.formation_a}</Badge>}
               <Badge variant={teams.status === 'confirmado' ? 'default' : 'secondary'} className={teams.status === 'confirmado' ? 'bg-turf text-white' : ''}>
                 {teams.status === 'confirmado' ? 'Confirmado' : 'Borrador'}
               </Badge>
@@ -97,34 +184,68 @@ export default function GeneratedTeams() {
         </div>
 
         {/* Actions */}
-        {isOrganizer && teams.status !== 'confirmado' && (
+        {isOrganizer && (
           <div className="flex flex-wrap gap-3 mb-6">
-            <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-              <Check className="w-4 h-4 mr-2" /> Confirmar Equipos
-            </Button>
-            <Button data-testid="regenerate-teams-btn" variant="outline" onClick={handleRegenerate} disabled={!!actionLoading} className="rounded-full px-6">
-              <Shuffle className="w-4 h-4 mr-2" /> Recalcular
-            </Button>
+            {teams.status !== 'confirmado' && !editMode && (
+              <>
+                <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
+                  <Check className="w-4 h-4 mr-2" /> Confirmar
+                </Button>
+                <Button data-testid="edit-teams-btn" variant="outline" onClick={() => setEditMode(true)} className="rounded-full px-6">
+                  <Edit3 className="w-4 h-4 mr-2" /> Ajustar
+                </Button>
+                <Button data-testid="regenerate-teams-btn" variant="outline" onClick={handleRegenerate} disabled={!!actionLoading} className="rounded-full px-6">
+                  <Shuffle className="w-4 h-4 mr-2" /> Recalcular
+                </Button>
+              </>
+            )}
+            {editMode && (
+              <>
+                <Button data-testid="save-adjustments-btn" onClick={handleSaveAdjustments} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
+                  <Save className="w-4 h-4 mr-2" /> Guardar Cambios
+                </Button>
+                <Button data-testid="cancel-edit-btn" variant="outline" onClick={cancelEdit} className="rounded-full px-6">
+                  <X className="w-4 h-4 mr-2" /> Cancelar
+                </Button>
+              </>
+            )}
           </div>
         )}
 
-        {/* Pitch Visualization (11v11) */}
-        {is11 && teams.formation_a && (
+        {/* Formation selector in edit mode */}
+        {editMode && is11 && availableFormations.length > 0 && (
+          <Card className="border-slate-100 mb-6">
+            <CardContent className="p-4">
+              <p className="text-sm font-medium text-slate-700 mb-2">Cambiar formacion</p>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-slate-500">Equipo A</label>
+                  <Select value={editFormationA} onValueChange={setEditFormationA}>
+                    <SelectTrigger className="mt-1" data-testid="formation-a-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {availableFormations.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-slate-500">Equipo B</label>
+                  <Select value={editFormationB} onValueChange={setEditFormationB}>
+                    <SelectTrigger className="mt-1" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {availableFormations.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pitch Visualization (11v11, non-edit mode) */}
+        {is11 && teams.formation_a && !editMode && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <FootballPitch
-              assignments={teams.assignments}
-              formation={teams.formation_a}
-              coords={teams.coords_a}
-              teamLabel="A"
-              teamColor="#1A1D23"
-            />
-            <FootballPitch
-              assignments={teams.assignments}
-              formation={teams.formation_b || teams.formation_a}
-              coords={teams.coords_b || teams.coords_a}
-              teamLabel="B"
-              teamColor="#FF6B00"
-            />
+            <FootballPitch assignments={currentAssignments} formation={teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor="#1A1D23" />
+            <FootballPitch assignments={currentAssignments} formation={teams.formation_b || teams.formation_a} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor="#FF6B00" />
           </div>
         )}
 
@@ -133,44 +254,22 @@ export default function GeneratedTeams() {
           <Card className="border-slate-100">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-slate-800" /> Equipo A
+                <div className="w-4 h-4 rounded-full bg-slate-800" /> Equipo A ({teamA.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamA.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-a-player-${i}`}>
-                  <Avatar className="w-9 h-9">
-                    <AvatarImage src={a.player_photo ? `${API_URL}${a.player_photo}` : undefined} />
-                    <AvatarFallback className="bg-slate-800 text-white text-xs font-bold">{a.player_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
-                    <p className="text-xs text-slate-400">{a.position}</p>
-                  </div>
-                </div>
-              ))}
+              {teamA.map((a, i) => <PlayerRow key={a.player_id} a={a} i={i} teamColor="#1A1D23" />)}
             </CardContent>
           </Card>
 
           <Card className="border-slate-100">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-orange" /> Equipo B
+                <div className="w-4 h-4 rounded-full bg-orange" /> Equipo B ({teamB.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamB.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-b-player-${i}`}>
-                  <Avatar className="w-9 h-9">
-                    <AvatarImage src={a.player_photo ? `${API_URL}${a.player_photo}` : undefined} />
-                    <AvatarFallback className="bg-orange text-white text-xs font-bold">{a.player_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
-                    <p className="text-xs text-slate-400">{a.position}</p>
-                  </div>
-                </div>
-              ))}
+              {teamB.map((a, i) => <PlayerRow key={a.player_id} a={a} i={i} teamColor="#FF6B00" />)}
             </CardContent>
           </Card>
         </div>

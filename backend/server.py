@@ -67,7 +67,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from database import client as db_client
+from database import client as db_client, db as app_db
+
+ADMIN_EMAILS = ["padrapatricio@gmail.com"]
+
+@app.on_event("startup")
+async def startup():
+    # Promote admin emails if they already exist
+    for email in ADMIN_EMAILS:
+        await app_db.users.update_many(
+            {"email": email},
+            {"$set": {"role": "admin"}}
+        )
+    logger.info("Admin emails promoted")
 
 @app.on_event("shutdown")
 async def shutdown():

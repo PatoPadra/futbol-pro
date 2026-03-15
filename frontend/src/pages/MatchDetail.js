@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
-import { Calendar, Clock, MapPin, Users, ExternalLink, UserPlus, UserMinus, Shuffle, Check, Play } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, ExternalLink, UserPlus, UserMinus, Shuffle, Check, Play, Copy, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -97,6 +97,22 @@ export default function MatchDetail() {
     finally { setActionLoading(''); }
   };
 
+  const handleDuplicate = async () => {
+    setActionLoading('duplicate');
+    try {
+      const res = await api.post(`/matches/${id}/duplicate`);
+      toast.success(res.data.message);
+      navigate(`/partidos/${res.data.id}`);
+    } catch (err) { toast.error(err.response?.data?.detail || 'Error al duplicar'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handleShareWhatsApp = () => {
+    const url = window.location.href;
+    const text = `${match.title}%0A${match.date} a las ${match.time}%0A${match.location}%0ATitulares: ${titulars.length}/${match.max_players}%0A%0AAnotate aca: ${url}`;
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
   if (!match) return <div className="page-container text-center text-slate-500">Partido no encontrado</div>;
 
@@ -171,6 +187,15 @@ export default function MatchDetail() {
               </Button>
             </Link>
           )}
+          {/* Duplicate & Share */}
+          {isOrganizer && (
+            <Button data-testid="duplicate-match-btn" variant="outline" onClick={handleDuplicate} disabled={!!actionLoading} className="rounded-full px-5">
+              <Copy className="w-4 h-4 mr-2" /> Duplicar (+7 dias)
+            </Button>
+          )}
+          <Button data-testid="share-whatsapp-btn" variant="outline" onClick={handleShareWhatsApp} className="rounded-full px-5 border-green-200 text-green-700 hover:bg-green-50">
+            <Share2 className="w-4 h-4 mr-2" /> Compartir
+          </Button>
         </div>
 
         {/* Player Lists */}

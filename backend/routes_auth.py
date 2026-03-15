@@ -8,6 +8,8 @@ import uuid
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+ADMIN_EMAILS = ["padrapatricio@gmail.com"]
+
 
 @router.post("/register", response_model=TokenResponse)
 async def register(data: RegisterRequest):
@@ -15,9 +17,9 @@ async def register(data: RegisterRequest):
     if existing:
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
-    # Check if this is the first user (make them admin)
+    # Check if this is the first user or admin email
     user_count = await db.users.count_documents({})
-    role = "admin" if user_count == 0 else "jugador"
+    role = "admin" if user_count == 0 or data.email.lower() in ADMIN_EMAILS else "jugador"
 
     user_id = str(uuid.uuid4())
     profile_id = str(uuid.uuid4())

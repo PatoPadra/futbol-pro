@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from database import db
 from auth import get_current_user
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
 from datetime import datetime, timezone
+from pathlib import Path
 import uuid
+
+UPLOAD_DIR = Path(__file__).parent / "uploads"
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -131,3 +134,41 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
     await db.player_profiles.insert_one(guest_doc)
 
     return ProfileResponse(**guest_doc)
+
+
+@router.post("/{player_id}/photo")
+async def upload_guest_photo(
+    player_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    """Upload photo for a guest player (by their creator or admin)."""
+    profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado")
+
+    my_profile = await db.player_profiles.find_one(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    )
+    if user["role"] != "admin" and (not my_profile or profile.get("created_by") != my_profile["id"]):
+        raise HTTPException(status_code=403, detail="Solo el creador o admin puede subir foto")
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Solo se permiten imagenes")
+
+    ext = file.filename.split(".")[-1] if file.filename else "jpg"
+    filename = f"{uuid.uuid4()}.{ext}"
+    filepath = UPLOAD_DIR / filename
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    photo_url = f"/api/uploads/{filename}"
+    await db.player_profiles.update_one(
+        {"id": player_id}, {"$set": {"photo_url": photo_url}}
+    )
+    return {"photo_url": photo_url}
