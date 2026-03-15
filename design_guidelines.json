@@ -1,0 +1,146 @@
+{
+  "brand_identity": {
+    "name": "App Fútbol",
+    "persona": "The Modern Playmaker",
+    "emotional_archetype": "Performance Pro (Light Mode Edition)",
+    "core_values": [
+      "Community",
+      "Precision",
+      "Energy"
+    ],
+    "tone": "Energetic, clear, encouraging, and professional."
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Barlow Condensed, sans-serif",
+      "body": "DM Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight uppercase",
+      "h2": "text-3xl md:text-4xl font-bold tracking-tight uppercase",
+      "h3": "text-2xl md:text-3xl font-semibold tracking-normal",
+      "h4": "text-xl font-semibold tracking-normal",
+      "body": "text-base font-normal leading-relaxed",
+      "small": "text-sm font-medium tracking-wide text-muted-foreground uppercase"
+    },
+    "imports": [
+      "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,400;500;700&display=swap"
+    ]
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#00C853",
+        "foreground": "#FFFFFF",
+        "hover": "#009624",
+        "description": "Neo-Turf Green. Vibrant, energetic, used for primary actions and success states."
+      },
+      "secondary": {
+        "DEFAULT": "#1A1D23",
+        "foreground": "#FFFFFF",
+        "description": "Off-Black / Deep Charcoal. Used for heavy contrast elements and headers."
+      },
+      "accent": {
+        "DEFAULT": "#FF6B00",
+        "foreground": "#FFFFFF",
+        "description": "Electric Orange. Used for CTAs, notifications, and 'hot' interactions."
+      },
+      "background": {
+        "DEFAULT": "#F8FAFC",
+        "paper": "#FFFFFF",
+        "subtle": "#F1F5F9"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#64748B",
+        "disabled": "#94A3B8"
+      },
+      "football_pitch": {
+        "grass": "#2E7D32",
+        "lines": "#FFFFFFcc"
+      }
+    },
+    "gradients": {
+      "hero": "linear-gradient(135deg, #00C853 0%, #009624 100%)",
+      "subtle_mesh": "radial-gradient(at 0% 0%, hsla(145,63%,42%,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(25,95%,53%,0.10) 0px, transparent 50%)"
+    }
+  },
+  "layout_strategies": {
+    "spacing_scale": "Tailwind standard, but start at p-4 for mobile containers. Use p-6 or p-8 for desktop cards.",
+    "containers": {
+      "mobile": "w-full px-4 py-4 max-w-md mx-auto",
+      "desktop": "max-w-7xl mx-auto px-6 sm:px-8"
+    },
+    "grid_system": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4",
+      "marketing": "grid grid-cols-1 md:grid-cols-12 gap-8"
+    },
+    "z_index": {
+      "toast": 50,
+      "modal": 40,
+      "sticky_nav": 30,
+      "dropdown": 20,
+      "default": 1
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-white rounded-full px-8 py-3 font-bold uppercase tracking-wider hover:bg-primary/90 transition-transform active:scale-95 shadow-lg shadow-primary/20",
+      "secondary": "bg-white border-2 border-slate-200 text-slate-800 rounded-full px-8 py-3 font-bold uppercase tracking-wider hover:border-slate-800 hover:text-slate-900 transition-colors",
+      "ghost": "text-slate-600 hover:text-primary font-semibold hover:bg-slate-100 rounded-lg px-4 py-2"
+    },
+    "cards": {
+      "default": "bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden",
+      "highlight": "bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-xl shadow-xl border border-slate-700",
+      "interactive": "cursor-pointer transform transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
+    },
+    "inputs": {
+      "default": "h-12 bg-slate-50 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-lg text-base px-4 placeholder:text-slate-400"
+    },
+    "navigation": {
+      "mobile_bottom": "fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 h-16 flex items-center justify-around z-50 pb-safe",
+      "desktop_top": "sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 z-40 h-16"
+    }
+  },
+  "visual_enhancements": {
+    "glassmorphism": "bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm",
+    "shadows": {
+      "card": "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+      "floating": "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+    },
+    "motion": {
+      "hover_lift": "transition-transform duration-300 ease-out hover:-translate-y-1",
+      "button_press": "active:scale-95 transition-transform duration-100",
+      "page_transition": "animate-in fade-in slide-in-from-bottom-4 duration-500"
+    },
+    "pitch_visualization": {
+      "container": "relative bg-[#2E7D32] rounded-lg overflow-hidden border-4 border-white/20 aspect-[2/3] md:aspect-[3/2] shadow-inner",
+      "lines": "absolute border-2 border-white/50 opacity-80",
+      "player_marker": "w-8 h-8 rounded-full bg-white border-2 border-slate-900 shadow-lg flex items-center justify-center text-xs font-bold z-10"
+    }
+  },
+  "image_urls": {
+    "hero_bg": "https://images.unsplash.com/photo-1745012010615-47abbeb3e906?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwzfHxhbWF0ZXVyJTIwZm9vdGJhbGwlMjBwbGF5ZXJzJTIwY2VsZWJyYXRpbmd8ZW58MHx8fHwxNzczNTk4NTU3fDA&ixlib=rb-4.1.0&q=85",
+    "pitch_texture": "https://images.unsplash.com/photo-1623792537381-5bab448bf305?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxmb290YmFsbCUyMHBpdGNoJTIwZ3Jhc3MlMjB0ZXh0dXJlJTIwdG9wJTIwdmlld3xlbnwwfHx8fDE3NzM1OTg1NTh8MA&ixlib=rb-4.1.0&q=85",
+    "placeholders": {
+      "team": "https://images.unsplash.com/photo-1526234577630-77b606b3421b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHw0fHxhbWF0ZXVyJTIwZm9vdGJhbGwlMjBwbGF5ZXJzJTIwY2VsZWJyYXRpbmd8ZW58MHx8fHwxNzczNTk4NTU3fDA&ixlib=rb-4.1.0&q=85",
+      "match": "https://images.unsplash.com/photo-1614543345793-fee7de5ea948?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwyfHxmb290YmFsbCUyMHBpdGNoJTIwZ3Jhc3MlMjB0ZXh0dXJlJTIwdG9wJTIwdmlld3xlbnwwfHx8fDE3NzM1OTg1NTh8MA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS: Add the Google Fonts import link to the head of 'public/index.html' immediately.",
+    "TAILWIND CONFIG: Update 'tailwind.config.js' to include the custom colors (neo-turf, electric-orange) and font families (Barlow Condensed, DM Sans).",
+    "MOBILE FIRST: Always design for mobile screen first. Use bottom sheets (Vaul/Drawer) for actions instead of Modals on mobile.",
+    "NO DEFAULT SHADCN: Heavily customize shadcn components. Rounded-xl, custom borders, custom shadows.",
+    "PITCH COMPONENT: When building the 'Generated Teams' page, create a custom CSS/Div based football pitch using the green colors and white lines defined in palette.",
+    "FORMS: Use 'react-hook-form' with 'zod' for all forms. Style inputs with large touch targets (min height 48px).",
+    "I18N: All text MUST be in Spanish (Castellano). No English in UI.",
+    "TESTING: Add 'data-testid' to every interactive element (buttons, inputs, cards)."
+  ],
+  "accessibility": {
+    "contrast": "Ensure text contrast ratio of 4.5:1. Use 'text-slate-900' on light backgrounds, 'text-white' on primary/dark backgrounds.",
+    "touch_targets": "Minimum 44x44px for all clickable elements.",
+    "focus_states": "Visible focus rings (ring-2 ring-primary ring-offset-2) for keyboard navigation."
+  }
+}
