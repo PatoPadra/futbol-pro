@@ -29,28 +29,28 @@ Full-stack web application for organizing amateur football matches and generatin
 ## What's Been Implemented (March 15, 2026)
 
 ### Backend (15 files)
-- Auth: register, login, JWT middleware
+- Auth: register, login, JWT middleware, **admin email auto-assignment (padrapatricio@gmail.com)**
 - Profile: CRUD, photo upload
-- Matches: CRUD, registration (titular/suplente), close registrations
-- Teams: generate balanced teams, adjust manually, confirm
+- Matches: CRUD, registration (titular/suplente), close registrations, **duplicate match (+7 days)**
+- Teams: generate balanced teams, **manual adjustment (swap players, change positions, change formations)**, confirm
 - Post-match: peer ratings (batch), self-evaluation, stats proposals, stats voting, finalize
-- Players: list, detail, history, metrics, create guest
+- Players: list, detail, history, metrics, create guest, **guest photo upload**
 - Admin: users, roles, matches, system stats
 - Team Balancer: snake draft (5-10), formation-based (11v11), 7 formations
 - Rating Calculator: general, recent (recency-weighted), per-position, confidence index, stats bonus
 
 ### Frontend (16 pages + components)
 - Landing, Login, Register, CompleteProfile
-- Dashboard, MatchesList, CreateMatch, MatchDetail
-- GeneratedTeams (with pitch visualization), PostMatch, StatsConfirmation
-- PlayerProfile, PlayerHistory, CreateGuest
+- Dashboard, MatchesList, CreateMatch, MatchDetail (**+ WhatsApp share + duplicate button**)
+- GeneratedTeams (**+ edit mode: swap players, change positions, formation selector**), PostMatch, StatsConfirmation
+- PlayerProfile, PlayerHistory (**+ rating evolution chart with Recharts**), CreateGuest (**+ photo upload**)
 - OrganizerPanel, AdminPanel
 - Layout (responsive top/bottom nav), FootballPitch component
 
-## Testing Results
-- Backend: 94.1% pass rate
-- Frontend: 85% pass rate
-- Overall: 90%
+## Testing Results (Iteration 2)
+- Backend: 90.5% pass rate
+- Frontend: 95% pass rate
+- Overall: 93%
 
 ## Prioritized Backlog
 
