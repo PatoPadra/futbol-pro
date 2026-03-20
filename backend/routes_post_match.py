@@ -57,36 +57,63 @@ async def submit_ratings(
     data: PeerRatingBatchRequest,
     user=Depends(get_current_user),
 ):
+    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not match:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+
+    if match.get("status") not in ["finalizado", "completado"]:
+        raise HTTPException(status_code=400, detail="Las evaluaciones solo se habilitan cuando el partido esta finalizado")
+
     profile = await db.player_profiles.find_one(
         {"user_id": user["user_id"]}, {"_id": 0}
     )
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
 
+    my_registration = await db.match_registrations.find_one(
+        {"match_id": match_id, "player_id": profile["id"], "status": {"$ne": "baja"}},
+        {"_id": 0},
+    )
+    if not my_registration:
+        raise HTTPException(status_code=403, detail="Solo pueden evaluar los jugadores inscriptos en el partido")
+
+    registrations = await db.match_registrations.find(
+        {"match_id": match_id, "status": {"$ne": "baja"}},
+        {"_id": 0},
+    ).to_list(500)
+    valid_player_ids = {registration["player_id"] for registration in registrations}
+
+    valid_ratings = []
+    for rating in data.ratings:
+        if rating.score < 1 or rating.score > 10:
+            continue
+        if rating.rated_player_id == profile["id"]:
+            continue
+        if rating.rated_player_id not in valid_player_ids:
+            raise HTTPException(status_code=400, detail="Solo podes evaluar jugadores que participaron en este partido")
+
+        valid_ratings.append(rating)
+
+    if not valid_ratings:
+        raise HTTPException(status_code=400, detail="No hay evaluaciones validas para guardar")
+
     now = datetime.now(timezone.utc).isoformat()
 
-    # Remove previous ratings from this rater for this match
     await db.peer_ratings.delete_many(
         {"match_id": match_id, "rater_id": profile["id"]}
     )
 
-    for r in data.ratings:
-        if r.score < 1 or r.score > 10:
-            continue
-        if r.rated_player_id == profile["id"]:
-            continue
-
+    for rating in valid_ratings:
         await db.peer_ratings.insert_one({
             "id": str(uuid.uuid4()),
             "match_id": match_id,
             "rater_id": profile["id"],
-            "rated_player_id": r.rated_player_id,
-            "score": r.score,
+            "rated_player_id": rating.rated_player_id,
+            "score": rating.score,
             "created_at": now,
         })
 
     return {"message": "Evaluaciones guardadas"}
-
 
 @router.get("/{match_id}/ratings")
 async def get_match_ratings(match_id: str, user=Depends(get_current_user)):

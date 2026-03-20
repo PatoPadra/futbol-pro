@@ -27,6 +27,9 @@ export default function PostMatch() {
   const [submitting, setSubmitting] = useState('');
 
   const profileId = user?.profile_id || user?.profile?.id;
+  const activeRegistrations = registrations.filter(r => r.status !== 'baja');
+  const myRegistration = activeRegistrations.find(r => r.player_id === profileId);
+  const otherPlayers = activeRegistrations.filter(r => r.player_id !== profileId);
 
   useEffect(() => {
     const load = async () => {
@@ -37,30 +40,58 @@ export default function PostMatch() {
         ]);
         setRegistrations(regsRes.data);
         setExistingRatings(ratingsRes.data);
-        if (ratingsRes.data?.my_ratings?.length) {
-          const rMap = {};
-          ratingsRes.data.my_ratings.forEach(r => { rMap[r.rated_player_id] = r.score; });
-          setRatings(rMap);
-        }
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.detail || 'Error al cargar post partido');
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [id]);
 
-  const otherPlayers = registrations.filter(r => r.player_id !== profileId && r.status === 'titular');
+  useEffect(() => {
+    if (!profileId) return;
+
+    const baseRatings = {};
+    otherPlayers.forEach(player => {
+      baseRatings[player.player_id] = 5;
+    });
+
+    if (existingRatings?.my_ratings?.length) {
+      existingRatings.my_ratings.forEach(rating => {
+        baseRatings[rating.rated_player_id] = rating.score;
+      });
+    }
+
+    setRatings(baseRatings);
+  }, [profileId, registrations, existingRatings]);
 
   const submitRatings = async () => {
-    const ratingsList = Object.entries(ratings).map(([pid, score]) => ({
-      rated_player_id: pid, score: parseInt(score),
+    if (!myRegistration) {
+      toast.error('Tenes que estar anotado en el partido para poder evaluar');
+      return;
+    }
+
+    const ratingsList = otherPlayers.map(player => ({
+      rated_player_id: player.player_id,
+      score: parseInt(ratings[player.player_id] ?? 5, 10),
     }));
-    if (ratingsList.length === 0) { toast.error('Evalua al menos un jugador'); return; }
+
+    if (ratingsList.length === 0) {
+      toast.error('No hay otros participantes para evaluar');
+      return;
+    }
+
     setSubmitting('ratings');
     try {
       await api.post(`/matches/${id}/ratings`, { ratings: ratingsList });
       toast.success('Evaluaciones guardadas!');
-    } catch (err) { toast.error('Error al guardar evaluaciones'); }
-    finally { setSubmitting(''); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al guardar evaluaciones');
+    } finally {
+      setSubmitting('');
+    }
   };
 
   const submitSelfEval = async () => {
@@ -68,8 +99,11 @@ export default function PostMatch() {
     try {
       await api.post(`/matches/${id}/self-evaluation`, selfEval);
       toast.success('Autoevaluacion guardada');
-    } catch (err) { toast.error('Error'); }
-    finally { setSubmitting(''); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error');
+    } finally {
+      setSubmitting('');
+    }
   };
 
   const submitStats = async (playerId) => {
@@ -84,8 +118,11 @@ export default function PostMatch() {
         saves: parseInt(s.saves) || 0,
       });
       toast.success('Estadisticas propuestas');
-    } catch (err) { toast.error('Error'); }
-    finally { setSubmitting(''); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error');
+    } finally {
+      setSubmitting('');
+    }
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
@@ -115,6 +152,18 @@ export default function PostMatch() {
                 <p className="text-xs text-slate-500">Puntuacion del 1 al 10</p>
               </CardHeader>
               <CardContent className="space-y-4">
+                {!myRegistration && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Tenes que estar anotado en este partido para poder evaluar y proponer estadisticas.
+                  </div>
+                )}
+
+                {myRegistration && otherPlayers.length === 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    No hay otros participantes para evaluar todavia.
+                  </div>
+                )}
+
                 {otherPlayers.map(p => (
                   <div key={p.player_id} className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0" data-testid={`rate-player-${p.player_id}`}>
                     <Avatar className="w-10 h-10">
@@ -125,18 +174,19 @@ export default function PostMatch() {
                       <p className="text-sm font-medium truncate">{p.player_name}</p>
                       <Slider
                         min={1} max={10} step={1}
-                        value={[ratings[p.player_id] || 5]}
+                        value={[ratings[p.player_id] ?? 5]}
                         onValueChange={v => setRatings(prev => ({ ...prev, [p.player_id]: v[0] }))}
                         className="mt-2"
+                        disabled={!myRegistration}
                       />
                     </div>
-                    <span className="text-lg font-bold text-turf w-8 text-center">{ratings[p.player_id] || 5}</span>
+                    <span className="text-lg font-bold text-turf w-8 text-center">{ratings[p.player_id] ?? 5}</span>
                   </div>
                 ))}
                 <Button
                   data-testid="submit-ratings-btn"
                   onClick={submitRatings}
-                  disabled={submitting === 'ratings'}
+                  disabled={submitting === 'ratings' || !myRegistration || otherPlayers.length === 0}
                   className="w-full bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase"
                 >
                   <Star className="w-4 h-4 mr-2" /> {existingRatings?.has_rated ? 'Actualizar Evaluaciones' : 'Guardar Evaluaciones'}
@@ -187,7 +237,7 @@ export default function PostMatch() {
                 <p className="text-xs text-slate-500">Las estadisticas se confirman por votacion de los jugadores.</p>
               </CardHeader>
               <CardContent className="space-y-6">
-                {registrations.filter(r => r.status === 'titular').map(p => (
+                {activeRegistrations.map(p => (
                   <div key={p.player_id} className="border border-slate-100 rounded-xl p-4" data-testid={`stats-player-${p.player_id}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <Avatar className="w-8 h-8">
@@ -204,6 +254,7 @@ export default function PostMatch() {
                           value={stats[p.player_id]?.goals || ''}
                           onChange={e => setStats(prev => ({ ...prev, [p.player_id]: { ...prev[p.player_id], goals: e.target.value } }))}
                           className="h-10 bg-slate-50 text-center"
+                          disabled={!myRegistration}
                         />
                       </div>
                       <div>
@@ -213,6 +264,7 @@ export default function PostMatch() {
                           value={stats[p.player_id]?.assists || ''}
                           onChange={e => setStats(prev => ({ ...prev, [p.player_id]: { ...prev[p.player_id], assists: e.target.value } }))}
                           className="h-10 bg-slate-50 text-center"
+                          disabled={!myRegistration}
                         />
                       </div>
                       <div>
@@ -222,6 +274,7 @@ export default function PostMatch() {
                           value={stats[p.player_id]?.saves || ''}
                           onChange={e => setStats(prev => ({ ...prev, [p.player_id]: { ...prev[p.player_id], saves: e.target.value } }))}
                           className="h-10 bg-slate-50 text-center"
+                          disabled={!myRegistration}
                         />
                       </div>
                     </div>
@@ -230,7 +283,7 @@ export default function PostMatch() {
                       variant="outline"
                       className="mt-3 w-full rounded-lg text-xs"
                       onClick={() => submitStats(p.player_id)}
-                      disabled={submitting === 'stats'}
+                      disabled={submitting === 'stats' || !myRegistration}
                       data-testid={`submit-stats-${p.player_id}`}
                     >
                       <Send className="w-3 h-3 mr-1" /> Proponer

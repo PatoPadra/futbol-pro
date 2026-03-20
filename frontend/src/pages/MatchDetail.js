@@ -180,7 +180,7 @@ export default function MatchDetail() {
               <Play className="w-4 h-4 mr-2" /> Finalizar Partido
             </Button>
           )}
-          {match.status === 'finalizado' && (
+          {match.status === 'finalizado' && isRegistered && (
             <Link to={`/partidos/${id}/post-partido`}>
               <Button data-testid="post-match-btn" className="bg-orange hover:bg-orange-light text-white rounded-full px-6 font-bold uppercase">
                 Evaluar y Estadisticas
