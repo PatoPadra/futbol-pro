@@ -12,7 +12,10 @@ import { toast } from 'sonner';
 export default function CreateMatch() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingGroups, setLoadingGroups] = useState(true);
+  const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
+    group_id: '',
     title: '',
     modality: '5',
     date: '',
@@ -24,11 +27,44 @@ export default function CreateMatch() {
 
   const capacities = { 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 22 };
 
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const res = await api.get('/groups');
+        const organizerGroups = (res.data || []).filter(
+          g => g.my_member_role === 'organizador' || g.my_member_role === 'admin'
+        );
+
+        setGroups(organizerGroups);
+
+        if (organizerGroups.length === 1) {
+          setForm(prev => ({ ...prev, group_id: organizerGroups[0].id }));
+        }
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Error al cargar grupos');
+      } finally {
+        setLoadingGroups(false);
+      }
+    };
+
+    loadGroups();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!form.group_id) {
+      toast.error('Selecciona un grupo');
+      return;
+    }
+
     setLoading(true);
     try {
-      const payload = { ...form, modality: parseInt(form.modality) };
+      const payload = {
+        ...form,
+        modality: parseInt(form.modality, 10),
+      };
+
       const res = await api.post('/matches', payload);
       toast.success('Partido creado!');
       navigate(`/partidos/${res.data.id}`);
@@ -53,6 +89,31 @@ export default function CreateMatch() {
               <CardTitle className="font-heading text-lg uppercase">Detalles</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div>
+                <Label>Grupo</Label>
+                <Select
+                  value={form.group_id}
+                  onValueChange={v => setForm(p => ({ ...p, group_id: v }))}
+                  disabled={loadingGroups || groups.length === 0}
+                >
+                  <SelectTrigger className="mt-1.5 h-12 bg-slate-50" data-testid="match-group-select">
+                    <SelectValue placeholder={loadingGroups ? 'Cargando grupos...' : 'Selecciona un grupo'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map(group => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!loadingGroups && groups.length === 0 && (
+                  <p className="text-xs text-red-500 mt-2">
+                    No tienes grupos donde puedas crear partidos.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <Label>Titulo del partido</Label>
                 <Input
@@ -148,7 +209,7 @@ export default function CreateMatch() {
 
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
             <p className="text-sm text-slate-600">
-              <strong>Capacidad:</strong> {capacities[parseInt(form.modality)]} titulares (Futbol {form.modality}).
+              <strong>Capacidad:</strong> {capacities[parseInt(form.modality, 10)]} titulares (Futbol {form.modality}).
               Los jugadores que se anoten luego del cupo quedaran como suplentes.
               El cierre de inscripcion sera el dia del partido al mediodia.
             </p>
@@ -157,7 +218,7 @@ export default function CreateMatch() {
           <Button
             type="submit"
             data-testid="create-match-submit"
-            disabled={loading}
+            disabled={loading || loadingGroups || groups.length === 0}
             className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider"
           >
             {loading ? 'Creando...' : 'Crear Partido'}
