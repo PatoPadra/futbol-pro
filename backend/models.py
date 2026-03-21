@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
-
+from typing import Optional, List, Literal
+from pydantic import BaseModel, EmailStr, Field
 
 # Auth
 class RegisterRequest(BaseModel):
@@ -25,7 +25,7 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     birth_date: Optional[str] = None
     primary_position: Optional[str] = None
-    secondary_positions: Optional[List[str]] = None
+    secondary_positions: List[str] = Field(default_factory=list)
     unwanted_position: Optional[str] = None
 
 class ProfileResponse(BaseModel):
@@ -53,6 +53,7 @@ class CreateGuestRequest(BaseModel):
 
 # Match
 class CreateMatchRequest(BaseModel):
+    group_id: str
     title: str
     modality: int
     date: str
@@ -72,6 +73,8 @@ class UpdateMatchRequest(BaseModel):
 
 class MatchResponse(BaseModel):
     id: str
+    group_id: str
+    group_name: Optional[str] = None
     organizer_id: str
     organizer_name: Optional[str] = None
     title: str
@@ -157,8 +160,40 @@ class PlayerMetricsResponse(BaseModel):
     confidence_index: float
     stats_bonus: float
     final_score: float
-    position_ratings: dict = {}
+    position_ratings: dict = Field(default_factory=dict)
     total_matches: int = 0
     total_goals: int = 0
     total_assists: int = 0
     total_saves: int = 0
+
+
+class CreateGroupRequest(BaseModel):
+    name: str
+
+class GroupResponse(BaseModel):
+    id: str
+    name: str
+    created_by: str
+    created_at: str
+    my_member_role: Optional[str] = None
+    members_count: int = 0
+
+class AddGroupMemberRequest(BaseModel):
+    player_id: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    member_role: Literal["organizador", "frecuente", "invitado"] = "frecuente"
+    
+class GroupMemberResponse(BaseModel):
+    id: str
+    group_id: str
+    player_id: str
+    member_role: str
+    status: str
+    invited_by: Optional[str] = None
+    created_at: str
+    player_name: Optional[str] = None
+    player_email: Optional[str] = None
+    player_type: Optional[str] = None
+    primary_position: Optional[str] = None
+    photo_url: Optional[str] = None

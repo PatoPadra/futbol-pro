@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from database import db
-from auth import get_current_user, require_roles
+from auth import get_current_user
 from models import CreateMatchRequest, UpdateMatchRequest, MatchResponse, RegistrationResponse
 from constants import MODALITY_CAPACITY
 from datetime import datetime, timezone
@@ -8,29 +8,83 @@ import uuid
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 
-
-@router.post("", response_model=MatchResponse)
-async def create_match(
-    data: CreateMatchRequest,
-    user=Depends(require_roles(["admin", "organizador"]))
-):
-    if data.modality not in MODALITY_CAPACITY:
-        raise HTTPException(status_code=400, detail="Modalidad inválida (5-11)")
-
+async def get_my_profile_or_404(user):
     profile = await db.player_profiles.find_one(
         {"user_id": user["user_id"]}, {"_id": 0}
     )
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
+    return profile
 
+
+async def get_group_membership(group_id: str, player_id: str):
+    return await db.group_members.find_one(
+        {
+            "group_id": group_id,
+            "player_id": player_id,
+            "status": "activo",
+        },
+        {"_id": 0},
+    )
+
+
+async def ensure_group_member(group_id: str, user):
+    if user["role"] == "admin":
+        profile = await get_my_profile_or_404(user)
+        return {
+            "player_id": profile["id"],
+            "member_role": "organizador",
+            "status": "activo",
+        }
+
+    profile = await get_my_profile_or_404(user)
+    membership = await get_group_membership(group_id, profile["id"])
+    if not membership:
+        raise HTTPException(status_code=403, detail="No perteneces al grupo de este partido")
+    return membership
+
+
+async def ensure_group_organizer(group_id: str, user):
+    if user["role"] == "admin":
+        profile = await get_my_profile_or_404(user)
+        return {
+            "player_id": profile["id"],
+            "member_role": "organizador",
+            "status": "activo",
+        }
+
+    profile = await get_my_profile_or_404(user)
+    membership = await get_group_membership(group_id, profile["id"])
+    if not membership:
+        raise HTTPException(status_code=403, detail="No perteneces al grupo de este partido")
+    if membership["member_role"] != "organizador":
+        raise HTTPException(status_code=403, detail="Solo el organizador del grupo puede hacer esta acción")
+    return membership
+
+
+
+@router.post("", response_model=MatchResponse)
+async def create_match(
+    data: CreateMatchRequest,
+    user=Depends(get_current_user)):
+    if data.modality not in MODALITY_CAPACITY:
+        raise HTTPException(status_code=400, detail="Modalidad inválida (5-11)")
+
+    profile = await get_my_profile_or_404(user)
+
+    group = await db.groups.find_one({"id": data.group_id}, {"_id": 0})
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+
+    await ensure_group_organizer(data.group_id, user)
     max_players = MODALITY_CAPACITY[data.modality]
-    # Deadline: match day at noon
     deadline = f"{data.date}T12:00:00+00:00"
     now = datetime.now(timezone.utc).isoformat()
     match_id = str(uuid.uuid4())
 
     match_doc = {
         "id": match_id,
+        "group_id": data.group_id,
         "organizer_id": profile["id"],
         "title": data.title,
         "modality": data.modality,
@@ -48,20 +102,35 @@ async def create_match(
 
     return MatchResponse(
         **{k: v for k, v in match_doc.items() if k != "_id"},
+        group_name=group["name"],
+        my_group_role="organizador",
         organizer_name=profile["name"],
         titular_count=0,
         suplente_count=0,
     )
-
-
 @router.get("")
 async def list_matches(
     status: str = Query(None),
     user=Depends(get_current_user),
 ):
     query = {}
+    profile = None
+    role_by_group = {}
+
     if status:
         query["status"] = status
+
+    if user["role"] != "admin":
+        profile = await get_my_profile_or_404(user)
+
+        memberships = await db.group_members.find(
+            {"player_id": profile["id"], "status": "activo"},
+            {"_id": 0},
+        ).to_list(500)
+
+        group_ids = [m["group_id"] for m in memberships]
+        role_by_group = {m["group_id"]: m["member_role"] for m in memberships}
+        query["group_id"] = {"$in": group_ids}
 
     matches = await db.matches.find(query, {"_id": 0}).sort("date", -1).to_list(100)
 
@@ -76,8 +145,19 @@ async def list_matches(
         organizer = await db.player_profiles.find_one(
             {"id": m["organizer_id"]}, {"_id": 0}
         )
+        group = await db.groups.find_one(
+            {"id": m["group_id"]}, {"_id": 0}
+        )
+
+        if user["role"] == "admin":
+            my_group_role = "admin"
+        else:
+            my_group_role = role_by_group.get(m["group_id"])
+
         result.append(MatchResponse(
             **m,
+            group_name=group["name"] if group else None,
+            my_group_role=my_group_role,
             organizer_name=organizer["name"] if organizer else "Desconocido",
             titular_count=titular_count,
             suplente_count=suplente_count,
@@ -86,11 +166,14 @@ async def list_matches(
     return result
 
 
+
 @router.get("/{match_id}")
 async def get_match(match_id: str, user=Depends(get_current_user)):
     match = await db.matches.find_one({"id": match_id}, {"_id": 0})
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
+
+    membership = await ensure_group_member(match["group_id"], user)
 
     titular_count = await db.match_registrations.count_documents(
         {"match_id": match_id, "status": "titular"}
@@ -101,8 +184,10 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
     organizer = await db.player_profiles.find_one(
         {"id": match["organizer_id"]}, {"_id": 0}
     )
+    group = await db.groups.find_one(
+        {"id": match["group_id"]}, {"_id": 0}
+    )
 
-    # Get user's registration status
     profile = await db.player_profiles.find_one(
         {"user_id": user["user_id"]}, {"_id": 0}
     )
@@ -117,6 +202,8 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
 
     return {
         **match,
+        "group_name": group["name"] if group else None,
+        "my_group_role": membership.get("member_role"),
         "organizer_name": organizer["name"] if organizer else "Desconocido",
         "titular_count": titular_count,
         "suplente_count": suplente_count,
@@ -134,12 +221,7 @@ async def update_match(
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
 
-    # Only organizer or admin can update
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] != "admin" and (not profile or profile["id"] != match["organizer_id"]):
-        raise HTTPException(status_code=403, detail="Solo el organizador puede editar")
+    await ensure_group_organizer(match["group_id"], user)
 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if update_data:
@@ -147,6 +229,7 @@ async def update_match(
 
     updated = await db.matches.find_one({"id": match_id}, {"_id": 0})
     return updated
+
 
 
 @router.post("/{match_id}/register")
@@ -158,13 +241,9 @@ async def register_for_match(match_id: str, user=Depends(get_current_user)):
     if match["status"] != "abierto":
         raise HTTPException(status_code=400, detail="El partido no está abierto para inscripción")
 
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if not profile:
-        raise HTTPException(status_code=400, detail="Perfil no encontrado")
+    profile = await get_my_profile_or_404(user)
+    await ensure_group_member(match["group_id"], user)
 
-    # Check if already registered
     existing = await db.match_registrations.find_one(
         {"match_id": match_id, "player_id": profile["id"], "status": {"$ne": "baja"}},
         {"_id": 0}
@@ -172,7 +251,6 @@ async def register_for_match(match_id: str, user=Depends(get_current_user)):
     if existing:
         raise HTTPException(status_code=400, detail="Ya estás inscrito en este partido")
 
-    # Count current titulars
     titular_count = await db.match_registrations.count_documents(
         {"match_id": match_id, "status": "titular"}
     )
@@ -201,7 +279,6 @@ async def register_for_match(match_id: str, user=Depends(get_current_user)):
         "message": f"Inscrito como {'titular' if status == 'titular' else 'suplente'}",
     }
 
-
 @router.post("/{match_id}/register-guest/{guest_id}")
 async def register_guest_for_match(
     match_id: str, guest_id: str, user=Depends(get_current_user)
@@ -210,9 +287,24 @@ async def register_guest_for_match(
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
 
+    await ensure_group_organizer(match["group_id"], user)
+
     guest = await db.player_profiles.find_one({"id": guest_id}, {"_id": 0})
     if not guest:
         raise HTTPException(status_code=404, detail="Jugador invitado no encontrado")
+    if match["status"] != "abierto":
+        raise HTTPException(status_code=400, detail="El partido no está abierto para inscripción")
+
+    guest_membership = await db.group_members.find_one(
+        {
+            "group_id": match["group_id"],
+            "player_id": guest_id,
+            "status": "activo",
+        },
+        {"_id": 0}
+    )
+    if not guest_membership:
+        raise HTTPException(status_code=400, detail="El invitado no pertenece al grupo del partido")
 
     existing = await db.match_registrations.find_one(
         {"match_id": match_id, "player_id": guest_id, "status": {"$ne": "baja"}},
@@ -221,6 +313,7 @@ async def register_guest_for_match(
     if existing:
         raise HTTPException(status_code=400, detail="El jugador ya está inscrito")
 
+    
     titular_count = await db.match_registrations.count_documents(
         {"match_id": match_id, "status": "titular"}
     )
@@ -242,6 +335,7 @@ async def register_guest_for_match(
     }
     await db.match_registrations.insert_one(reg_doc)
     return {"id": reg_id, "status": status}
+
 
 
 @router.delete("/{match_id}/register")
@@ -281,6 +375,12 @@ async def unregister_from_match(match_id: str, user=Depends(get_current_user)):
 
 @router.get("/{match_id}/registrations")
 async def get_registrations(match_id: str, user=Depends(get_current_user)):
+    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not match:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+
+    await ensure_group_member(match["group_id"], user)
+
     regs = await db.match_registrations.find(
         {"match_id": match_id, "status": {"$ne": "baja"}},
         {"_id": 0}
@@ -305,39 +405,28 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
             ))
     return result
 
-
 @router.post("/{match_id}/close")
 async def close_registrations(match_id: str, user=Depends(get_current_user)):
     match = await db.matches.find_one({"id": match_id}, {"_id": 0})
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
 
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] != "admin" and (not profile or profile["id"] != match["organizer_id"]):
-        raise HTTPException(status_code=403, detail="Solo el organizador puede cerrar inscripciones")
+    await ensure_group_organizer(match["group_id"], user)
 
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "cerrado"}}
     )
     return {"message": "Inscripciones cerradas"}
 
-
 @router.post("/{match_id}/duplicate")
 async def duplicate_match(match_id: str, user=Depends(get_current_user)):
-    """Duplicate a match for the next week (recurring)."""
     match = await db.matches.find_one({"id": match_id}, {"_id": 0})
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
 
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] not in ["admin", "organizador"]:
-        raise HTTPException(status_code=403, detail="Solo organizadores pueden duplicar partidos")
+    await ensure_group_organizer(match["group_id"], user)
+    profile = await get_my_profile_or_404(user)
 
-    # Calculate next week's date
     from datetime import timedelta
     try:
         original_date = datetime.strptime(match["date"], "%Y-%m-%d")
@@ -352,7 +441,8 @@ async def duplicate_match(match_id: str, user=Depends(get_current_user)):
 
     new_match = {
         "id": new_id,
-        "organizer_id": profile["id"] if profile else match["organizer_id"],
+        "group_id": match["group_id"],
+        "organizer_id": profile["id"],
         "title": match["title"],
         "modality": match["modality"],
         "date": next_date_str,

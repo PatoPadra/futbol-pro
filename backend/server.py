@@ -6,6 +6,15 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
+from routes_auth import router as auth_router
+from routes_profile import router as profile_router
+from routes_matches import router as matches_router
+from routes_teams import router as teams_router
+from routes_post_match import router as post_match_router
+from routes_players import router as players_router
+from routes_admin import router as admin_router
+from routes_groups import router as groups_router
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -20,14 +29,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import and include routers
-from routes_auth import router as auth_router
-from routes_profile import router as profile_router
-from routes_matches import router as matches_router
-from routes_teams import router as teams_router
-from routes_post_match import router as post_match_router
-from routes_players import router as players_router
-from routes_admin import router as admin_router
 
 app.include_router(auth_router)
 app.include_router(profile_router)
@@ -36,8 +37,10 @@ app.include_router(teams_router)
 app.include_router(post_match_router)
 app.include_router(players_router)
 app.include_router(admin_router)
+app.include_router(groups_router)
 
-# Static files for uploads
+
+
 uploads_dir = ROOT_DIR / "uploads"
 uploads_dir.mkdir(exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
