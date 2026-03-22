@@ -193,8 +193,9 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
     )
 
     profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
+        {"user_id": user.get("user_id") or user.get("id")}, {"_id": 0}
     )
+
     my_registration = None
     if profile:
         reg = await db.match_registrations.find_one(
@@ -345,7 +346,7 @@ async def register_guest_for_match(
 @router.delete("/{match_id}/register")
 async def unregister_from_match(match_id: str, user=Depends(get_current_user)):
     profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
+        {"user_id": user.get("user_id") or user.get("id")}, {"_id": 0}
     )
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
