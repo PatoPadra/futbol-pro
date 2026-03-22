@@ -9,8 +9,12 @@ import uuid
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 async def get_my_profile_or_404(user):
+    user_id = user.get("user_id") or user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Usuario inválido")
+
     profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
+        {"user_id": user_id}, {"_id": 0}
     )
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
