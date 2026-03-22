@@ -97,9 +97,6 @@ async def create_group(
     data: CreateGroupRequest,
     user=Depends(get_current_user),
 ):
-    if user["role"] not in ["admin", "organizador"]:
-        raise HTTPException(status_code=403, detail="Solo admin u organizador pueden crear grupos")
-
     profile = await get_my_profile_or_404(user)
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
@@ -129,6 +126,7 @@ async def create_group(
         "members_count": 1,
     }
 
+    
 
 @router.get("")
 async def list_groups(user=Depends(get_current_user)):
