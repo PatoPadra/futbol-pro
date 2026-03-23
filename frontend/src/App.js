@@ -14,6 +14,8 @@ import CreateMatch from '@/pages/CreateMatch';
 import MatchesList from '@/pages/MatchesList';
 import MatchDetail from '@/pages/MatchDetail';
 import CreateGuest from '@/pages/CreateGuest';
+import CreateGroup from '@/pages/CreateGroup';
+import GroupDetail from '@/pages/GroupDetail';
 import GeneratedTeams from '@/pages/GeneratedTeams';
 import PostMatch from '@/pages/PostMatch';
 import StatsConfirmation from '@/pages/StatsConfirmation';
@@ -21,8 +23,6 @@ import PlayerHistory from '@/pages/PlayerHistory';
 import PlayerProfile from '@/pages/PlayerProfile';
 import OrganizerPanel from '@/pages/OrganizerPanel';
 import AdminPanel from '@/pages/AdminPanel';
-import CreateGroup from '@/pages/CreateGroup';
-
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -41,7 +41,6 @@ function AppRoutes() {
       <Route path="/registro" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
       <Route path="/completar-perfil" element={<ProtectedRoute><Layout><CompleteProfile /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-      <Route path="/grupos/crear" element={<ProtectedRoute><Layout><CreateGroup /></Layout></ProtectedRoute>} />
       <Route path="/partidos" element={<ProtectedRoute><Layout><MatchesList /></Layout></ProtectedRoute>} />
       <Route path="/partidos/crear" element={<ProtectedRoute><Layout><CreateMatch /></Layout></ProtectedRoute>} />
       <Route path="/partidos/:id" element={<ProtectedRoute><Layout><MatchDetail /></Layout></ProtectedRoute>} />
@@ -49,6 +48,8 @@ function AppRoutes() {
       <Route path="/partidos/:id/post-partido" element={<ProtectedRoute><Layout><PostMatch /></Layout></ProtectedRoute>} />
       <Route path="/partidos/:id/estadisticas" element={<ProtectedRoute><Layout><StatsConfirmation /></Layout></ProtectedRoute>} />
       <Route path="/invitar-jugador" element={<ProtectedRoute><Layout><CreateGuest /></Layout></ProtectedRoute>} />
+      <Route path="/grupos/crear" element={<ProtectedRoute><Layout><CreateGroup /></Layout></ProtectedRoute>} />
+      <Route path="/grupos/:id" element={<ProtectedRoute><Layout><GroupDetail /></Layout></ProtectedRoute>} />
       <Route path="/jugadores/:id" element={<ProtectedRoute><Layout><PlayerProfile /></Layout></ProtectedRoute>} />
       <Route path="/jugadores/:id/historial" element={<ProtectedRoute><Layout><PlayerHistory /></Layout></ProtectedRoute>} />
       <Route path="/mi-perfil" element={<ProtectedRoute><Layout><PlayerProfile isSelf /></Layout></ProtectedRoute>} />

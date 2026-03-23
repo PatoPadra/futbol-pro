@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Literal
+from typing import List, Literal, Optional
+
 from pydantic import BaseModel, EmailStr, Field
+
 
 # Auth
 class RegisterRequest(BaseModel):
@@ -8,9 +9,11 @@ class RegisterRequest(BaseModel):
     password: str
     name: str
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
 
 class TokenResponse(BaseModel):
     token: str
@@ -20,6 +23,7 @@ class TokenResponse(BaseModel):
     has_profile: bool
     name: str
 
+
 # Profile
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
@@ -27,6 +31,7 @@ class ProfileUpdate(BaseModel):
     primary_position: Optional[str] = None
     secondary_positions: List[str] = Field(default_factory=list)
     unwanted_position: Optional[str] = None
+
 
 class ProfileResponse(BaseModel):
     id: str
@@ -38,18 +43,20 @@ class ProfileResponse(BaseModel):
     age: Optional[int] = None
     player_type: str
     primary_position: Optional[str] = None
-    secondary_positions: List[str] = []
+    secondary_positions: List[str] = Field(default_factory=list)
     unwanted_position: Optional[str] = None
     matches_played: int = 0
     created_by: Optional[str] = None
     estimated_level: Optional[float] = None
     created_at: str
 
+
 # Guest
 class CreateGuestRequest(BaseModel):
     name: str
     primary_position: Optional[str] = None
     estimated_level: float = 5.0
+
 
 # Match
 class CreateMatchRequest(BaseModel):
@@ -62,6 +69,7 @@ class CreateMatchRequest(BaseModel):
     maps_link: Optional[str] = None
     is_recurring: bool = False
 
+
 class UpdateMatchRequest(BaseModel):
     title: Optional[str] = None
     modality: Optional[int] = None
@@ -70,6 +78,7 @@ class UpdateMatchRequest(BaseModel):
     location: Optional[str] = None
     maps_link: Optional[str] = None
     status: Optional[str] = None
+
 
 class MatchResponse(BaseModel):
     id: str
@@ -91,6 +100,7 @@ class MatchResponse(BaseModel):
     suplente_count: int = 0
     created_at: str
 
+
 class RegistrationResponse(BaseModel):
     id: str
     match_id: str
@@ -102,6 +112,7 @@ class RegistrationResponse(BaseModel):
     order: int
     registered_at: str
 
+
 # Team
 class TeamAssignmentModel(BaseModel):
     player_id: str
@@ -110,6 +121,7 @@ class TeamAssignmentModel(BaseModel):
     team: str
     position: str
     is_manual: bool = False
+
 
 class TeamGenerationResponse(BaseModel):
     id: str
@@ -121,22 +133,36 @@ class TeamGenerationResponse(BaseModel):
     balance_score: float
     created_at: str
 
+
 class ManualAdjustRequest(BaseModel):
     assignments: List[TeamAssignmentModel]
     formation_a: Optional[str] = None
     formation_b: Optional[str] = None
+
 
 # Ratings
 class PeerRatingRequest(BaseModel):
     rated_player_id: str
     score: int
 
+
 class PeerRatingBatchRequest(BaseModel):
     ratings: List[PeerRatingRequest]
+
 
 class SelfEvaluationRequest(BaseModel):
     score: int
     notes: Optional[str] = None
+
+
+class GroupSeedRatingRequest(BaseModel):
+    rated_player_id: str
+    score: int
+
+
+class GroupSeedRatingBatchRequest(BaseModel):
+    ratings: List[GroupSeedRatingRequest]
+
 
 # Stats
 class StatsProposalRequest(BaseModel):
@@ -145,12 +171,15 @@ class StatsProposalRequest(BaseModel):
     assists: int = 0
     saves: int = 0
 
+
 class StatsVoteRequest(BaseModel):
     proposal_id: str
+
 
 # Admin
 class UpdateRoleRequest(BaseModel):
     role: str
+
 
 # Player Metrics
 class PlayerMetricsResponse(BaseModel):
@@ -167,8 +196,10 @@ class PlayerMetricsResponse(BaseModel):
     total_saves: int = 0
 
 
+# Groups
 class CreateGroupRequest(BaseModel):
     name: str
+
 
 class GroupResponse(BaseModel):
     id: str
@@ -178,12 +209,15 @@ class GroupResponse(BaseModel):
     my_member_role: Optional[str] = None
     members_count: int = 0
 
+
 class AddGroupMemberRequest(BaseModel):
     player_id: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    username: Optional[str] = None
     member_role: Literal["organizador", "frecuente", "invitado"] = "frecuente"
-    
+
+
 class GroupMemberResponse(BaseModel):
     id: str
     group_id: str

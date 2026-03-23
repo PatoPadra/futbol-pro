@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from database import db
-from auth import get_current_user
-from models import CreateGuestRequest, ProfileResponse
-from rating_calculator import calculate_player_metrics
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+from auth import get_current_user
+from database import db
+from models import CreateGuestRequest, ProfileResponse
+from rating_calculator import calculate_player_metrics
 
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 
@@ -14,18 +16,36 @@ router = APIRouter(prefix="/api/players", tags=["players"])
 
 @router.get("")
 async def list_players(user=Depends(get_current_user)):
-    profiles = await db.player_profiles.find({}, {"_id": 0}).to_list(500)
-    return profiles
+    if user["role"] == "admin":
+        return await db.player_profiles.find({}, {"_id": 0}).to_list(500)
+
+    my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    if not my_profile:
+        raise HTTPException(status_code=400, detail="Perfil no encontrado")
+
+    memberships = await db.group_members.find(
+        {"player_id": my_profile["id"], "status": "activo"},
+        {"_id": 0},
+    ).to_list(500)
+    group_ids = [m["group_id"] for m in memberships]
+    if not group_ids:
+        return []
+
+    member_rows = await db.group_members.find(
+        {"group_id": {"$in": group_ids}, "status": "activo"},
+        {"_id": 0},
+    ).to_list(1000)
+    player_ids = sorted({row["player_id"] for row in member_rows})
+
+    return await db.player_profiles.find({"id": {"$in": player_ids}}, {"_id": 0}).to_list(1000)
 
 
 @router.get("/{player_id}")
 async def get_player(player_id: str, user=Depends(get_current_user)):
-    profile = await db.player_profiles.find_one(
-        {"id": player_id}, {"_id": 0}
-    )
+    profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Jugador no encontrado")
-    
+
     if profile.get("birth_date"):
         try:
             bd = datetime.strptime(profile["birth_date"], "%Y-%m-%d")
@@ -33,16 +53,13 @@ async def get_player(player_id: str, user=Depends(get_current_user)):
             profile["age"] = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
         except ValueError:
             pass
-    
+
     return profile
 
 
 @router.get("/{player_id}/history")
 async def get_player_history(player_id: str, user=Depends(get_current_user)):
-    # Get all matches this player participated in
-    regs = await db.match_registrations.find(
-        {"player_id": player_id, "status": "titular"}, {"_id": 0}
-    ).to_list(500)
+    regs = await db.match_registrations.find({"player_id": player_id, "status": "titular"}, {"_id": 0}).to_list(500)
 
     history = []
     for reg in regs:
@@ -50,36 +67,28 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         if not match:
             continue
 
-        # Get peer ratings received in this match
         ratings = await db.peer_ratings.find(
-            {"match_id": reg["match_id"], "rated_player_id": player_id}, {"_id": 0}
+            {"match_id": reg["match_id"], "rated_player_id": player_id},
+            {"_id": 0},
         ).to_list(100)
         avg_rating = sum(r["score"] for r in ratings) / len(ratings) if ratings else None
 
-        # Get team assignment
-        gen = await db.team_generations.find_one(
-            {"match_id": reg["match_id"]}, {"_id": 0}
-        )
+        gen = await db.team_generations.find({"match_id": reg["match_id"]}, {"_id": 0}).to_list(1)
         assignment = None
         if gen:
-            for a in gen.get("assignments", []):
+            for a in gen[0].get("assignments", []):
                 if a["player_id"] == player_id:
                     assignment = a
                     break
 
-        # Get confirmed stats
-        stats = await db.stats_final.find_one(
-            {"match_id": reg["match_id"], "player_id": player_id}, {"_id": 0}
-        )
+        stats = await db.stats_final.find_one({"match_id": reg["match_id"], "player_id": player_id}, {"_id": 0})
 
-        # Get self evaluation (only if requesting own history)
         self_eval = None
-        my_profile = await db.player_profiles.find_one(
-            {"user_id": user["user_id"]}, {"_id": 0}
-        )
+        my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
         if my_profile and my_profile["id"] == player_id:
             self_eval = await db.self_evaluations.find_one(
-                {"match_id": reg["match_id"], "player_id": player_id}, {"_id": 0}
+                {"match_id": reg["match_id"], "player_id": player_id},
+                {"_id": 0},
             )
 
         history.append({
@@ -100,15 +109,12 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
 
 @router.get("/{player_id}/metrics")
 async def get_player_metrics(player_id: str, user=Depends(get_current_user)):
-    metrics = await calculate_player_metrics(player_id)
-    return metrics
+    return await calculate_player_metrics(player_id)
 
 
 @router.post("/guest")
 async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user)):
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
+    profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
 
@@ -137,19 +143,12 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
 
 
 @router.post("/{player_id}/photo")
-async def upload_guest_photo(
-    player_id: str,
-    file: UploadFile = File(...),
-    user=Depends(get_current_user),
-):
-    """Upload photo for a guest player (by their creator or admin)."""
+async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
     profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Jugador no encontrado")
 
-    my_profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
+    my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
     if user["role"] != "admin" and (not my_profile or profile.get("created_by") != my_profile["id"]):
         raise HTTPException(status_code=403, detail="Solo el creador o admin puede subir foto")
 
@@ -168,7 +167,5 @@ async def upload_guest_photo(
         f.write(content)
 
     photo_url = f"/api/uploads/{filename}"
-    await db.player_profiles.update_one(
-        {"id": player_id}, {"$set": {"photo_url": photo_url}}
-    )
+    await db.player_profiles.update_one({"id": player_id}, {"$set": {"photo_url": photo_url}})
     return {"photo_url": photo_url}

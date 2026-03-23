@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Switch } from '../components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 
+import api from '../lib/api';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Switch } from '../components/ui/switch';
 
 export default function CreateMatch() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedGroupId = searchParams.get('group_id') || '';
+
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [groups, setGroups] = useState([]);
-  const [searchParams] = useSearchParams();
-  const groupIdFromQuery = searchParams.get('group_id') || '';
   const [form, setForm] = useState({
     group_id: '',
     title: '',
@@ -35,16 +36,14 @@ export default function CreateMatch() {
       try {
         const res = await api.get('/groups');
         const organizerGroups = (res.data || []).filter(
-          g => g.my_member_role === 'organizador' || g.my_member_role === 'admin'
+          (group) => group.my_member_role === 'organizador' || group.my_member_role === 'admin'
         );
         setGroups(organizerGroups);
 
-        const groupFromQueryExists = organizerGroups.some(g => g.id === groupIdFromQuery);
-
-        if (groupFromQueryExists) {
-          setForm(prev => ({ ...prev, group_id: groupIdFromQuery }));
+        if (requestedGroupId && organizerGroups.some((group) => group.id === requestedGroupId)) {
+          setForm((prev) => ({ ...prev, group_id: requestedGroupId }));
         } else if (organizerGroups.length === 1) {
-          setForm(prev => ({ ...prev, group_id: organizerGroups[0].id }));
+          setForm((prev) => ({ ...prev, group_id: organizerGroups[0].id }));
         }
       } catch (err) {
         toast.error(err.response?.data?.detail || 'Error al cargar grupos');
@@ -54,7 +53,7 @@ export default function CreateMatch() {
     };
 
     loadGroups();
-  }, []);
+  }, [requestedGroupId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -99,28 +98,28 @@ export default function CreateMatch() {
                 <Label>Grupo</Label>
                 <Select
                   value={form.group_id}
-                  onValueChange={v => setForm(p => ({ ...p, group_id: v }))}
+                  onValueChange={(value) => setForm((prev) => ({ ...prev, group_id: value }))}
                   disabled={loadingGroups || groups.length === 0}
                 >
                   <SelectTrigger className="mt-1.5 h-12 bg-slate-50" data-testid="match-group-select">
                     <SelectValue placeholder={loadingGroups ? 'Cargando grupos...' : 'Selecciona un grupo'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {groups.map(group => (
+                    {groups.map((group) => (
                       <SelectItem key={group.id} value={group.id}>
                         {group.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              {!loadingGroups && groups.length === 0 && (
-                <div className="text-xs mt-2 space-y-1">
-                  <p className="text-red-500">No tienes grupos donde puedas crear partidos.</p>
-                  <Link to="/grupos/crear" className="text-turf font-medium hover:underline">
-                    Crear mi primer grupo
-                  </Link>
-                </div>
-              )}
+                {!loadingGroups && groups.length === 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-red-500">No tienes grupos donde puedas crear partidos.</p>
+                    <Link to="/grupos/crear" className="text-xs text-turf hover:underline">
+                      Crear mi primer grupo
+                    </Link>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -129,7 +128,7 @@ export default function CreateMatch() {
                   data-testid="match-title-input"
                   placeholder="Ej: Partido del sabado"
                   value={form.title}
-                  onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                   className="mt-1.5 h-12 bg-slate-50"
                   required
                 />
@@ -137,17 +136,14 @@ export default function CreateMatch() {
 
               <div>
                 <Label>Modalidad</Label>
-                <Select
-                  value={form.modality}
-                  onValueChange={v => setForm(p => ({ ...p, modality: v }))}
-                >
+                <Select value={form.modality} onValueChange={(value) => setForm((prev) => ({ ...prev, modality: value }))}>
                   <SelectTrigger className="mt-1.5 h-12 bg-slate-50" data-testid="match-modality-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[5, 6, 7, 8, 9, 10, 11].map(n => (
-                      <SelectItem key={n} value={String(n)}>
-                        Futbol {n} ({capacities[n]} jugadores)
+                    {[5, 6, 7, 8, 9, 10, 11].map((value) => (
+                      <SelectItem key={value} value={String(value)}>
+                        Futbol {value} ({capacities[value]} jugadores)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -161,7 +157,7 @@ export default function CreateMatch() {
                     type="date"
                     data-testid="match-date-input"
                     value={form.date}
-                    onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
                     className="mt-1.5 h-12 bg-slate-50"
                     required
                   />
@@ -172,7 +168,7 @@ export default function CreateMatch() {
                     type="time"
                     data-testid="match-time-input"
                     value={form.time}
-                    onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
                     className="mt-1.5 h-12 bg-slate-50"
                     required
                   />
@@ -185,7 +181,7 @@ export default function CreateMatch() {
                   data-testid="match-location-input"
                   placeholder="Ej: Cancha Municipal"
                   value={form.location}
-                  onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
                   className="mt-1.5 h-12 bg-slate-50"
                   required
                 />
@@ -197,7 +193,7 @@ export default function CreateMatch() {
                   data-testid="match-maps-input"
                   placeholder="https://maps.google.com/..."
                   value={form.maps_link}
-                  onChange={e => setForm(p => ({ ...p, maps_link: e.target.value }))}
+                  onChange={(e) => setForm((prev) => ({ ...prev, maps_link: e.target.value }))}
                   className="mt-1.5 h-12 bg-slate-50"
                 />
               </div>
@@ -209,7 +205,7 @@ export default function CreateMatch() {
                 </div>
                 <Switch
                   checked={form.is_recurring}
-                  onCheckedChange={v => setForm(p => ({ ...p, is_recurring: v }))}
+                  onCheckedChange={(value) => setForm((prev) => ({ ...prev, is_recurring: value }))}
                   data-testid="match-recurring-switch"
                 />
               </div>
@@ -218,9 +214,7 @@ export default function CreateMatch() {
 
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
             <p className="text-sm text-slate-600">
-              <strong>Capacidad:</strong> {capacities[parseInt(form.modality, 10)]} titulares (Futbol {form.modality}).
-              Los jugadores que se anoten luego del cupo quedaran como suplentes.
-              El cierre de inscripcion sera el dia del partido al mediodia.
+              <strong>Capacidad:</strong> {capacities[parseInt(form.modality, 10)]} titulares (Futbol {form.modality}). Los jugadores que se anoten luego del cupo quedaran como suplentes. El cierre de inscripcion sera el dia del partido al mediodia.
             </p>
           </div>
 
