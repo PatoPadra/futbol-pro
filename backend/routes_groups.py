@@ -13,14 +13,14 @@ async def get_my_profile_or_404(user):
     if not user_id:
         raise HTTPException(status_code=401, detail="Usuario inválido")
 
-    profile = await db.player_profiles.find_one(
-        {"user_id": user_id}, {"_id": 0}
-    )
+    profile = await db.player_profiles.find_one({"user_id": user_id})
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
+
+    profile["id"] = str(profile.get("id") or profile.get("_id"))
+    profile.pop("_id", None)
+
     return profile
-
-
 
 
 async def get_group_or_404(group_id: str):
@@ -97,20 +97,21 @@ async def ensure_can_invite_to_group(group_id: str, user):
 
     return membership
 
-
 @router.post("")
 async def create_group(
     data: CreateGroupRequest,
     user=Depends(get_current_user),
 ):
     profile = await get_my_profile_or_404(user)
+    profile_id = str(profile["id"])
+
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
 
     group_doc = {
         "id": group_id,
         "name": data.name.strip(),
-        "created_by": profile["id"],
+        "created_by": profile_id,
         "created_at": now,
     }
     await db.groups.insert_one(group_doc)
@@ -118,10 +119,10 @@ async def create_group(
     member_doc = {
         "id": str(uuid.uuid4()),
         "group_id": group_id,
-        "player_id": profile["id"],
+        "player_id": profile_id,
         "member_role": "organizador",
         "status": "activo",
-        "invited_by": profile["id"],
+        "invited_by": profile_id,
         "created_at": now,
     }
     await db.group_members.insert_one(member_doc)
@@ -131,7 +132,6 @@ async def create_group(
         "my_member_role": "organizador",
         "members_count": 1,
     }
-
 
 
 @router.get("")
