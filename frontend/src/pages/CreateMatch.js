@@ -34,7 +34,6 @@ export default function CreateMatch() {
         const organizerGroups = (res.data || []).filter(
           g => g.my_member_role === 'organizador' || g.my_member_role === 'admin'
         );
-
         setGroups(organizerGroups);
 
         if (organizerGroups.length === 1) {
