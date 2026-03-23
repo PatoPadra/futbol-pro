@@ -5,7 +5,7 @@ import uuid
 import json
 
 class FutbolAppTester:
-    def __init__(self, base_url="https://futbol-match-hub.preview.emergentagent.com"):
+    def __init__(self, base_url="https://futbol-match-hub.preview.agent.com"):
         self.base_url = base_url
         self.token = None
         self.user_id = None
