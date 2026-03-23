@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -9,11 +9,14 @@ import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 
+
 export default function CreateMatch() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [groups, setGroups] = useState([]);
+  const [searchParams] = useSearchParams();
+  const groupIdFromQuery = searchParams.get('group_id') || '';
   const [form, setForm] = useState({
     group_id: '',
     title: '',
@@ -36,7 +39,11 @@ export default function CreateMatch() {
         );
         setGroups(organizerGroups);
 
-        if (organizerGroups.length === 1) {
+        const groupFromQueryExists = organizerGroups.some(g => g.id === groupIdFromQuery);
+
+        if (groupFromQueryExists) {
+          setForm(prev => ({ ...prev, group_id: groupIdFromQuery }));
+        } else if (organizerGroups.length === 1) {
           setForm(prev => ({ ...prev, group_id: organizerGroups[0].id }));
         }
       } catch (err) {
@@ -106,11 +113,14 @@ export default function CreateMatch() {
                     ))}
                   </SelectContent>
                 </Select>
-                {!loadingGroups && groups.length === 0 && (
-                  <p className="text-xs text-red-500 mt-2">
-                    No tienes grupos donde puedas crear partidos.
-                  </p>
-                )}
+              {!loadingGroups && groups.length === 0 && (
+                <div className="text-xs mt-2 space-y-1">
+                  <p className="text-red-500">No tienes grupos donde puedas crear partidos.</p>
+                  <Link to="/grupos/crear" className="text-turf font-medium hover:underline">
+                    Crear mi primer grupo
+                  </Link>
+                </div>
+              )}
               </div>
 
               <div>

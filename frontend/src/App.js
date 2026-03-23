@@ -21,6 +21,8 @@ import PlayerHistory from '@/pages/PlayerHistory';
 import PlayerProfile from '@/pages/PlayerProfile';
 import OrganizerPanel from '@/pages/OrganizerPanel';
 import AdminPanel from '@/pages/AdminPanel';
+import CreateGroup from '@/pages/CreateGroup';
+
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -39,6 +41,7 @@ function AppRoutes() {
       <Route path="/registro" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
       <Route path="/completar-perfil" element={<ProtectedRoute><Layout><CompleteProfile /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+      <Route path="/grupos/crear" element={<ProtectedRoute><Layout><CreateGroup /></Layout></ProtectedRoute>} />
       <Route path="/partidos" element={<ProtectedRoute><Layout><MatchesList /></Layout></ProtectedRoute>} />
       <Route path="/partidos/crear" element={<ProtectedRoute><Layout><CreateMatch /></Layout></ProtectedRoute>} />
       <Route path="/partidos/:id" element={<ProtectedRoute><Layout><MatchDetail /></Layout></ProtectedRoute>} />

@@ -68,17 +68,25 @@ export default function Layout({ children }) {
             </Link>
           ))}
         </nav>
-
-        <div className="flex items-center gap-3">
-          {(user?.role === 'organizador' || user?.role === 'admin') && (
+          <div className="flex items-center gap-3">
             <Button
-              data-testid="create-match-btn"
-              onClick={() => navigate('/partidos/crear')}
-              className="bg-turf hover:bg-turf-dark text-white rounded-full px-5 h-9 text-sm font-bold uppercase tracking-wider"
+              variant="outline"
+              onClick={() => navigate('/grupos/crear')}
+              className="rounded-full px-5 h-9 text-sm font-bold uppercase tracking-wider"
+              data-testid="create-group-btn"
             >
-              <Plus className="w-4 h-4 mr-1" /> Crear Partido
+              <Users className="w-4 h-4 mr-1" /> Crear Grupo
             </Button>
-          )}
+
+            {(user?.role === 'organizador' || user?.role === 'admin') && (
+              <Button
+                data-testid="create-match-btn"
+                onClick={() => navigate('/partidos/crear')}
+                className="bg-turf hover:bg-turf-dark text-white rounded-full px-5 h-9 text-sm font-bold uppercase tracking-wider"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Crear Partido
+              </Button>
+            )}
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <span className="font-medium">{user?.profile?.name || user?.name || ''}</span>
           </div>
@@ -118,6 +126,14 @@ export default function Layout({ children }) {
             <div className="text-xs font-medium text-slate-400 uppercase tracking-wider px-3 mb-2">
               {user?.profile?.name || user?.name}
             </div>
+            <button
+              onClick={() => { navigate('/grupos/crear'); setMenuOpen(false); }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-700 text-sm hover:bg-slate-50"
+              data-testid="mobile-create-group"
+            >
+              <Users className="w-4 h-4" /> Crear Grupo
+            </button>
+
             {(user?.role === 'organizador' || user?.role === 'admin') && (
               <button
                 onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
@@ -127,6 +143,7 @@ export default function Layout({ children }) {
                 <Plus className="w-4 h-4" /> Crear Partido
               </button>
             )}
+
             <button
               onClick={() => { navigate('/invitar-jugador'); setMenuOpen(false); }}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-700 text-sm hover:bg-slate-50"
