@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Plus, Star, Users } from 'lucide-react';
+import { Plus, Shield, Star, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '../lib/api';
@@ -12,8 +12,12 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
-const ROLE_LABELS = {
+const GROUP_PERMISSION_LABELS = {
   organizador: 'Organizador',
+  miembro: 'Miembro',
+};
+
+const MEMBERSHIP_TYPE_LABELS = {
   frecuente: 'Frecuente',
   invitado: 'Invitado',
 };
@@ -62,15 +66,15 @@ export default function GroupDetail() {
   }, [id]);
 
   const myProfileId = user?.profile?.id || user?.profile_id;
-  const canManage = group && (group.my_member_role === 'organizador' || user?.role === 'admin');
-  const canRate = group && (['organizador', 'frecuente', 'admin'].includes(group.my_member_role) || user?.role === 'admin');
+  const canInvite = Boolean(group?.can_invite || user?.role === 'admin');
+  const canRate = Boolean(group?.can_rate_seed || user?.role === 'admin');
 
   const rateableMembers = useMemo(() => {
     return members.filter((member) => {
       if (member.player_id === myProfileId) return false;
 
-      const isCoreMember = ['organizador', 'frecuente'].includes(member.member_role);
-      const isMyInvitedGuest = member.member_role === 'invitado' && member.invited_by === myProfileId;
+      const isCoreMember = member.membership_type === 'frecuente';
+      const isMyInvitedGuest = member.membership_type === 'invitado' && member.invited_by === myProfileId;
 
       return isCoreMember || isMyInvitedGuest;
     });
@@ -79,16 +83,19 @@ export default function GroupDetail() {
   const handleInvite = async (e) => {
     e.preventDefault();
     setSavingInvite(true);
+
     try {
-      await api.post(`/groups/${id}/members`, {
+      const payload = {
         name: inviteForm.name || null,
         username: inviteForm.username || null,
         email: inviteForm.email || null,
         member_role: inviteForm.member_role,
-      });
+      };
+
+      await api.post(`/groups/${id}/members`, payload);
       toast.success('Jugador agregado al grupo');
       setInviteForm({ name: '', username: '', email: '', member_role: 'frecuente' });
-      loadData();
+      await loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al invitar jugador');
     } finally {
@@ -110,7 +117,7 @@ export default function GroupDetail() {
     try {
       await api.post(`/groups/${id}/seed-ratings`, { ratings });
       toast.success('Puntajes iniciales guardados');
-      loadData();
+      await loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al guardar puntajes');
     } finally {
@@ -135,9 +142,26 @@ export default function GroupDetail() {
       <div className="animate-slide-up space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">{group.name}</h1>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">
+              {group.name}
+            </h1>
             <p className="text-slate-500 mt-1">{group.members_count} miembros activos</p>
+
+            <div className="flex items-center gap-2 flex-wrap mt-3">
+              <Badge variant="outline">
+                {GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
+              </Badge>
+              <Badge variant="outline">
+                {MEMBERSHIP_TYPE_LABELS[group.my_membership_type] || group.my_membership_type}
+              </Badge>
+              {group.my_global_role === 'admin' && (
+                <Badge className="bg-slate-900 text-white">
+                  <Shield className="w-3 h-3 mr-1" /> Admin
+                </Badge>
+              )}
+            </div>
           </div>
+
           <Link to={`/partidos/crear?group_id=${group.id}`}>
             <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
               Crear Partido
@@ -153,9 +177,13 @@ export default function GroupDetail() {
                   <Users className="w-4 h-4" /> Miembros del grupo
                 </CardTitle>
               </CardHeader>
+
               <CardContent className="space-y-3">
                 {members.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3"
+                  >
                     <div>
                       <p className="font-medium">{member.player_name}</p>
                       <p className="text-xs text-slate-500">
@@ -163,9 +191,21 @@ export default function GroupDetail() {
                         {member.primary_position ? ` · ${member.primary_position}` : ''}
                       </p>
                     </div>
+
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <Badge variant="outline">{ROLE_LABELS[member.member_role] || member.member_role}</Badge>
-                      <Badge variant="outline">{member.player_type || 'jugador'}</Badge>
+                      <Badge variant="outline">
+                        {GROUP_PERMISSION_LABELS[member.group_permission] || member.group_permission}
+                      </Badge>
+
+                      <Badge variant="outline">
+                        {MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type}
+                      </Badge>
+
+                      {member.is_system_admin && (
+                        <Badge className="bg-slate-900 text-white">
+                          <Shield className="w-3 h-3 mr-1" /> Admin
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -179,32 +219,48 @@ export default function GroupDetail() {
                     <Star className="w-4 h-4" /> Puntaje inicial del grupo
                   </CardTitle>
                 </CardHeader>
+
                 <CardContent className="space-y-4">
                   <p className="text-sm text-slate-500">
-                    Esto siembra el scoring inicial para los jugadores frecuentes del grupo antes de tener suficientes puntajes por partido. Los invitados manuales solo pueden ser puntuados por quien los invitó.
+                    Los jugadores frecuentes del grupo pueden puntuar a los demás frecuentes. Los invitados solo pueden ser puntuados por quien los invitó.
                   </p>
 
                   {rateableMembers.length === 0 && (
-                    <p className="text-sm text-slate-400">No hay compañeros elegibles para puntuar todavía.</p>
+                    <p className="text-sm text-slate-400">
+                      No hay compañeros elegibles para puntuar todavía.
+                    </p>
                   )}
 
                   <div className="space-y-3">
                     {rateableMembers.map((member) => (
-                      <div key={member.player_id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3">
+                      <div
+                        key={member.player_id}
+                        className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3"
+                      >
                         <div>
                           <p className="font-medium">{member.player_name}</p>
                           <p className="text-xs text-slate-500">
-                            {ROLE_LABELS[member.member_role] || member.member_role}
-                            {member.member_role === 'invitado' && member.invited_by === myProfileId ? ' · Tu invitado' : ''}
+                            {GROUP_PERMISSION_LABELS[member.group_permission] || member.group_permission}
+                            {' · '}
+                            {MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type}
+                            {member.membership_type === 'invitado' && member.invited_by === myProfileId
+                              ? ' · Tu invitado'
+                              : ''}
                           </p>
                         </div>
+
                         <Input
                           type="number"
                           min="1"
                           max="10"
                           step="1"
                           value={ratingMap[member.player_id] || ''}
-                          onChange={(e) => setRatingMap((prev) => ({ ...prev, [member.player_id]: e.target.value }))}
+                          onChange={(e) =>
+                            setRatingMap((prev) => ({
+                              ...prev,
+                              [member.player_id]: e.target.value,
+                            }))
+                          }
                           className="w-24 h-10 bg-slate-50"
                         />
                       </div>
@@ -224,13 +280,14 @@ export default function GroupDetail() {
           </div>
 
           <div className="space-y-6">
-            {canManage && (
+            {canInvite && (
               <Card className="border-slate-100">
                 <CardHeader>
                   <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
                     <Plus className="w-4 h-4" /> Invitar jugador
                   </CardTitle>
                 </CardHeader>
+
                 <CardContent>
                   <form onSubmit={handleInvite} className="space-y-4">
                     <div>
@@ -239,34 +296,39 @@ export default function GroupDetail() {
                         value={inviteForm.email}
                         onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
                         placeholder="mail@ejemplo.com"
-                        className="mt-1.5 h-11 bg-slate-50"
+                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
                       />
                     </div>
+
                     <div>
-                      <Label>Nombre de usuario</Label>
+                      <Label>Nombre de usuario o nombre</Label>
                       <Input
                         value={inviteForm.username}
                         onChange={(e) => setInviteForm((prev) => ({ ...prev, username: e.target.value }))}
-                        placeholder="Username exacto si ya existe"
-                        className="mt-1.5 h-11 bg-slate-50"
+                        placeholder="usuario o nombre visible"
+                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
                       />
                     </div>
+
                     <div>
-                      <Label>Nombre visible</Label>
+                      <Label>Nombre visible (para invitados)</Label>
                       <Input
                         value={inviteForm.name}
                         onChange={(e) => setInviteForm((prev) => ({ ...prev, name: e.target.value }))}
-                        placeholder="Nombre para mostrar o invitado manual"
-                        className="mt-1.5 h-11 bg-slate-50"
+                        placeholder="Nombre del invitado"
+                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
                       />
                     </div>
+
                     <div>
                       <Label>Tipo de miembro</Label>
                       <Select
                         value={inviteForm.member_role}
-                        onValueChange={(value) => setInviteForm((prev) => ({ ...prev, member_role: value }))}
+                        onValueChange={(value) =>
+                          setInviteForm((prev) => ({ ...prev, member_role: value }))
+                        }
                       >
-                        <SelectTrigger className="mt-1.5 h-11 bg-slate-50">
+                        <SelectTrigger className="mt-1.5 h-11 bg-slate-50 border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -276,25 +338,23 @@ export default function GroupDetail() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    <p className="text-xs text-slate-500">
+                      La autoridad en este grupo se muestra como <strong>Organizador/Miembro</strong>.
+                      La forma de participación se muestra como <strong>Frecuente/Invitado</strong>.
+                    </p>
+
                     <Button
                       type="submit"
                       disabled={savingInvite}
-                      className="w-full bg-turf hover:bg-turf-dark text-white rounded-full font-bold uppercase"
+                      className="w-full bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase"
                     >
-                      {savingInvite ? 'Agregando...' : 'Agregar al grupo'}
+                      {savingInvite ? 'Guardando...' : 'Agregar al grupo'}
                     </Button>
                   </form>
                 </CardContent>
               </Card>
             )}
-
-            <Card className="border-slate-100">
-              <CardContent className="p-5">
-                <p className="text-sm text-slate-500">
-                  Los partidos de este grupo solo admiten inscripciones de miembros activos del grupo.
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

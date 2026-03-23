@@ -26,6 +26,24 @@ def clean_mongo(value):
     return value
 
 
+def normalize_global_role(role: str | None):
+    if role == "admin":
+        return "admin"
+    if role == "organizador":
+        return "organizador"
+    return "jugador"
+
+
+def build_group_permission(member_role: str | None):
+    return "organizador" if member_role == "organizador" else "miembro"
+
+
+def build_membership_type(member_role: str | None, player_type: str | None = None):
+    if member_role == "invitado" or player_type == "invitado":
+        return "invitado"
+    return "frecuente"
+
+
 async def get_my_profile_or_404(user):
     user_id = user.get("user_id") or user.get("id")
     if not user_id:
@@ -223,6 +241,12 @@ async def create_group(data: CreateGroupRequest, user=Depends(get_current_user))
     return clean_mongo({
         **group_doc,
         "my_member_role": "organizador",
+        "my_group_permission": "organizador",
+        "my_membership_type": "frecuente",
+        "my_global_role": normalize_global_role(user.get("role")),
+        "can_manage": True,
+        "can_invite": True,
+        "can_rate_seed": True,
         "members_count": 1,
     })
 
@@ -237,6 +261,12 @@ async def list_groups(user=Depends(get_current_user)):
             result.append(clean_mongo({
                 **group,
                 "my_member_role": "admin",
+                "my_group_permission": "organizador",
+                "my_membership_type": "frecuente",
+                "my_global_role": "admin",
+                "can_manage": True,
+                "can_invite": True,
+                "can_rate_seed": True,
                 "members_count": members_count,
             }))
         return result
@@ -249,14 +279,23 @@ async def list_groups(user=Depends(get_current_user)):
 
     group_ids = [m["group_id"] for m in memberships]
     groups = await db.groups.find({"id": {"$in": group_ids}}, {"_id": 0}).to_list(500)
-    role_by_group = {m["group_id"]: m["member_role"] for m in memberships}
+    membership_by_group = {m["group_id"]: m for m in memberships}
 
     result = []
     for group in groups:
+        membership = membership_by_group.get(group["id"])
+        member_role = membership.get("member_role") if membership else None
         members_count = await db.group_members.count_documents({"group_id": group["id"], "status": "activo"})
+
         result.append(clean_mongo({
             **group,
-            "my_member_role": role_by_group.get(group["id"]),
+            "my_member_role": member_role,
+            "my_group_permission": build_group_permission(member_role),
+            "my_membership_type": build_membership_type(member_role, profile.get("player_type")),
+            "my_global_role": normalize_global_role(user.get("role")),
+            "can_manage": member_role == "organizador",
+            "can_invite": member_role == "organizador",
+            "can_rate_seed": member_role in ["organizador", "frecuente"],
             "members_count": members_count,
         }))
     return result
@@ -265,16 +304,37 @@ async def list_groups(user=Depends(get_current_user)):
 @router.get("/{group_id}")
 async def get_group(group_id: str, user=Depends(get_current_user)):
     group = await get_group_or_404(group_id)
+
     if user["role"] == "admin":
         my_member_role = "admin"
+        my_group_permission = "organizador"
+        my_membership_type = "frecuente"
+        can_manage = True
+        can_invite = True
+        can_rate_seed = True
     else:
+        profile = await get_my_profile_or_404(user)
         membership = await ensure_group_member(group_id, user)
-        my_member_role = membership.get("member_role")
+        member_role = membership.get("member_role")
+
+        my_member_role = member_role
+        my_group_permission = build_group_permission(member_role)
+        my_membership_type = build_membership_type(member_role, profile.get("player_type"))
+        can_manage = member_role == "organizador"
+        can_invite = member_role == "organizador"
+        can_rate_seed = member_role in ["organizador", "frecuente"]
 
     members_count = await db.group_members.count_documents({"group_id": group_id, "status": "activo"})
+
     return clean_mongo({
         **group,
         "my_member_role": my_member_role,
+        "my_group_permission": my_group_permission,
+        "my_membership_type": my_membership_type,
+        "my_global_role": normalize_global_role(user.get("role")),
+        "can_manage": can_manage,
+        "can_invite": can_invite,
+        "can_rate_seed": can_rate_seed,
         "members_count": members_count,
     })
 
@@ -285,9 +345,17 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
     await ensure_group_member(group_id, user)
 
     memberships = await db.group_members.find({"group_id": group_id, "status": "activo"}, {"_id": 0}).to_list(500)
+
     result = []
     for membership in memberships:
         player = await db.player_profiles.find_one({"id": membership["player_id"]}, {"_id": 0})
+
+        global_role = "jugador"
+        if player and player.get("user_id"):
+            linked_user = await db.users.find_one({"id": player["user_id"]}, {"_id": 0})
+            global_role = normalize_global_role(linked_user.get("role") if linked_user else None)
+
+        member_role = membership.get("member_role")
         row = {
             **membership,
             "player_name": player["name"] if player else "Desconocido",
@@ -295,10 +363,20 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
             "player_type": player.get("player_type") if player else None,
             "primary_position": player.get("primary_position") if player else None,
             "photo_url": player.get("photo_url") if player else None,
+            "group_permission": build_group_permission(member_role),
+            "membership_type": build_membership_type(member_role, player.get("player_type") if player else None),
+            "global_role": global_role,
+            "is_system_admin": global_role == "admin",
         }
         result.append(clean_mongo(row))
 
-    result.sort(key=lambda item: (0 if item.get("member_role") == "organizador" else 1, item.get("player_name") or ""))
+    result.sort(
+        key=lambda item: (
+            0 if item.get("group_permission") == "organizador" else 1,
+            0 if item.get("membership_type") == "frecuente" else 1,
+            item.get("player_name") or "",
+        )
+    )
     return result
 
 
@@ -351,6 +429,8 @@ async def add_group_member(group_id: str, data: AddGroupMemberRequest, user=Depe
         "player_name": target_player["name"],
         "player_email": target_player.get("email"),
         "member_role": final_member_role,
+        "group_permission": build_group_permission(final_member_role),
+        "membership_type": build_membership_type(final_member_role, target_player.get("player_type")),
         "status": "activo",
         "invited_by": my_profile["id"],
         "created_at": created_at_value,

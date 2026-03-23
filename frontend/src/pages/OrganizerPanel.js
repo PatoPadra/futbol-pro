@@ -164,8 +164,16 @@ export default function OrganizerPanel() {
 
                           <div className="flex flex-col items-end gap-2">
                             <Badge variant="outline">
-                              {MEMBER_ROLE_LABELS[group.my_member_role] || group.my_member_role}
+                              {group.my_group_permission === 'organizador' ? 'Organizador' : 'Miembro'}
                             </Badge>
+
+                            <Badge variant="outline">
+                              {group.my_membership_type === 'invitado' ? 'Invitado' : 'Frecuente'}
+                            </Badge>
+
+                            {group.my_global_role === 'admin' && (
+                              <Badge className="bg-slate-900 text-white">Admin</Badge>
+                            )}
 
                             {manageable && (
                               <Badge className="text-xs bg-turf/10 text-turf border-turf/20">
