@@ -411,7 +411,6 @@ async def submit_group_seed_ratings(group_id: str, data: GroupSeedRatingBatchReq
 
     memberships = await db.group_members.find({"group_id": group_id, "status": "activo"}, {"_id": 0}).to_list(500)
     member_by_player = {m["player_id"]: m for m in memberships}
-    ratable_player_ids = {m["player_id"] for m in memberships if m.get("member_role") in ["organizador", "frecuente"]}
 
     valid_ratings = []
     for rating in data.ratings:
@@ -419,10 +418,21 @@ async def submit_group_seed_ratings(group_id: str, data: GroupSeedRatingBatchReq
             continue
         if rating.rated_player_id == rater_id:
             continue
-        if rating.rated_player_id not in ratable_player_ids:
-            raise HTTPException(status_code=400, detail="Solo puedes calificar organizadores o jugadores frecuentes del grupo")
-        if rating.rated_player_id not in member_by_player:
+
+        target_member = member_by_player.get(rating.rated_player_id)
+        if not target_member:
             raise HTTPException(status_code=400, detail="Jugador inválido para este grupo")
+
+        target_role = target_member.get("member_role")
+        is_core_member = target_role in ["organizador", "frecuente"]
+        is_my_invited_guest = target_role == "invitado" and target_member.get("invited_by") == rater_id
+
+        if not (is_core_member or is_my_invited_guest):
+            raise HTTPException(
+                status_code=400,
+                detail="Solo puedes calificar jugadores frecuentes/organizadores del grupo y, en el caso de invitados, únicamente a los que invitaste tú",
+            )
+
         valid_ratings.append(rating)
 
     if not valid_ratings:

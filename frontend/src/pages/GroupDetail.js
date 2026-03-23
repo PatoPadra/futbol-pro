@@ -66,9 +66,14 @@ export default function GroupDetail() {
   const canRate = group && (['organizador', 'frecuente', 'admin'].includes(group.my_member_role) || user?.role === 'admin');
 
   const rateableMembers = useMemo(() => {
-    return members.filter(
-      (member) => member.player_id !== myProfileId && ['organizador', 'frecuente'].includes(member.member_role)
-    );
+    return members.filter((member) => {
+      if (member.player_id === myProfileId) return false;
+
+      const isCoreMember = ['organizador', 'frecuente'].includes(member.member_role);
+      const isMyInvitedGuest = member.member_role === 'invitado' && member.invited_by === myProfileId;
+
+      return isCoreMember || isMyInvitedGuest;
+    });
   }, [members, myProfileId]);
 
   const handleInvite = async (e) => {
@@ -176,11 +181,11 @@ export default function GroupDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-slate-500">
-                    Esto siembra el scoring inicial para los jugadores frecuentes del grupo antes de tener suficientes puntajes por partido.
+                    Esto siembra el scoring inicial para los jugadores frecuentes del grupo antes de tener suficientes puntajes por partido. Los invitados manuales solo pueden ser puntuados por quien los invitó.
                   </p>
 
                   {rateableMembers.length === 0 && (
-                    <p className="text-sm text-slate-400">No hay jugadores frecuentes para puntuar todavía.</p>
+                    <p className="text-sm text-slate-400">No hay compañeros elegibles para puntuar todavía.</p>
                   )}
 
                   <div className="space-y-3">
@@ -188,7 +193,10 @@ export default function GroupDetail() {
                       <div key={member.player_id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3">
                         <div>
                           <p className="font-medium">{member.player_name}</p>
-                          <p className="text-xs text-slate-500">{ROLE_LABELS[member.member_role] || member.member_role}</p>
+                          <p className="text-xs text-slate-500">
+                            {ROLE_LABELS[member.member_role] || member.member_role}
+                            {member.member_role === 'invitado' && member.invited_by === myProfileId ? ' · Tu invitado' : ''}
+                          </p>
                         </div>
                         <Input
                           type="number"
