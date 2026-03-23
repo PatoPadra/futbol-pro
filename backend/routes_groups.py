@@ -3,9 +3,27 @@ from database import db
 from auth import get_current_user
 from models import CreateGroupRequest, AddGroupMemberRequest
 from datetime import datetime, timezone
+from bson import ObjectId
 import uuid
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
+
+
+def clean_mongo(value):
+    if isinstance(value, ObjectId):
+        return str(value)
+
+    if isinstance(value, dict):
+        return {
+            k: clean_mongo(v)
+            for k, v in value.items()
+            if k != "_id"
+        }
+
+    if isinstance(value, list):
+        return [clean_mongo(v) for v in value]
+
+    return value
 
 
 async def get_my_profile_or_404(user):
@@ -17,17 +35,21 @@ async def get_my_profile_or_404(user):
     if not profile:
         raise HTTPException(status_code=400, detail="Perfil no encontrado")
 
-    profile["id"] = str(profile.get("id") or profile.get("_id"))
-    profile.pop("_id", None)
+    raw_profile_id = profile.get("id") or profile.get("_id")
+    profile = clean_mongo(profile)
+    profile["id"] = str(raw_profile_id) if raw_profile_id is not None else None
+
+    if not profile.get("id"):
+        raise HTTPException(status_code=400, detail="Perfil inválido: falta id")
 
     return profile
 
 
 async def get_group_or_404(group_id: str):
-    group = await db.groups.find_one({"id": group_id}, {"_id": 0})
+    group = await db.groups.find_one({"id": group_id})
     if not group:
         raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    return group
+    return clean_mongo(group)
 
 
 async def get_membership(group_id: str, player_id: str):
@@ -36,22 +58,21 @@ async def get_membership(group_id: str, player_id: str):
             "group_id": group_id,
             "player_id": player_id,
             "status": "activo",
-        },
-        {"_id": 0},
+        }
     )
-    return membership
+    return clean_mongo(membership) if membership else None
 
 
 async def ensure_group_member(group_id: str, user):
+    profile = await get_my_profile_or_404(user)
+
     if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
         return {
             "player_id": profile["id"],
             "member_role": "organizador",
             "status": "activo",
         }
 
-    profile = await get_my_profile_or_404(user)
     membership = await get_membership(group_id, profile["id"])
     if not membership:
         raise HTTPException(status_code=403, detail="No perteneces a este grupo")
@@ -59,15 +80,15 @@ async def ensure_group_member(group_id: str, user):
 
 
 async def ensure_can_manage_group(group_id: str, user):
+    profile = await get_my_profile_or_404(user)
+
     if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
         return {
             "player_id": profile["id"],
             "member_role": "organizador",
             "status": "activo",
         }
 
-    profile = await get_my_profile_or_404(user)
     membership = await get_membership(group_id, profile["id"])
     if not membership:
         raise HTTPException(status_code=403, detail="No perteneces a este grupo")
@@ -79,15 +100,15 @@ async def ensure_can_manage_group(group_id: str, user):
 
 
 async def ensure_can_invite_to_group(group_id: str, user):
+    profile = await get_my_profile_or_404(user)
+
     if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
         return {
             "player_id": profile["id"],
             "member_role": "organizador",
             "status": "activo",
         }
 
-    profile = await get_my_profile_or_404(user)
     membership = await get_membership(group_id, profile["id"])
     if not membership:
         raise HTTPException(status_code=403, detail="No perteneces a este grupo")
@@ -97,6 +118,7 @@ async def ensure_can_invite_to_group(group_id: str, user):
 
     return membership
 
+
 @router.post("")
 async def create_group(
     data: CreateGroupRequest,
@@ -105,12 +127,16 @@ async def create_group(
     profile = await get_my_profile_or_404(user)
     profile_id = str(profile["id"])
 
+    name = (data.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nombre de grupo inválido")
+
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
 
     group_doc = {
         "id": group_id,
-        "name": data.name.strip(),
+        "name": name,
         "created_by": profile_id,
         "created_at": now,
     }
@@ -127,41 +153,42 @@ async def create_group(
     }
     await db.group_members.insert_one(member_doc)
 
-    return {
+    return clean_mongo({
         **group_doc,
         "my_member_role": "organizador",
         "members_count": 1,
-    }
+    })
 
 
 @router.get("")
 async def list_groups(user=Depends(get_current_user)):
     if user["role"] == "admin":
-        groups = await db.groups.find({}, {"_id": 0}).to_list(500)
+        groups = await db.groups.find({}).to_list(500)
         result = []
+
         for group in groups:
+            group = clean_mongo(group)
             members_count = await db.group_members.count_documents(
                 {"group_id": group["id"], "status": "activo"}
             )
-            result.append({
+            result.append(clean_mongo({
                 **group,
                 "my_member_role": "admin",
                 "members_count": members_count,
-            })
+            }))
+
         return result
 
     profile = await get_my_profile_or_404(user)
 
     memberships = await db.group_members.find(
-        {"player_id": profile["id"], "status": "activo"},
-        {"_id": 0},
+        {"player_id": profile["id"], "status": "activo"}
     ).to_list(500)
+    memberships = clean_mongo(memberships)
 
     group_ids = [m["group_id"] for m in memberships]
-    groups = await db.groups.find(
-        {"id": {"$in": group_ids}},
-        {"_id": 0},
-    ).to_list(500)
+    groups = await db.groups.find({"id": {"$in": group_ids}}).to_list(500)
+    groups = clean_mongo(groups)
 
     role_by_group = {m["group_id"]: m["member_role"] for m in memberships}
 
@@ -170,11 +197,11 @@ async def list_groups(user=Depends(get_current_user)):
         members_count = await db.group_members.count_documents(
             {"group_id": group["id"], "status": "activo"}
         )
-        result.append({
+        result.append(clean_mongo({
             **group,
             "my_member_role": role_by_group.get(group["id"]),
             "members_count": members_count,
-        })
+        }))
 
     return result
 
@@ -193,11 +220,11 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
         {"group_id": group_id, "status": "activo"}
     )
 
-    return {
+    return clean_mongo({
         **group,
         "my_member_role": my_member_role,
         "members_count": members_count,
-    }
+    })
 
 
 @router.get("/{group_id}/members")
@@ -206,24 +233,26 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
     await ensure_group_member(group_id, user)
 
     memberships = await db.group_members.find(
-        {"group_id": group_id, "status": "activo"},
-        {"_id": 0},
+        {"group_id": group_id, "status": "activo"}
     ).to_list(500)
+    memberships = clean_mongo(memberships)
 
     result = []
     for membership in memberships:
-        player = await db.player_profiles.find_one(
-            {"id": membership["player_id"]},
-            {"_id": 0},
-        )
-        result.append({
+        player = await db.player_profiles.find_one({"id": membership["player_id"]})
+        if player:
+            raw_player_id = player.get("id") or player.get("_id")
+            player = clean_mongo(player)
+            player["id"] = str(raw_player_id) if raw_player_id is not None else None
+
+        result.append(clean_mongo({
             **membership,
             "player_name": player["name"] if player else "Desconocido",
             "player_email": player.get("email") if player else None,
             "player_type": player.get("player_type") if player else None,
             "primary_position": player.get("primary_position") if player else None,
             "photo_url": player.get("photo_url") if player else None,
-        })
+        }))
 
     return result
 
@@ -237,16 +266,19 @@ async def add_group_member(
     await get_group_or_404(group_id)
     inviter_membership = await ensure_can_invite_to_group(group_id, user)
     my_profile = await get_my_profile_or_404(user)
+    my_profile_id = str(my_profile["id"])
 
     target_player = None
     final_member_role = data.member_role
 
     if data.player_id:
-        target_player = await db.player_profiles.find_one(
-            {"id": data.player_id}, {"_id": 0}
-        )
+        target_player = await db.player_profiles.find_one({"id": data.player_id})
         if not target_player:
             raise HTTPException(status_code=404, detail="Jugador no encontrado")
+
+        raw_target_id = target_player.get("id") or target_player.get("_id")
+        target_player = clean_mongo(target_player)
+        target_player["id"] = str(raw_target_id) if raw_target_id is not None else None
     else:
         if not data.name:
             raise HTTPException(status_code=400, detail="Debes enviar player_id o name")
@@ -266,7 +298,7 @@ async def add_group_member(
             "secondary_positions": [],
             "unwanted_position": None,
             "matches_played": 0,
-            "created_by": my_profile["id"],
+            "created_by": my_profile_id,
             "estimated_level": 5.0,
             "created_at": now,
         }
@@ -274,6 +306,9 @@ async def add_group_member(
 
         # Si se crea manualmente por nombre/email, siempre entra como invitado
         final_member_role = "invitado"
+
+    if not target_player.get("id"):
+        raise HTTPException(status_code=400, detail="Jugador inválido: falta id")
 
     # Regla: frecuente solo puede invitar invitados
     if inviter_membership["member_role"] == "frecuente" and final_member_role != "invitado":
@@ -283,9 +318,9 @@ async def add_group_member(
         {
             "group_id": group_id,
             "player_id": target_player["id"],
-        },
-        {"_id": 0},
+        }
     )
+    existing = clean_mongo(existing) if existing else None
 
     if existing and existing.get("status") == "activo":
         raise HTTPException(status_code=400, detail="Ese jugador ya pertenece al grupo")
@@ -299,7 +334,7 @@ async def add_group_member(
                 "$set": {
                     "member_role": final_member_role,
                     "status": "activo",
-                    "invited_by": my_profile["id"],
+                    "invited_by": my_profile_id,
                     "updated_at": now,
                 }
             },
@@ -314,13 +349,13 @@ async def add_group_member(
             "player_id": target_player["id"],
             "member_role": final_member_role,
             "status": "activo",
-            "invited_by": my_profile["id"],
+            "invited_by": my_profile_id,
             "created_at": now,
         }
         await db.group_members.insert_one(member_doc)
         created_at_value = now
 
-    return {
+    return clean_mongo({
         "id": member_id,
         "group_id": group_id,
         "player_id": target_player["id"],
@@ -328,9 +363,9 @@ async def add_group_member(
         "player_email": target_player.get("email"),
         "member_role": final_member_role,
         "status": "activo",
-        "invited_by": my_profile["id"],
+        "invited_by": my_profile_id,
         "created_at": created_at_value,
-    }
+    })
 
 
 @router.patch("/{group_id}/members/{member_id}")
@@ -344,9 +379,10 @@ async def update_group_member(
     await ensure_can_manage_group(group_id, user)
 
     member = await db.group_members.find_one(
-        {"id": member_id, "group_id": group_id},
-        {"_id": 0},
+        {"id": member_id, "group_id": group_id}
     )
+    member = clean_mongo(member) if member else None
+
     if not member:
         raise HTTPException(status_code=404, detail="Miembro no encontrado")
 
@@ -372,5 +408,5 @@ async def update_group_member(
         {"$set": update_data},
     )
 
-    updated = await db.group_members.find_one({"id": member_id}, {"_id": 0})
-    return updated
+    updated = await db.group_members.find_one({"id": member_id})
+    return clean_mongo(updated)
