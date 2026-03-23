@@ -65,6 +65,18 @@ async def ensure_group_organizer(group_id: str, user):
         raise HTTPException(status_code=403, detail="Solo el organizador del grupo puede hacer esta acción")
     return membership
 
+async def ensure_can_delete_match(match: dict, user):
+    if user["role"] == "admin":
+        return True
+
+    profile = await get_my_profile_or_404(user)
+    if profile["id"] != match["organizer_id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el creador del partido puede borrarlo"
+        )
+
+    return True
 
 
 @router.post("", response_model=MatchResponse)
@@ -234,6 +246,26 @@ async def update_match(
 
     updated = await db.matches.find_one({"id": match_id}, {"_id": 0})
     return updated
+
+
+@router.delete("/{match_id}")
+async def delete_match(match_id: str, user=Depends(get_current_user)):
+    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not match:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+
+    await ensure_can_delete_match(match, user)
+
+    await db.match_registrations.delete_many({"match_id": match_id})
+    await db.peer_ratings.delete_many({"match_id": match_id})
+    await db.self_evaluations.delete_many({"match_id": match_id})
+    await db.stats_proposals.delete_many({"match_id": match_id})
+    await db.stats_final.delete_many({"match_id": match_id})
+    await db.team_generations.delete_many({"match_id": match_id})
+    await db.matches.delete_one({"id": match_id})
+
+    return {"message": "Partido borrado correctamente"}
+
 
 
 

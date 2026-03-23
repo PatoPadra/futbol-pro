@@ -8,6 +8,8 @@ from models import (
 from constants import GUEST_TO_REGULAR_THRESHOLD
 from datetime import datetime, timezone
 import uuid
+from routes_matches import ensure_group_organizer
+
 
 router = APIRouter(prefix="/api/matches", tags=["post-match"])
 
@@ -19,11 +21,7 @@ async def finalize_match(match_id: str, user=Depends(get_current_user)):
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado")
 
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] != "admin" and (not profile or profile["id"] != match["organizer_id"]):
-        raise HTTPException(status_code=403, detail="Solo el organizador")
+    await ensure_group_organizer(match["group_id"], user)
 
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "finalizado"}}
@@ -39,9 +37,14 @@ async def finalize_match(match_id: str, user=Depends(get_current_user)):
             {"id": reg["player_id"]},
             {"$inc": {"matches_played": 1}}
         )
+
         # Check guest -> regular promotion
         p = await db.player_profiles.find_one({"id": reg["player_id"]}, {"_id": 0})
-        if p and p.get("player_type") == "invitado" and p.get("matches_played", 0) >= GUEST_TO_REGULAR_THRESHOLD:
+        if (
+            p
+            and p.get("player_type") == "invitado"
+            and p.get("matches_played", 0) >= GUEST_TO_REGULAR_THRESHOLD
+        ):
             await db.player_profiles.update_one(
                 {"id": reg["player_id"]},
                 {"$set": {"player_type": "frecuente"}}
