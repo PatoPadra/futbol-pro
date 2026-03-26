@@ -1,26 +1,23 @@
-from fastapi import APIRouter, HTTPException, Depends
-from database import db
-from auth import get_current_user
-from models import TeamGenerationResponse, ManualAdjustRequest
-from team_balancer import generate_teams
-from constants import FORMATION_COORDS, FORMATIONS
 from datetime import datetime, timezone
 import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from auth import get_current_user
+from constants import FORMATION_COORDS, FORMATIONS
+from database import db
+from models import ManualAdjustRequest, TeamGenerationResponse
+from services.matches import get_match_or_404
+from services.permissions import ensure_group_member, ensure_group_organizer
+from team_balancer import generate_teams
 
 router = APIRouter(prefix="/api/matches", tags=["teams"])
 
 
 @router.post("/{match_id}/generate-teams", response_model=TeamGenerationResponse)
 async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
-    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
-    if not match:
-        raise HTTPException(status_code=404, detail="Partido no encontrado")
-
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] != "admin" and (not profile or profile["id"] != match["organizer_id"]):
-        raise HTTPException(status_code=403, detail="Solo el organizador puede generar equipos")
+    match = await get_match_or_404(match_id)
+    await ensure_group_organizer(match["group_id"], user)
 
     try:
         result = await generate_teams(match_id)
@@ -41,7 +38,6 @@ async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
         "created_at": now,
     }
 
-    # Remove previous generations for this match
     await db.team_generations.delete_many({"match_id": match_id})
     await db.team_generations.insert_one(gen_doc)
 
@@ -54,13 +50,13 @@ async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
 
 @router.get("/{match_id}/teams")
 async def get_match_teams(match_id: str, user=Depends(get_current_user)):
-    gen = await db.team_generations.find_one(
-        {"match_id": match_id}, {"_id": 0}
-    )
+    match = await get_match_or_404(match_id)
+    await ensure_group_member(match["group_id"], user)
+
+    gen = await db.team_generations.find_one({"match_id": match_id}, {"_id": 0})
     if not gen:
         raise HTTPException(status_code=404, detail="No se han generado equipos aún")
 
-    # Include formation coordinates for pitch visualization
     coords_a = FORMATION_COORDS.get(gen.get("formation_a"), [])
     coords_b = FORMATION_COORDS.get(gen.get("formation_b"), [])
     available_formations = list(FORMATIONS.keys())
@@ -74,50 +70,32 @@ async def get_match_teams(match_id: str, user=Depends(get_current_user)):
 
 
 @router.put("/{match_id}/teams")
-async def adjust_teams(
-    match_id: str,
-    data: ManualAdjustRequest,
-    user=Depends(get_current_user),
-):
-    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
-    if not match:
-        raise HTTPException(status_code=404, detail="Partido no encontrado")
+async def adjust_teams(match_id: str, data: ManualAdjustRequest, user=Depends(get_current_user)):
+    match = await get_match_or_404(match_id)
+    await ensure_group_organizer(match["group_id"], user)
 
-    gen = await db.team_generations.find_one(
-        {"match_id": match_id}, {"_id": 0}
-    )
+    gen = await db.team_generations.find_one({"match_id": match_id}, {"_id": 0})
     if not gen:
         raise HTTPException(status_code=404, detail="No se han generado equipos")
 
     update = {
-        "assignments": [a.model_dump() for a in data.assignments],
+        "assignments": [assignment.model_dump() for assignment in data.assignments],
     }
     if data.formation_a:
         update["formation_a"] = data.formation_a
     if data.formation_b:
         update["formation_b"] = data.formation_b
 
-    await db.team_generations.update_one(
-        {"match_id": match_id}, {"$set": update}
-    )
+    await db.team_generations.update_one({"match_id": match_id}, {"$set": update})
 
-    updated = await db.team_generations.find_one(
-        {"match_id": match_id}, {"_id": 0}
-    )
+    updated = await db.team_generations.find_one({"match_id": match_id}, {"_id": 0})
     return updated
 
 
 @router.post("/{match_id}/teams/confirm")
 async def confirm_teams(match_id: str, user=Depends(get_current_user)):
-    match = await db.matches.find_one({"id": match_id}, {"_id": 0})
-    if not match:
-        raise HTTPException(status_code=404, detail="Partido no encontrado")
-
-    profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-    if user["role"] != "admin" and (not profile or profile["id"] != match["organizer_id"]):
-        raise HTTPException(status_code=403, detail="Solo el organizador puede confirmar")
+    match = await get_match_or_404(match_id)
+    await ensure_group_organizer(match["group_id"], user)
 
     await db.team_generations.update_one(
         {"match_id": match_id}, {"$set": {"status": "confirmado"}}

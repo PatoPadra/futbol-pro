@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 import re
 import uuid
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
@@ -12,18 +11,17 @@ from models import (
     CreateGroupRequest,
     GroupSeedRatingBatchRequest,
 )
+from services.permissions import (
+    ensure_can_invite_to_group,
+    ensure_can_manage_group,
+    ensure_can_rate_group,
+    ensure_group_member,
+    get_group_or_404,
+)
+from services.profiles import get_my_profile_or_404
+from utils.mongo import clean_mongo
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
-
-
-def clean_mongo(value):
-    if isinstance(value, ObjectId):
-        return str(value)
-    if isinstance(value, dict):
-        return {k: clean_mongo(v) for k, v in value.items() if k != "_id"}
-    if isinstance(value, list):
-        return [clean_mongo(item) for item in value]
-    return value
 
 
 def normalize_global_role(role: str | None):
@@ -42,112 +40,6 @@ def build_membership_type(member_role: str | None, player_type: str | None = Non
     if member_role == "invitado" or player_type == "invitado":
         return "invitado"
     return "frecuente"
-
-
-async def get_my_profile_or_404(user):
-    user_id = user.get("user_id") or user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Usuario inválido")
-
-    raw_profile = await db.player_profiles.find_one({"user_id": user_id})
-    if not raw_profile:
-        raise HTTPException(status_code=400, detail="Perfil no encontrado")
-
-    profile = clean_mongo(raw_profile)
-    if raw_profile.get("id") is None and raw_profile.get("_id") is not None:
-        profile["id"] = str(raw_profile["_id"])
-    elif raw_profile.get("id") is not None:
-        profile["id"] = str(raw_profile["id"])
-
-    return profile
-
-
-async def get_group_or_404(group_id: str):
-    group = await db.groups.find_one({"id": group_id})
-    if not group:
-        raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    return clean_mongo(group)
-
-
-async def get_membership(group_id: str, player_id: str):
-    membership = await db.group_members.find_one(
-        {
-            "group_id": group_id,
-            "player_id": player_id,
-            "status": "activo",
-        }
-    )
-    return clean_mongo(membership) if membership else None
-
-
-async def ensure_group_member(group_id: str, user):
-    if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
-        return {
-            "player_id": profile["id"],
-            "member_role": "organizador",
-            "status": "activo",
-        }
-
-    profile = await get_my_profile_or_404(user)
-    membership = await get_membership(group_id, profile["id"])
-    if not membership:
-        raise HTTPException(status_code=403, detail="No perteneces a este grupo")
-    return membership
-
-
-async def ensure_can_manage_group(group_id: str, user):
-    if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
-        return {
-            "player_id": profile["id"],
-            "member_role": "organizador",
-            "status": "activo",
-        }
-
-    profile = await get_my_profile_or_404(user)
-    membership = await get_membership(group_id, profile["id"])
-    if not membership:
-        raise HTTPException(status_code=403, detail="No perteneces a este grupo")
-    if membership["member_role"] != "organizador":
-        raise HTTPException(status_code=403, detail="Solo el organizador puede administrar el grupo")
-    return membership
-
-
-async def ensure_can_invite_to_group(group_id: str, user):
-    if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
-        return {
-            "player_id": profile["id"],
-            "member_role": "organizador",
-            "status": "activo",
-        }
-
-    profile = await get_my_profile_or_404(user)
-    membership = await get_membership(group_id, profile["id"])
-    if not membership:
-        raise HTTPException(status_code=403, detail="No perteneces a este grupo")
-    if membership["member_role"] != "organizador":
-        raise HTTPException(status_code=403, detail="Solo el organizador puede invitar jugadores a este grupo")
-    return membership
-
-
-async def ensure_can_rate_group(group_id: str, user):
-    if user["role"] == "admin":
-        profile = await get_my_profile_or_404(user)
-        return {
-            "player_id": profile["id"],
-            "member_role": "organizador",
-            "status": "activo",
-        }
-
-    profile = await get_my_profile_or_404(user)
-    membership = await get_membership(group_id, profile["id"])
-    if not membership:
-        raise HTTPException(status_code=403, detail="No perteneces a este grupo")
-    if membership["member_role"] not in ["organizador", "frecuente"]:
-        raise HTTPException(status_code=403, detail="Solo los jugadores frecuentes u organizadores pueden calificar")
-    return membership
 
 
 async def resolve_target_player(data: AddGroupMemberRequest, inviter_profile: dict):
@@ -345,14 +237,24 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
     await ensure_group_member(group_id, user)
 
     memberships = await db.group_members.find({"group_id": group_id, "status": "activo"}, {"_id": 0}).to_list(500)
+    if not memberships:
+        return []
+
+    player_ids = [membership["player_id"] for membership in memberships]
+    players = await db.player_profiles.find({"id": {"$in": player_ids}}, {"_id": 0}).to_list(500)
+    player_map = {player["id"]: player for player in players}
+
+    user_ids = [player["user_id"] for player in players if player.get("user_id")]
+    linked_users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(500) if user_ids else []
+    user_map = {linked_user["id"]: linked_user for linked_user in linked_users}
 
     result = []
     for membership in memberships:
-        player = await db.player_profiles.find_one({"id": membership["player_id"]}, {"_id": 0})
+        player = player_map.get(membership["player_id"])
 
         global_role = "jugador"
         if player and player.get("user_id"):
-            linked_user = await db.users.find_one({"id": player["user_id"]}, {"_id": 0})
+            linked_user = user_map.get(player["user_id"])
             global_role = normalize_global_role(linked_user.get("role") if linked_user else None)
 
         member_role = membership.get("member_role")

@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import {
   ClipboardList,
   Home,
@@ -13,6 +12,9 @@ import {
   Users,
   X,
 } from 'lucide-react';
+
+import { useAuth } from '../contexts/AuthContext';
+import { canCreateGroupsAndMatches, getUserDisplayName, isAdmin } from '../utils/user';
 import { Button } from './ui/button';
 
 export default function Layout({ children }) {
@@ -21,25 +23,31 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const allowOrganizerActions = canCreateGroupsAndMatches(user);
+  const showAdmin = isAdmin(user);
+
+  const navItems = useMemo(() => {
+    const items = [
+      { path: '/dashboard', icon: Home, label: 'Inicio' },
+      { path: '/partidos', icon: Trophy, label: 'Partidos' },
+      { path: '/mi-perfil', icon: UserCircle, label: 'Perfil' },
+    ];
+
+    if (allowOrganizerActions) {
+      items.splice(2, 0, { path: '/organizador', icon: ClipboardList, label: 'Organizar' });
+    }
+    if (showAdmin) {
+      items.push({ path: '/admin', icon: Shield, label: 'Admin' });
+    }
+    return items;
+  }, [allowOrganizerActions, showAdmin]);
+
   const isActive = (path) => location.pathname === path;
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
-
-  const navItems = [
-    { path: '/dashboard', icon: Home, label: 'Inicio' },
-    { path: '/partidos', icon: Trophy, label: 'Partidos' },
-    { path: '/mi-perfil', icon: UserCircle, label: 'Perfil' },
-  ];
-
-  if (user?.role === 'organizador' || user?.role === 'admin') {
-    navItems.splice(2, 0, { path: '/organizador', icon: ClipboardList, label: 'Organizar' });
-  }
-  if (user?.role === 'admin') {
-    navItems.push({ path: '/admin', icon: Shield, label: 'Admin' });
-  }
 
   if (!isAuthenticated) {
     return <main className="min-h-screen">{children}</main>;
@@ -52,9 +60,7 @@ export default function Layout({ children }) {
           <div className="w-8 h-8 bg-turf rounded-lg flex items-center justify-center">
             <Trophy className="w-5 h-5 text-white" />
           </div>
-          <span className="font-heading text-xl font-bold uppercase tracking-tight text-slate-900">
-            App Futbol
-          </span>
+          <span className="font-heading text-xl font-bold uppercase tracking-tight text-slate-900">App Futbol</span>
         </Link>
 
         <nav className="flex items-center gap-1 flex-1">
@@ -76,7 +82,7 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="flex items-center gap-3">
-          {(user?.role === 'organizador' || user?.role === 'admin') && (
+          {allowOrganizerActions && (
             <>
               <Button
                 data-testid="create-group-btn"
@@ -96,7 +102,7 @@ export default function Layout({ children }) {
             </>
           )}
           <div className="flex items-center gap-2 text-sm text-slate-600">
-            <span className="font-medium">{user?.profile?.name || user?.name || ''}</span>
+            <span className="font-medium">{getUserDisplayName(user)}</span>
           </div>
           <Button
             variant="ghost"
@@ -117,11 +123,7 @@ export default function Layout({ children }) {
           </div>
           <span className="font-heading text-lg font-bold uppercase tracking-tight">App Futbol</span>
         </Link>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="p-2 text-slate-600"
-          data-testid="mobile-menu-toggle"
-        >
+        <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 text-slate-600" data-testid="mobile-menu-toggle">
           {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </header>
@@ -130,9 +132,9 @@ export default function Layout({ children }) {
         <div className="md:hidden fixed inset-x-0 top-14 bg-white/95 backdrop-blur-lg border-b border-slate-200 z-30 p-4 animate-slide-up">
           <div className="flex flex-col gap-1">
             <div className="text-xs font-medium text-slate-400 uppercase tracking-wider px-3 mb-2">
-              {user?.profile?.name || user?.name}
+              {getUserDisplayName(user)}
             </div>
-            {(user?.role === 'organizador' || user?.role === 'admin') && (
+            {allowOrganizerActions && (
               <>
                 <button
                   onClick={() => { navigate('/grupos/crear'); setMenuOpen(false); }}

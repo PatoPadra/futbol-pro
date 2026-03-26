@@ -1,25 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Plus, Shield, Star, Users } from 'lucide-react';
+import { Shield, Star, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { getGroupPermissionLabel, getMembershipTypeLabel } from '../constants/groups';
+import { canInviteToGroup, canRateSeed } from '../utils/permissions';
+import { getProfileId, isAdmin } from '../utils/user';
+import GroupMemberCard from '../components/groups/GroupMemberCard';
+import InviteMemberForm from '../components/groups/InviteMemberForm';
+import SeedRatingRow from '../components/groups/SeedRatingRow';
+import PageLoader from '../components/common/PageLoader';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
-const GROUP_PERMISSION_LABELS = {
-  organizador: 'Organizador',
-  miembro: 'Miembro',
-};
-
-const MEMBERSHIP_TYPE_LABELS = {
-  frecuente: 'Frecuente',
-  invitado: 'Invitado',
+const INITIAL_INVITE_FORM = {
+  name: '',
+  username: '',
+  email: '',
+  member_role: 'frecuente',
 };
 
 export default function GroupDetail() {
@@ -30,15 +31,15 @@ export default function GroupDetail() {
   const [loading, setLoading] = useState(true);
   const [savingInvite, setSavingInvite] = useState(false);
   const [savingRatings, setSavingRatings] = useState(false);
-  const [inviteForm, setInviteForm] = useState({
-    name: '',
-    username: '',
-    email: '',
-    member_role: 'frecuente',
-  });
+  const [inviteForm, setInviteForm] = useState(INITIAL_INVITE_FORM);
   const [ratingMap, setRatingMap] = useState({});
 
-  const loadData = async () => {
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function loadData() {
     try {
       const [groupRes, membersRes, ratingsRes] = await Promise.all([
         api.get(`/groups/${id}`),
@@ -59,26 +60,28 @@ export default function GroupDetail() {
     } finally {
       setLoading(false);
     }
+  }
+
+  const myProfileId = getProfileId(user);
+  const allowInvite = canInviteToGroup(group, user);
+  const allowSeedRating = canRateSeed(group, user);
+
+  const rateableMembers = useMemo(
+    () =>
+      members.filter((member) => {
+        if (member.player_id === myProfileId) return false;
+
+        const isCoreMember = member.membership_type === 'frecuente';
+        const isMyInvitedGuest = member.membership_type === 'invitado' && member.invited_by === myProfileId;
+
+        return isCoreMember || isMyInvitedGuest;
+      }),
+    [members, myProfileId],
+  );
+
+  const handleInviteFormChange = (field, value) => {
+    setInviteForm((prev) => ({ ...prev, [field]: value }));
   };
-
-  useEffect(() => {
-    loadData();
-  }, [id]);
-
-  const myProfileId = user?.profile?.id || user?.profile_id;
-  const canInvite = Boolean(group?.can_invite || user?.role === 'admin');
-  const canRate = Boolean(group?.can_rate_seed || user?.role === 'admin');
-
-  const rateableMembers = useMemo(() => {
-    return members.filter((member) => {
-      if (member.player_id === myProfileId) return false;
-
-      const isCoreMember = member.membership_type === 'frecuente';
-      const isMyInvitedGuest = member.membership_type === 'invitado' && member.invited_by === myProfileId;
-
-      return isCoreMember || isMyInvitedGuest;
-    });
-  }, [members, myProfileId]);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -94,7 +97,7 @@ export default function GroupDetail() {
 
       await api.post(`/groups/${id}/members`, payload);
       toast.success('Jugador agregado al grupo');
-      setInviteForm({ name: '', username: '', email: '', member_role: 'frecuente' });
+      setInviteForm(INITIAL_INVITE_FORM);
       await loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al invitar jugador');
@@ -125,13 +128,7 @@ export default function GroupDetail() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   if (!group) {
     return <div className="page-container text-center text-slate-500">Grupo no encontrado</div>;
@@ -142,19 +139,13 @@ export default function GroupDetail() {
       <div className="animate-slide-up space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">
-              {group.name}
-            </h1>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">{group.name}</h1>
             <p className="text-slate-500 mt-1">{group.members_count} miembros activos</p>
 
             <div className="flex items-center gap-2 flex-wrap mt-3">
-              <Badge variant="outline">
-                {GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
-              </Badge>
-              <Badge variant="outline">
-                {MEMBERSHIP_TYPE_LABELS[group.my_membership_type] || group.my_membership_type}
-              </Badge>
-              {group.my_global_role === 'admin' && (
+              <Badge variant="outline">{getGroupPermissionLabel(group.my_group_permission)}</Badge>
+              <Badge variant="outline">{getMembershipTypeLabel(group.my_membership_type)}</Badge>
+              {(group.my_global_role === 'admin' || isAdmin(user)) && (
                 <Badge className="bg-slate-900 text-white">
                   <Shield className="w-3 h-3 mr-1" /> Admin
                 </Badge>
@@ -180,39 +171,12 @@ export default function GroupDetail() {
 
               <CardContent className="space-y-3">
                 {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3"
-                  >
-                    <div>
-                      <p className="font-medium">{member.player_name}</p>
-                      <p className="text-xs text-slate-500">
-                        {member.player_email || 'Sin email'}
-                        {member.primary_position ? ` · ${member.primary_position}` : ''}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <Badge variant="outline">
-                        {GROUP_PERMISSION_LABELS[member.group_permission] || member.group_permission}
-                      </Badge>
-
-                      <Badge variant="outline">
-                        {MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type}
-                      </Badge>
-
-                      {member.is_system_admin && (
-                        <Badge className="bg-slate-900 text-white">
-                          <Shield className="w-3 h-3 mr-1" /> Admin
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+                  <GroupMemberCard key={member.id} member={member} />
                 ))}
               </CardContent>
             </Card>
 
-            {canRate && (
+            {allowSeedRating && (
               <Card className="border-slate-100">
                 <CardHeader>
                   <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
@@ -226,44 +190,23 @@ export default function GroupDetail() {
                   </p>
 
                   {rateableMembers.length === 0 && (
-                    <p className="text-sm text-slate-400">
-                      No hay compañeros elegibles para puntuar todavía.
-                    </p>
+                    <p className="text-sm text-slate-400">No hay compañeros elegibles para puntuar todavía.</p>
                   )}
 
                   <div className="space-y-3">
                     {rateableMembers.map((member) => (
-                      <div
+                      <SeedRatingRow
                         key={member.player_id}
-                        className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3"
-                      >
-                        <div>
-                          <p className="font-medium">{member.player_name}</p>
-                          <p className="text-xs text-slate-500">
-                            {GROUP_PERMISSION_LABELS[member.group_permission] || member.group_permission}
-                            {' · '}
-                            {MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type}
-                            {member.membership_type === 'invitado' && member.invited_by === myProfileId
-                              ? ' · Tu invitado'
-                              : ''}
-                          </p>
-                        </div>
-
-                        <Input
-                          type="number"
-                          min="1"
-                          max="10"
-                          step="1"
-                          value={ratingMap[member.player_id] || ''}
-                          onChange={(e) =>
-                            setRatingMap((prev) => ({
-                              ...prev,
-                              [member.player_id]: e.target.value,
-                            }))
-                          }
-                          className="w-24 h-10 bg-slate-50"
-                        />
-                      </div>
+                        member={member}
+                        isInvitedByMe={member.invited_by === myProfileId}
+                        value={ratingMap[member.player_id]}
+                        onChange={(value) =>
+                          setRatingMap((prev) => ({
+                            ...prev,
+                            [member.player_id]: value,
+                          }))
+                        }
+                      />
                     ))}
                   </div>
 
@@ -280,80 +223,13 @@ export default function GroupDetail() {
           </div>
 
           <div className="space-y-6">
-            {canInvite && (
-              <Card className="border-slate-100">
-                <CardHeader>
-                  <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Invitar jugador
-                  </CardTitle>
-                </CardHeader>
-
-                <CardContent>
-                  <form onSubmit={handleInvite} className="space-y-4">
-                    <div>
-                      <Label>Email</Label>
-                      <Input
-                        value={inviteForm.email}
-                        onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
-                        placeholder="mail@ejemplo.com"
-                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Nombre de usuario o nombre</Label>
-                      <Input
-                        value={inviteForm.username}
-                        onChange={(e) => setInviteForm((prev) => ({ ...prev, username: e.target.value }))}
-                        placeholder="usuario o nombre visible"
-                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Nombre visible (para invitados)</Label>
-                      <Input
-                        value={inviteForm.name}
-                        onChange={(e) => setInviteForm((prev) => ({ ...prev, name: e.target.value }))}
-                        placeholder="Nombre del invitado"
-                        className="mt-1.5 h-11 bg-slate-50 border-slate-200"
-                      />
-                    </div>
-
-                    <div>
-                      <Label>Tipo de miembro</Label>
-                      <Select
-                        value={inviteForm.member_role}
-                        onValueChange={(value) =>
-                          setInviteForm((prev) => ({ ...prev, member_role: value }))
-                        }
-                      >
-                        <SelectTrigger className="mt-1.5 h-11 bg-slate-50 border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="frecuente">Frecuente</SelectItem>
-                          <SelectItem value="invitado">Invitado</SelectItem>
-                          <SelectItem value="organizador">Organizador</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <p className="text-xs text-slate-500">
-                      La autoridad en este grupo se muestra como <strong>Organizador/Miembro</strong>.
-                      La forma de participación se muestra como <strong>Frecuente/Invitado</strong>.
-                    </p>
-
-                    <Button
-                      type="submit"
-                      disabled={savingInvite}
-                      className="w-full bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase"
-                    >
-                      {savingInvite ? 'Guardando...' : 'Agregar al grupo'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+            {allowInvite && (
+              <InviteMemberForm
+                form={inviteForm}
+                onFormChange={handleInviteFormChange}
+                onSubmit={handleInvite}
+                saving={savingInvite}
+              />
             )}
           </div>
         </div>
