@@ -1,6 +1,3 @@
-export const MATCH_STATUSES_ACTIVE = ['abierto', 'cerrado', 'equipos_generados', 'equipos_confirmados'];
-export const MATCH_STATUSES_PAST = ['finalizado', 'completado'];
-
 export const MODALITY_LABELS = {
   5: 'Futbol 5',
   6: 'Futbol 6',
@@ -28,12 +25,7 @@ export const MATCH_STATUS_LABELS = {
   equipos_confirmados: 'Equipos confirmados',
   finalizado: 'Finalizado',
   completado: 'Completado',
-};
-
-export const MATCH_STATUS_SHORT_LABELS = {
-  ...MATCH_STATUS_LABELS,
-  equipos_generados: 'Equipos',
-  equipos_confirmados: 'Confirmado',
+  cancelado: 'Cancelado',
 };
 
 export const MATCH_STATUS_STYLES = {
@@ -43,26 +35,8 @@ export const MATCH_STATUS_STYLES = {
   equipos_confirmados: 'bg-indigo-50 text-indigo-600 border-indigo-200',
   finalizado: 'bg-slate-100 text-slate-600 border-slate-200',
   completado: 'bg-slate-50 text-slate-400 border-slate-200',
+  cancelado: 'bg-red-50 text-red-600 border-red-200',
 };
 
-export function getModalityLabel(modality, { short = false } = {}) {
-  const labels = short ? MODALITY_SHORT_LABELS : MODALITY_LABELS;
-  return labels[modality] || (short ? `F${modality}` : `Futbol ${modality}`);
-}
-
-export function getMatchStatusLabel(status, { short = false } = {}) {
-  const labels = short ? MATCH_STATUS_SHORT_LABELS : MATCH_STATUS_LABELS;
-  return labels[status] || status;
-}
-
-export function getMatchStatusStyle(status) {
-  return MATCH_STATUS_STYLES[status] || 'bg-slate-100 text-slate-600 border-slate-200';
-}
-
-export function isActiveMatchStatus(status) {
-  return MATCH_STATUSES_ACTIVE.includes(status);
-}
-
-export function isPastMatchStatus(status) {
-  return MATCH_STATUSES_PAST.includes(status);
-}
+export const UPCOMING_MATCH_STATUSES = ['abierto', 'cerrado', 'equipos_generados', 'equipos_confirmados'];
+export const PAST_MATCH_STATUSES = ['finalizado', 'completado', 'cancelado'];

@@ -1,21 +1,23 @@
-import { isAdmin } from './user';
+export function isAdmin(user) {
+  return user?.role === 'admin';
+}
+
+export function isOrganizerRole(user) {
+  return user?.role === 'organizador' || user?.role === 'admin';
+}
 
 export function canManageGroup(group, user) {
-  if (isAdmin(user)) return true;
-  return group?.can_manage || group?.can_invite || group?.my_group_permission === 'organizador' || group?.my_member_role === 'organizador';
+  return isAdmin(user) || !!group?.can_manage || group?.my_group_permission === 'organizador';
 }
 
 export function canInviteToGroup(group, user) {
-  if (isAdmin(user)) return true;
-  return Boolean(group?.can_invite || group?.my_group_permission === 'organizador' || group?.my_member_role === 'organizador');
+  return isAdmin(user) || !!group?.can_invite;
 }
 
 export function canRateSeed(group, user) {
-  if (isAdmin(user)) return true;
-  return Boolean(group?.can_rate_seed || ['organizador', 'frecuente'].includes(group?.my_member_role));
+  return isAdmin(user) || !!group?.can_rate_seed;
 }
 
 export function canManageMatch(match, user) {
-  if (isAdmin(user)) return true;
-  return match?.my_group_role === 'organizador' || match?.organizer_id === user?.profile_id || match?.organizer_id === user?.profile?.id;
+  return isAdmin(user) || match?.my_group_role === 'organizador';
 }

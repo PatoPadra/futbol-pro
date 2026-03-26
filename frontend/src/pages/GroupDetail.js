@@ -1,27 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Shield, Star, Users } from 'lucide-react';
+import { ArrowRight, Shield, Star, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { getGroupPermissionLabel, getMembershipTypeLabel } from '../constants/groups';
-import { canInviteToGroup, canRateSeed } from '../utils/permissions';
-import { getProfileId, isAdmin } from '../utils/user';
-import GroupMemberCard from '../components/groups/GroupMemberCard';
-import InviteMemberForm from '../components/groups/InviteMemberForm';
-import SeedRatingRow from '../components/groups/SeedRatingRow';
-import PageLoader from '../components/common/PageLoader';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-
-const INITIAL_INVITE_FORM = {
-  name: '',
-  username: '',
-  email: '',
-  member_role: 'frecuente',
-};
+import PageLoader from '../components/common/PageLoader';
+import GroupMemberCard from '../components/groups/GroupMemberCard';
+import InviteMemberForm from '../components/groups/InviteMemberForm';
+import SeedRatingRow from '../components/groups/SeedRatingRow';
+import { GROUP_PERMISSION_LABELS, MEMBERSHIP_TYPE_LABELS } from '../constants/groups';
+import { canInviteToGroup, canRateSeed } from '../utils/permissions';
+import { getProfileId } from '../utils/user';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -31,15 +24,16 @@ export default function GroupDetail() {
   const [loading, setLoading] = useState(true);
   const [savingInvite, setSavingInvite] = useState(false);
   const [savingRatings, setSavingRatings] = useState(false);
-  const [inviteForm, setInviteForm] = useState(INITIAL_INVITE_FORM);
+  const [memberFilter, setMemberFilter] = useState('todos');
+  const [inviteForm, setInviteForm] = useState({
+    name: '',
+    username: '',
+    email: '',
+    member_role: 'frecuente',
+  });
   const [ratingMap, setRatingMap] = useState({});
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  async function loadData() {
+  const loadData = async () => {
     try {
       const [groupRes, membersRes, ratingsRes] = await Promise.all([
         api.get(`/groups/${id}`),
@@ -60,28 +54,47 @@ export default function GroupDetail() {
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [id]);
 
   const myProfileId = getProfileId(user);
-  const allowInvite = canInviteToGroup(group, user);
-  const allowSeedRating = canRateSeed(group, user);
+  const canInvite = canInviteToGroup(group, user);
+  const canRate = canRateSeed(group, user);
 
-  const rateableMembers = useMemo(
-    () =>
-      members.filter((member) => {
-        if (member.player_id === myProfileId) return false;
+  const filteredMembers = useMemo(() => {
+    if (memberFilter === 'frecuentes') {
+      return members.filter((member) => member.membership_type === 'frecuente');
+    }
+    if (memberFilter === 'invitados') {
+      return members.filter((member) => member.membership_type === 'invitado');
+    }
+    if (memberFilter === 'organizadores') {
+      return members.filter((member) => member.group_permission === 'organizador');
+    }
+    return members;
+  }, [memberFilter, members]);
 
-        const isCoreMember = member.membership_type === 'frecuente';
-        const isMyInvitedGuest = member.membership_type === 'invitado' && member.invited_by === myProfileId;
+  const rateableMembers = useMemo(() => {
+    return members.filter((member) => {
+      if (member.player_id === myProfileId) return false;
 
-        return isCoreMember || isMyInvitedGuest;
-      }),
-    [members, myProfileId],
-  );
+      const isCoreMember = member.membership_type === 'frecuente';
+      const isMyInvitedGuest = member.membership_type === 'invitado' && member.invited_by === myProfileId;
 
-  const handleInviteFormChange = (field, value) => {
-    setInviteForm((prev) => ({ ...prev, [field]: value }));
-  };
+      return isCoreMember || isMyInvitedGuest;
+    });
+  }, [members, myProfileId]);
+
+  const memberStats = useMemo(() => {
+    return {
+      frecuentes: members.filter((member) => member.membership_type === 'frecuente').length,
+      invitados: members.filter((member) => member.membership_type === 'invitado').length,
+      organizadores: members.filter((member) => member.group_permission === 'organizador').length,
+    };
+  }, [members]);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -97,7 +110,7 @@ export default function GroupDetail() {
 
       await api.post(`/groups/${id}/members`, payload);
       toast.success('Jugador agregado al grupo');
-      setInviteForm(INITIAL_INVITE_FORM);
+      setInviteForm({ name: '', username: '', email: '', member_role: 'frecuente' });
       await loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al invitar jugador');
@@ -128,56 +141,117 @@ export default function GroupDetail() {
     }
   };
 
-  if (loading) return <PageLoader />;
+  if (loading) {
+    return <PageLoader label="Cargando grupo..." />;
+  }
 
   if (!group) {
     return <div className="page-container text-center text-slate-500">Grupo no encontrado</div>;
   }
 
   return (
-    <div className="page-container max-w-5xl mx-auto" data-testid="group-detail-page">
+    <div className="page-container max-w-6xl mx-auto" data-testid="group-detail-page">
       <div className="animate-slide-up space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">{group.name}</h1>
-            <p className="text-slate-500 mt-1">{group.members_count} miembros activos</p>
-
-            <div className="flex items-center gap-2 flex-wrap mt-3">
-              <Badge variant="outline">{getGroupPermissionLabel(group.my_group_permission)}</Badge>
-              <Badge variant="outline">{getMembershipTypeLabel(group.my_membership_type)}</Badge>
-              {(group.my_global_role === 'admin' || isAdmin(user)) && (
-                <Badge className="bg-slate-900 text-white">
-                  <Shield className="w-3 h-3 mr-1" /> Admin
+        <section className="rounded-[28px] border border-slate-100 bg-white p-6 md:p-7 shadow-sm shadow-slate-100/80">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <Badge variant="outline">
+                  {GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
                 </Badge>
-              )}
+                <Badge variant="outline">
+                  {MEMBERSHIP_TYPE_LABELS[group.my_membership_type] || group.my_membership_type}
+                </Badge>
+                {user?.role === 'admin' && (
+                  <Badge className="bg-slate-900 text-white">
+                    <Shield className="w-3 h-3 mr-1" /> Admin
+                  </Badge>
+                )}
+              </div>
+
+              <h1 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight text-slate-900">
+                {group.name}
+              </h1>
+              <p className="text-slate-500 mt-2 max-w-2xl">
+                Organiza jugadores frecuentes, invitados y puntajes iniciales desde una sola pantalla.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Link to="/organizador">
+                <Button variant="outline" className="rounded-full px-5">
+                  Panel organizador
+                </Button>
+              </Link>
+              <Link to={`/partidos/crear?group_id=${group.id}`}>
+                <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
+                  Crear partido
+                </Button>
+              </Link>
             </div>
           </div>
 
-          <Link to={`/partidos/crear?group_id=${group.id}`}>
-            <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-              Crear Partido
-            </Button>
-          </Link>
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            {[
+              { label: 'Miembros activos', value: group.members_count },
+              { label: 'Frecuentes', value: memberStats.frecuentes },
+              { label: 'Invitados', value: memberStats.invitados },
+              { label: 'Organizadores', value: memberStats.organizadores },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <p className="text-2xl font-bold text-slate-900">{item.value}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="border-slate-100">
-              <CardHeader>
-                <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Miembros del grupo
-                </CardTitle>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2 space-y-6">
+            <Card className="border-slate-100 shadow-sm shadow-slate-100/70">
+              <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Miembros del grupo
+                  </CardTitle>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Filtrá rápido para ver quiénes son frecuentes, invitados o quién organiza.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ['todos', `Todos (${members.length})`],
+                    ['frecuentes', `Frecuentes (${memberStats.frecuentes})`],
+                    ['invitados', `Invitados (${memberStats.invitados})`],
+                    ['organizadores', `Organizadores (${memberStats.organizadores})`],
+                  ].map(([key, label]) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant={memberFilter === key ? 'default' : 'outline'}
+                      onClick={() => setMemberFilter(key)}
+                      className={`rounded-full ${memberFilter === key ? 'bg-slate-900 text-white hover:bg-slate-800' : ''}`}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
               </CardHeader>
 
               <CardContent className="space-y-3">
-                {members.map((member) => (
-                  <GroupMemberCard key={member.id} member={member} />
-                ))}
+                {filteredMembers.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">
+                    No hay jugadores para este filtro.
+                  </div>
+                ) : (
+                  filteredMembers.map((member) => <GroupMemberCard key={member.id} member={member} />)
+                )}
               </CardContent>
             </Card>
 
-            {allowSeedRating && (
-              <Card className="border-slate-100">
+            {canRate && (
+              <Card className="border-slate-100 shadow-sm shadow-slate-100/70">
                 <CardHeader>
                   <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
                     <Star className="w-4 h-4" /> Puntaje inicial del grupo
@@ -185,9 +259,11 @@ export default function GroupDetail() {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-slate-500">
-                    Los jugadores frecuentes del grupo pueden puntuar a los demás frecuentes. Los invitados solo pueden ser puntuados por quien los invitó.
-                  </p>
+                  <div className="rounded-2xl bg-orange/5 border border-orange/10 p-4">
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Los frecuentes pueden puntuar a los demás frecuentes. Los invitados solo pueden ser puntuados por quien los invitó.
+                    </p>
+                  </div>
 
                   {rateableMembers.length === 0 && (
                     <p className="text-sm text-slate-400">No hay compañeros elegibles para puntuar todavía.</p>
@@ -198,39 +274,60 @@ export default function GroupDetail() {
                       <SeedRatingRow
                         key={member.player_id}
                         member={member}
-                        isInvitedByMe={member.invited_by === myProfileId}
+                        myProfileId={myProfileId}
                         value={ratingMap[member.player_id]}
-                        onChange={(value) =>
+                        onChange={(e) =>
                           setRatingMap((prev) => ({
                             ...prev,
-                            [member.player_id]: value,
+                            [member.player_id]: e.target.value,
                           }))
                         }
                       />
                     ))}
                   </div>
 
-                  <Button
-                    onClick={handleSaveRatings}
-                    disabled={savingRatings || rateableMembers.length === 0}
-                    className="bg-orange hover:bg-orange-light text-white rounded-full px-6 font-bold uppercase"
-                  >
-                    {savingRatings ? 'Guardando...' : 'Guardar Puntajes Iniciales'}
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <p className="text-xs text-slate-400">
+                      Consejo: usá una escala consistente para que el balanceador tenga mejor base.
+                    </p>
+                    <Button
+                      onClick={handleSaveRatings}
+                      disabled={savingRatings || rateableMembers.length === 0}
+                      className="bg-orange hover:bg-orange-light text-white rounded-full px-6 font-bold uppercase"
+                    >
+                      {savingRatings ? 'Guardando...' : 'Guardar puntajes iniciales'}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
           </div>
 
           <div className="space-y-6">
-            {allowInvite && (
+            {canInvite && (
               <InviteMemberForm
-                form={inviteForm}
-                onFormChange={handleInviteFormChange}
+                inviteForm={inviteForm}
+                setInviteForm={setInviteForm}
+                savingInvite={savingInvite}
                 onSubmit={handleInvite}
-                saving={savingInvite}
               />
             )}
+
+            <Card className="border-slate-100 shadow-sm shadow-slate-100/70">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg uppercase">Siguiente paso recomendado</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  Con el grupo listo, lo más práctico es crear el próximo partido ya vinculado a este grupo.
+                </p>
+                <Link to={`/partidos/crear?group_id=${group.id}`}>
+                  <Button className="w-full bg-turf hover:bg-turf-dark text-white rounded-full font-bold uppercase">
+                    Crear partido <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

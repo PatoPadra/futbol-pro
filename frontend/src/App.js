@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Toaster } from '@/components/ui/sonner';
 import Layout from '@/components/Layout';
+import PageLoader from '@/components/common/PageLoader';
 
 import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
@@ -26,7 +27,7 @@ import AdminPanel from '@/pages/AdminPanel';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <div className="min-h-screen"><PageLoader label="Preparando tu sesión..." /></div>;
   if (!isAuthenticated) return <Navigate to="/login" />;
   return children;
 }

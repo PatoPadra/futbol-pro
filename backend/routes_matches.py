@@ -15,16 +15,11 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 
 async def ensure_can_delete_match(match: dict, user):
-    if user["role"] == "admin":
-        return True
-
-    profile = await get_my_profile_or_404(user)
-    if profile["id"] != match["organizer_id"]:
+    if user["role"] != "admin":
         raise HTTPException(
             status_code=403,
-            detail="Solo el creador del partido puede borrarlo",
+            detail="Solo un admin puede borrar definitivamente un partido",
         )
-
     return True
 
 
@@ -194,6 +189,35 @@ async def update_match(
     updated = await db.matches.find_one({"id": match_id}, {"_id": 0})
     return updated
 
+
+
+
+@router.post("/{match_id}/cancel")
+async def cancel_match(match_id: str, user=Depends(get_current_user)):
+    match = await get_match_or_404(match_id)
+    await ensure_group_organizer(match["group_id"], user)
+
+    if match.get("status") in ["finalizado", "completado"] and user["role"] != "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="Este partido ya fue jugado. Solo un admin puede corregirlo borrandolo.",
+        )
+
+    if match.get("status") == "cancelado":
+        return {"message": "El partido ya estaba cancelado"}
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.matches.update_one(
+        {"id": match_id},
+        {
+            "$set": {
+                "status": "cancelado",
+                "cancelled_at": now,
+                "cancelled_by": user.get("user_id") or user.get("id"),
+            }
+        },
+    )
+    return {"message": "Partido cancelado"}
 
 @router.delete("/{match_id}")
 async def delete_match(match_id: str, user=Depends(get_current_user)):
