@@ -15,12 +15,40 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 
 async def ensure_can_delete_match(match: dict, user):
-    if user["role"] != "admin":
+    if user["role"] == "admin":
+        return True
+
+    raise HTTPException(
+        status_code=403,
+        detail="Solo un admin puede borrar definitivamente un partido",
+    )
+
+
+async def ensure_can_manage_match(match: dict, user):
+    if user["role"] == "admin":
+        return True
+
+    profile = await get_my_profile_or_404(user)
+    if profile["id"] != match["organizer_id"]:
         raise HTTPException(
             status_code=403,
-            detail="Solo un admin puede borrar definitivamente un partido",
+            detail="Solo el organizador del partido puede hacer esta acción",
         )
+
     return True
+
+
+async def promote_first_substitute(match_id: str):
+    first_sup = await db.match_registrations.find_one(
+        {"match_id": match_id, "status": "suplente"},
+        {"_id": 0},
+        sort=[("order", 1)],
+    )
+    if first_sup:
+        await db.match_registrations.update_one(
+            {"id": first_sup["id"]},
+            {"$set": {"status": "titular"}},
+        )
 
 
 @router.post("", response_model=MatchResponse)
@@ -165,11 +193,13 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
     return {
         **match,
         "group_name": group["name"] if group else None,
-        "my_group_role": membership.get("member_role"),
+        "my_group_role": membership.get("member_role") if user["role"] != "admin" else "admin",
         "organizer_name": organizer["name"] if organizer else "Desconocido",
         "titular_count": titular_count,
         "suplente_count": suplente_count,
         "my_registration": my_registration,
+        "can_manage": user["role"] == "admin" or membership.get("member_role") == "organizador",
+        "can_delete": user["role"] == "admin",
     }
 
 
@@ -189,35 +219,6 @@ async def update_match(
     updated = await db.matches.find_one({"id": match_id}, {"_id": 0})
     return updated
 
-
-
-
-@router.post("/{match_id}/cancel")
-async def cancel_match(match_id: str, user=Depends(get_current_user)):
-    match = await get_match_or_404(match_id)
-    await ensure_group_organizer(match["group_id"], user)
-
-    if match.get("status") in ["finalizado", "completado"] and user["role"] != "admin":
-        raise HTTPException(
-            status_code=400,
-            detail="Este partido ya fue jugado. Solo un admin puede corregirlo borrandolo.",
-        )
-
-    if match.get("status") == "cancelado":
-        return {"message": "El partido ya estaba cancelado"}
-
-    now = datetime.now(timezone.utc).isoformat()
-    await db.matches.update_one(
-        {"id": match_id},
-        {
-            "$set": {
-                "status": "cancelado",
-                "cancelled_at": now,
-                "cancelled_by": user.get("user_id") or user.get("id"),
-            }
-        },
-    )
-    return {"message": "Partido cancelado"}
 
 @router.delete("/{match_id}")
 async def delete_match(match_id: str, user=Depends(get_current_user)):
@@ -349,15 +350,7 @@ async def unregister_from_match(match_id: str, user=Depends(get_current_user)):
     )
 
     if was_titular:
-        first_sup = await db.match_registrations.find_one(
-            {"match_id": match_id, "status": "suplente"},
-            {"_id": 0},
-            sort=[("order", 1)],
-        )
-        if first_sup:
-            await db.match_registrations.update_one(
-                {"id": first_sup["id"]}, {"$set": {"status": "titular"}}
-            )
+        await promote_first_substitute(match_id)
 
     return {"message": "Te has dado de baja del partido"}
 
@@ -408,6 +401,60 @@ async def close_registrations(match_id: str, user=Depends(get_current_user)):
         {"id": match_id}, {"$set": {"status": "cerrado"}}
     )
     return {"message": "Inscripciones cerradas"}
+
+
+@router.post("/{match_id}/cancel")
+async def cancel_match(match_id: str, user=Depends(get_current_user)):
+    match = await get_match_or_404(match_id)
+    await ensure_can_manage_match(match, user)
+
+    if match["status"] in ["finalizado", "completado"]:
+        raise HTTPException(status_code=400, detail="No puedes cancelar un partido ya finalizado")
+    if match["status"] == "cancelado":
+        raise HTTPException(status_code=400, detail="El partido ya está cancelado")
+
+    await db.matches.update_one(
+        {"id": match_id},
+        {"$set": {"status": "cancelado"}},
+    )
+    return {"message": "Partido cancelado correctamente"}
+
+
+@router.delete("/{match_id}/registrations/{registration_id}")
+async def remove_registration(match_id: str, registration_id: str, user=Depends(get_current_user)):
+    match = await get_match_or_404(match_id)
+    await ensure_can_manage_match(match, user)
+
+    if match["status"] in ["finalizado", "completado", "cancelado"]:
+        raise HTTPException(status_code=400, detail="No puedes quitar jugadores en este estado del partido")
+
+    registration = await db.match_registrations.find_one(
+        {"id": registration_id, "match_id": match_id, "status": {"$ne": "baja"}},
+        {"_id": 0},
+    )
+    if not registration:
+        raise HTTPException(status_code=404, detail="Inscripción no encontrada")
+
+    actor = await get_my_profile_or_404(user)
+    was_titular = registration.get("status") == "titular"
+    await db.match_registrations.update_one(
+        {"id": registration_id},
+        {"$set": {"status": "baja", "removed_by": actor["id"], "removed_at": datetime.now(timezone.utc).isoformat(), "removed_reason": "removed_by_manager"}},
+    )
+
+    if was_titular:
+        await promote_first_substitute(match_id)
+
+    message = "Jugador quitado del partido"
+    if match.get("status") in ["equipos_generados", "equipos_confirmados"]:
+        await db.team_generations.delete_many({"match_id": match_id})
+        await db.matches.update_one(
+            {"id": match_id},
+            {"$set": {"status": "cerrado"}},
+        )
+        message = "Jugador quitado del partido y equipos reiniciados"
+
+    return {"message": message, "registration_id": registration_id}
 
 
 @router.post("/{match_id}/duplicate")

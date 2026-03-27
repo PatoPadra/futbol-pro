@@ -4,19 +4,12 @@ import { Calendar, Clock, MapPin, Plus, Settings, Users } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { MATCH_STATUS_LABELS } from '@/constants/matches';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import PageLoader from '../components/common/PageLoader';
-import { MATCH_STATUS_LABELS, MODALITY_SHORT_LABELS, PAST_MATCH_STATUSES, UPCOMING_MATCH_STATUSES } from '../constants/matches';
-
-const MEMBER_ROLE_LABELS = {
-  organizador: 'Organizador',
-  frecuente: 'Frecuente',
-  invitado: 'Invitado',
-  admin: 'Admin',
-};
+import PageLoader from '@/components/common/PageLoader';
 
 export default function OrganizerPanel() {
   const { user } = useAuth();
@@ -55,13 +48,17 @@ export default function OrganizerPanel() {
     user?.role === 'admin' || match.my_group_role === 'organizador';
 
   const myMatches = matches.filter(canOrganizeMatch);
-  const activeMatches = myMatches.filter((match) => UPCOMING_MATCH_STATUSES.includes(match.status));
-  const pastMatches = myMatches.filter((match) => PAST_MATCH_STATUSES.includes(match.status));
+  const activeMatches = myMatches.filter((match) =>
+    ['abierto', 'cerrado', 'equipos_generados', 'equipos_confirmados'].includes(match.status)
+  );
+  const pastMatches = myMatches.filter((match) =>
+    ['finalizado', 'completado', 'cancelado'].includes(match.status)
+  );
 
   const guests = players.filter((player) => player.player_type === 'invitado');
 
   if (loading) {
-    return <PageLoader label="Cargando panel organizador..." />;
+    return <PageLoader />;
   }
 
   return (
@@ -195,7 +192,7 @@ export default function OrganizerPanel() {
                       <div>
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <Badge variant="outline" className="text-xs">
-                            {MODALITY_SHORT_LABELS[match.modality] || `F${match.modality}`}
+                            {`F${match.modality}`}
                           </Badge>
 
                           <Badge className="text-xs bg-turf/10 text-turf border-turf/20">
@@ -264,7 +261,7 @@ export default function OrganizerPanel() {
                       <div>
                         <p className="font-medium">{match.title}</p>
                         <p className="text-xs text-slate-500">
-                          {match.date} - {MODALITY_SHORT_LABELS[match.modality] || `F${match.modality}`}
+                          {match.date} - {`F${match.modality}`}
                         </p>
                         {match.group_name && (
                           <p className="text-[11px] text-slate-400 mt-1">

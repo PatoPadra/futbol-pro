@@ -248,6 +248,10 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
     linked_users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(500) if user_ids else []
     user_map = {linked_user["id"]: linked_user for linked_user in linked_users}
 
+    inviter_ids = list({membership.get("invited_by") for membership in memberships if membership.get("invited_by")})
+    inviters = await db.player_profiles.find({"id": {"$in": inviter_ids}}, {"_id": 0}).to_list(500) if inviter_ids else []
+    inviter_map = {inviter["id"]: inviter for inviter in inviters}
+
     result = []
     for membership in memberships:
         player = player_map.get(membership["player_id"])
@@ -269,6 +273,7 @@ async def list_group_members(group_id: str, user=Depends(get_current_user)):
             "membership_type": build_membership_type(member_role, player.get("player_type") if player else None),
             "global_role": global_role,
             "is_system_admin": global_role == "admin",
+            "invited_by_name": inviter_map.get(membership.get("invited_by"), {}).get("name") if membership.get("invited_by") else None,
         }
         result.append(clean_mongo(row))
 
@@ -368,6 +373,77 @@ async def update_group_member(group_id: str, member_id: str, data: dict, user=De
     await db.group_members.update_one({"id": member_id}, {"$set": update_data})
     updated = await db.group_members.find_one({"id": member_id}, {"_id": 0})
     return clean_mongo(updated)
+
+
+@router.delete("/{group_id}/members/{member_id}")
+async def remove_group_member(group_id: str, member_id: str, user=Depends(get_current_user)):
+    await get_group_or_404(group_id)
+    await ensure_can_manage_group(group_id, user)
+
+    member = await db.group_members.find_one({"id": member_id, "group_id": group_id, "status": "activo"}, {"_id": 0})
+    if not member:
+        raise HTTPException(status_code=404, detail="Miembro no encontrado")
+
+    actor_profile = await get_my_profile_or_404(user)
+    if user["role"] != "admin" and member["player_id"] == actor_profile["id"]:
+        raise HTTPException(status_code=400, detail="No puedes quitarte a ti mismo desde aquí")
+
+    if member.get("member_role") == "organizador":
+        organizers_count = await db.group_members.count_documents(
+            {"group_id": group_id, "status": "activo", "member_role": "organizador"}
+        )
+        if organizers_count <= 1:
+            raise HTTPException(status_code=400, detail="No puedes quitar al último organizador del grupo")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.group_members.update_one(
+        {"id": member_id},
+        {"$set": {"status": "inactivo", "updated_at": now}},
+    )
+
+    active_match_statuses = ["abierto", "cerrado", "equipos_generados", "equipos_confirmados"]
+    active_matches = await db.matches.find(
+        {"group_id": group_id, "status": {"$in": active_match_statuses}},
+        {"_id": 0, "id": 1, "status": 1},
+    ).to_list(500)
+
+    for match in active_matches:
+        reg = await db.match_registrations.find_one(
+            {
+                "match_id": match["id"],
+                "player_id": member["player_id"],
+                "status": {"$ne": "baja"},
+            },
+            {"_id": 0},
+        )
+        if not reg:
+            continue
+
+        was_titular = reg.get("status") == "titular"
+        await db.match_registrations.update_one(
+            {"id": reg["id"]},
+            {"$set": {"status": "baja", "removed_by": actor_profile["id"], "removed_at": now, "removed_reason": "removed_from_group"}},
+        )
+
+        if was_titular:
+            first_sup = await db.match_registrations.find_one(
+                {"match_id": match["id"], "status": "suplente"},
+                {"_id": 0},
+                sort=[("order", 1)],
+            )
+            if first_sup:
+                await db.match_registrations.update_one(
+                    {"id": first_sup["id"]}, {"$set": {"status": "titular"}}
+                )
+
+        if match.get("status") in ["equipos_generados", "equipos_confirmados"]:
+            await db.team_generations.delete_many({"match_id": match["id"]})
+            await db.matches.update_one(
+                {"id": match["id"]},
+                {"$set": {"status": "cerrado", "updated_at": now}},
+            )
+
+    return {"message": "Jugador quitado del grupo", "member_id": member_id}
 
 
 @router.get("/{group_id}/seed-ratings")
