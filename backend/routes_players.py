@@ -11,10 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 
 
-UPLOAD_DIR = Path(
-    os.environ.get("UPLOAD_DIR", str(Path(__file__).parent / "uploads"))
-)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(ROOT_DIR / "uploads")))
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
