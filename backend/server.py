@@ -16,7 +16,7 @@ from routes_admin import router as admin_router
 from routes_groups import router as groups_router
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
 app = FastAPI(title="App Fútbol API")
 
@@ -24,11 +24,10 @@ app = FastAPI(title="App Fútbol API")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 app.include_router(auth_router)
 app.include_router(profile_router)
@@ -39,11 +38,10 @@ app.include_router(players_router)
 app.include_router(admin_router)
 app.include_router(groups_router)
 
-
-
-uploads_dir = ROOT_DIR / "uploads"
-uploads_dir.mkdir(exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+# Uploads
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(ROOT_DIR / "uploads")))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Root endpoint
 @app.get("/api")
@@ -66,7 +64,7 @@ async def get_formations():
 # Logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -83,6 +81,7 @@ async def startup():
                 {"$set": {"role": "admin"}}
             )
         logger.info("Admin emails promoted")
+        logger.info(f"Uploads dir mounted at: {UPLOAD_DIR}")
     except Exception as e:
         logger.exception(f"Startup Mongo error: {e}")
 

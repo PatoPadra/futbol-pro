@@ -1,15 +1,20 @@
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-
 from auth import get_current_user
 from database import db
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
+from pathlib import Path
+import uuid
+import os
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-UPLOAD_DIR = Path(__file__).parent / "uploads"
+
+
+UPLOAD_DIR = Path(
+    os.environ.get("UPLOAD_DIR", str(Path(__file__).parent / "uploads"))
+)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -143,19 +148,31 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
 
 
 @router.post("/{player_id}/photo")
-async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
+async def upload_guest_photo(
+    player_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user)
+):
     profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Jugador no encontrado")
 
-    my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    if user["role"] != "admin" and (not my_profile or profile.get("created_by") != my_profile["id"]):
-        raise HTTPException(status_code=403, detail="Solo el creador o admin puede subir foto")
+    my_profile = await db.player_profiles.find_one(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    )
+
+    if user["role"] != "admin" and (
+        not my_profile or profile.get("created_by") != my_profile["id"]
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el creador o admin puede subir foto"
+        )
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Solo se permiten imagenes")
 
-    ext = file.filename.split(".")[-1] if file.filename else "jpg"
+    ext = file.filename.split(".")[-1].lower() if file.filename else "jpg"
     filename = f"{uuid.uuid4()}.{ext}"
     filepath = UPLOAD_DIR / filename
 
@@ -167,5 +184,9 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
         f.write(content)
 
     photo_url = f"/api/uploads/{filename}"
-    await db.player_profiles.update_one({"id": player_id}, {"$set": {"photo_url": photo_url}})
+    await db.player_profiles.update_one(
+        {"id": player_id},
+        {"$set": {"photo_url": photo_url}}
+    )
+
     return {"photo_url": photo_url}
