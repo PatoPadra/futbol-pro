@@ -54,6 +54,11 @@ export default function RegistrationCard({
             {registration.status === 'suplente' ? (
               <Badge variant="outline" className="text-[10px]">Suplente</Badge>
             ) : null}
+            {registration.registration_type ? (
+              <Badge variant="outline" className="text-[10px] capitalize">
+                {registration.registration_type}
+              </Badge>
+            ) : null}
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             {registration.primary_position || 'Sin posición cargada'}

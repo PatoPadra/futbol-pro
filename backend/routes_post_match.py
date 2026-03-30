@@ -4,7 +4,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
-from constants import GUEST_TO_REGULAR_THRESHOLD
 from database import db
 from models import (
     PeerRatingBatchRequest,
@@ -38,17 +37,6 @@ async def finalize_match(match_id: str, user=Depends(get_current_user)):
             {"id": reg["player_id"]},
             {"$inc": {"matches_played": 1}},
         )
-
-        p = await db.player_profiles.find_one({"id": reg["player_id"]}, {"_id": 0})
-        if (
-            p
-            and p.get("player_type") == "invitado"
-            and p.get("matches_played", 0) >= GUEST_TO_REGULAR_THRESHOLD
-        ):
-            await db.player_profiles.update_one(
-                {"id": reg["player_id"]},
-                {"$set": {"player_type": "frecuente"}},
-            )
 
     return {"message": "Partido finalizado. Evaluaciones abiertas."}
 

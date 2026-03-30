@@ -14,6 +14,59 @@ from services.profiles import get_my_profile_or_404
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 
+def normalize_registration_type(value: str | None):
+    if value in {"organizador", "frecuente", "invitado"}:
+        return value
+    return None
+
+
+async def get_membership_map(group_id: str, player_ids: list[str]):
+    if not player_ids:
+        return {}
+
+    memberships = await db.group_members.find(
+        {
+            "group_id": group_id,
+            "player_id": {"$in": list(set(player_ids))},
+            "status": "activo",
+        },
+        {"_id": 0},
+    ).to_list(1000)
+    return {membership["player_id"]: membership for membership in memberships}
+
+
+def infer_registration_type(match: dict, registration: dict | None = None, membership: dict | None = None, profile: dict | None = None):
+    explicit = normalize_registration_type((registration or {}).get("registration_type"))
+    if explicit:
+        return explicit
+
+    player_id = (registration or {}).get("player_id") or (profile or {}).get("id")
+    if player_id and player_id == match.get("organizer_id"):
+        return "organizador"
+
+    member_role = (membership or {}).get("member_role")
+    if member_role == "invitado":
+        return "invitado"
+
+    if profile and profile.get("player_type") == "invitado":
+        return "invitado"
+
+    return "frecuente"
+
+
+def resolve_requested_registration_type(requested_type: str | None, *, match: dict, membership: dict | None = None, profile: dict | None = None, allow_organizer: bool = False):
+    normalized = normalize_registration_type(requested_type)
+    if not normalized:
+        return infer_registration_type(match, membership=membership, profile=profile)
+
+    if normalized == "organizador":
+        if allow_organizer and profile and profile.get("id") == match.get("organizer_id"):
+            return "organizador"
+        return infer_registration_type(match, membership=membership, profile=profile)
+
+    return normalized
+
+
 async def ensure_can_delete_match(match: dict, user):
     if user["role"] == "admin":
         return True
@@ -188,7 +241,10 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
             {"_id": 0},
         )
         if reg:
-            my_registration = reg
+            my_registration = {
+                **reg,
+                "registration_type": infer_registration_type(match, registration=reg, membership=membership, profile=profile),
+            }
 
     return {
         **match,
@@ -237,14 +293,14 @@ async def delete_match(match_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/{match_id}/register")
-async def register_for_match(match_id: str, user=Depends(get_current_user)):
+async def register_for_match(match_id: str, registration_type: str | None = Query(default=None), user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
 
     if match["status"] != "abierto":
         raise HTTPException(status_code=400, detail="El partido no está abierto para inscripción")
 
     profile = await get_my_profile_or_404(user)
-    await ensure_group_member(match["group_id"], user)
+    membership = await ensure_group_member(match["group_id"], user)
 
     existing = await db.match_registrations.find_one(
         {"match_id": match_id, "player_id": profile["id"], "status": {"$ne": "baja"}},
@@ -264,11 +320,21 @@ async def register_for_match(match_id: str, user=Depends(get_current_user)):
     reg_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
+    resolved_registration_type = resolve_requested_registration_type(
+        registration_type,
+        match=match,
+        membership=membership,
+        profile=profile,
+        allow_organizer=True,
+    )
+
     reg_doc = {
         "id": reg_id,
         "match_id": match_id,
         "player_id": profile["id"],
         "status": status,
+        "registration_type": resolved_registration_type,
+        "registered_by": profile["id"],
         "order": total_regs + 1,
         "registered_at": now,
     }
@@ -277,12 +343,13 @@ async def register_for_match(match_id: str, user=Depends(get_current_user)):
     return {
         "id": reg_id,
         "status": status,
+        "registration_type": resolved_registration_type,
         "message": f"Inscrito como {'titular' if status == 'titular' else 'suplente'}",
     }
 
 
 @router.post("/{match_id}/register-guest/{guest_id}")
-async def register_guest_for_match(match_id: str, guest_id: str, user=Depends(get_current_user)):
+async def register_guest_for_match(match_id: str, guest_id: str, registration_type: str | None = Query(default=None), user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_group_organizer(match["group_id"], user)
 
@@ -321,16 +388,26 @@ async def register_guest_for_match(match_id: str, guest_id: str, user=Depends(ge
     reg_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
+    resolved_registration_type = resolve_requested_registration_type(
+        registration_type,
+        match=match,
+        membership=guest_membership,
+        profile=guest,
+        allow_organizer=False,
+    )
+
     reg_doc = {
         "id": reg_id,
         "match_id": match_id,
         "player_id": guest_id,
         "status": status,
+        "registration_type": resolved_registration_type,
+        "registered_by": (await get_my_profile_or_404(user))["id"],
         "order": total_regs + 1,
         "registered_at": now,
     }
     await db.match_registrations.insert_one(reg_doc)
-    return {"id": reg_id, "status": status}
+    return {"id": reg_id, "status": status, "registration_type": resolved_registration_type}
 
 
 @router.delete("/{match_id}/register")
@@ -371,11 +448,13 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
     player_ids = [reg["player_id"] for reg in regs]
     profiles = await db.player_profiles.find({"id": {"$in": player_ids}}, {"_id": 0}).to_list(200)
     profile_map = {profile["id"]: profile for profile in profiles}
+    membership_map = await get_membership_map(match["group_id"], player_ids)
 
     result = []
     for reg in regs:
         profile = profile_map.get(reg["player_id"])
         if profile:
+            membership = membership_map.get(reg["player_id"])
             result.append(
                 RegistrationResponse(
                     id=reg["id"],
@@ -385,6 +464,8 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
                     player_photo=profile.get("photo_url"),
                     primary_position=profile.get("primary_position"),
                     status=reg["status"],
+                    registration_type=infer_registration_type(match, registration=reg, membership=membership, profile=profile),
+                    registered_by=reg.get("registered_by"),
                     order=reg["order"],
                     registered_at=reg["registered_at"],
                 )

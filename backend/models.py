@@ -109,6 +109,8 @@ class RegistrationResponse(BaseModel):
     player_photo: Optional[str] = None
     primary_position: Optional[str] = None
     status: str
+    registration_type: Optional[Literal["organizador", "frecuente", "invitado"]] = None
+    registered_by: Optional[str] = None
     order: int
     registered_at: str
 
