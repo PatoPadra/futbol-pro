@@ -10,6 +10,7 @@ pydantic==2.12.5
 email-validator==2.3.0
 python-multipart==0.0.22
 dnspython==2.8.0
+cloudinary
 
 
 # aiofiles==25.1.0

@@ -8,7 +8,7 @@ from pathlib import Path
 import uuid
 import os
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-
+from storage_cloudinary import upload_image_bytes
 
 
 UPLOAD_DIR = Path(
@@ -146,47 +146,36 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
 
     return ProfileResponse(**guest_doc)
 
-
 @router.post("/{player_id}/photo")
-async def upload_guest_photo(
-    player_id: str,
-    file: UploadFile = File(...),
-    user=Depends(get_current_user)
-):
+async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
     profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Jugador no encontrado")
 
-    my_profile = await db.player_profiles.find_one(
-        {"user_id": user["user_id"]}, {"_id": 0}
-    )
-
-    if user["role"] != "admin" and (
-        not my_profile or profile.get("created_by") != my_profile["id"]
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Solo el creador o admin puede subir foto"
-        )
+    my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    if user["role"] != "admin" and (not my_profile or profile.get("created_by") != my_profile["id"]):
+        raise HTTPException(status_code=403, detail="Solo el creador o admin puede subir foto")
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Solo se permiten imagenes")
-
-    ext = file.filename.split(".")[-1].lower() if file.filename else "jpg"
-    filename = f"{uuid.uuid4()}.{ext}"
-    filepath = UPLOAD_DIR / filename
 
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
 
-    with open(filepath, "wb") as f:
-        f.write(content)
-
-    photo_url = f"/api/uploads/{filename}"
-    await db.player_profiles.update_one(
-        {"id": player_id},
-        {"$set": {"photo_url": photo_url}}
+    uploaded = upload_image_bytes(
+        content=content,
+        filename=file.filename or "guest.jpg",
+        folder="futbol-pro/guests",
     )
 
-    return {"photo_url": photo_url}
+    await db.player_profiles.update_one(
+        {"id": player_id},
+        {
+            "$set": {
+                "photo_url": uploaded["photo_url"],
+                "photo_public_id": uploaded["photo_public_id"],
+            }
+        },
+    )
+    return {"photo_url": uploaded["photo_url"]}

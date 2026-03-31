@@ -3,12 +3,11 @@ from database import db
 from auth import get_current_user
 from models import ProfileUpdate, ProfileResponse
 from datetime import datetime, timezone
-import uuid
-import os
 from pathlib import Path
 
+from storage_cloudinary import upload_image_bytes
+
 router = APIRouter(prefix="/api/profile", tags=["profile"])
-UPLOAD_DIR = Path(__file__).parent / "uploads"
 
 
 def _calculate_age(birth_date_str: str) -> int:
@@ -30,7 +29,7 @@ async def get_profile(user=Depends(get_current_user)):
     )
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    
+
     if profile.get("birth_date"):
         profile["age"] = _calculate_age(profile["birth_date"])
     return ProfileResponse(**profile)
@@ -74,20 +73,24 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Solo se permiten imágenes")
 
-    ext = file.filename.split(".")[-1] if file.filename else "jpg"
-    filename = f"{uuid.uuid4()}.{ext}"
-    filepath = UPLOAD_DIR / filename
-
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
 
-    with open(filepath, "wb") as f:
-        f.write(content)
-
-    photo_url = f"/api/uploads/{filename}"
-    await db.player_profiles.update_one(
-        {"user_id": user["user_id"]}, {"$set": {"photo_url": photo_url}}
+    uploaded = upload_image_bytes(
+        content=content,
+        filename=file.filename or "profile.jpg",
+        folder="futbol-pro/profiles",
     )
 
-    return {"photo_url": photo_url}
+    await db.player_profiles.update_one(
+        {"user_id": user["user_id"]},
+        {
+            "$set": {
+                "photo_url": uploaded["photo_url"],
+                "photo_public_id": uploaded["photo_public_id"],
+            }
+        },
+    )
+
+    return {"photo_url": uploaded["photo_url"]}
