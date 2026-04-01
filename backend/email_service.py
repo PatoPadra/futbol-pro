@@ -5,20 +5,20 @@ from urllib.parse import quote
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-SMTP_HOST = os.environ.get("SMTP_HOST")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL")
-SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-
 
 def send_verification_email(email: str, name: str, token: str):
-    if not SMTP_HOST or not SMTP_FROM_EMAIL:
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_username = os.environ.get("SMTP_USERNAME")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    smtp_from_email = os.environ.get("SMTP_FROM_EMAIL")
+    smtp_use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+    if not smtp_host or not smtp_from_email:
         raise RuntimeError("Faltan SMTP_HOST o SMTP_FROM_EMAIL en variables de entorno")
 
-    verify_url = f"{FRONTEND_URL}/verificar-email?token={quote(token)}"
+    verify_url = f"{frontend_url}/verificar-email?token={quote(token)}"
 
     subject = "Verificá tu cuenta en App Futbol"
 
@@ -55,16 +55,16 @@ Si vos no creaste esta cuenta, ignorá este mensaje.
 
     message = MIMEMultipart("alternative")
     message["Subject"] = subject
-    message["From"] = SMTP_FROM_EMAIL
+    message["From"] = smtp_from_email
     message["To"] = email
     message.attach(MIMEText(text_body, "plain", "utf-8"))
     message.attach(MIMEText(html_body, "html", "utf-8"))
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        if SMTP_USE_TLS:
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        if smtp_use_tls:
             server.starttls(context=ssl.create_default_context())
 
-        if SMTP_USERNAME and SMTP_PASSWORD:
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        if smtp_username and smtp_password:
+            server.login(smtp_username, smtp_password)
 
-        server.sendmail(SMTP_FROM_EMAIL, [email], message.as_string())
+        server.sendmail(smtp_from_email, [email], message.as_string())
