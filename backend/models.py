@@ -3,6 +3,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
+
 # Auth
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -235,3 +236,39 @@ class GroupMemberResponse(BaseModel):
     player_type: Optional[str] = None
     primary_position: Optional[str] = None
     photo_url: Optional[str] = None
+
+
+
+# Auth
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+
+
+class RegisterResponse(BaseModel):
+    message: str
+    email: EmailStr
+    verification_sent: bool = True
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    token: str
+    user_id: str
+    role: str
+    profile_id: str
+    has_profile: bool
+    name: str
+
+
+class VerifyEmailResponse(BaseModel):
+    message: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr

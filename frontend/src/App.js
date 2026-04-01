@@ -24,6 +24,7 @@ import PlayerHistory from '@/pages/PlayerHistory';
 import PlayerProfile from '@/pages/PlayerProfile';
 import OrganizerPanel from '@/pages/OrganizerPanel';
 import AdminPanel from '@/pages/AdminPanel';
+import VerifyEmail from '@/pages/VerifyEmail';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -40,6 +41,7 @@ function AppRoutes() {
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Landing />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/registro" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
+      <Route path="/verificar-email" element={<VerifyEmail />} />
       <Route path="/completar-perfil" element={<ProtectedRoute><Layout><CompleteProfile /></Layout></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/partidos" element={<ProtectedRoute><Layout><MatchesList /></Layout></ProtectedRoute>} />

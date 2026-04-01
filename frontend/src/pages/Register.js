@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
+import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -14,26 +14,83 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
-  const navigate = useNavigate();
+  const [successInfo, setSuccessInfo] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (password.length < 6) {
       toast.error('La contrasena debe tener al menos 6 caracteres');
       return;
     }
+
     setLoading(true);
     try {
-      await register(email, password, name);
-      toast.success('Cuenta creada!');
-      navigate('/completar-perfil');
+      const res = await api.post('/auth/register', {
+        name,
+        email,
+        password,
+      });
+
+      setSuccessInfo({
+        email,
+        verificationSent: res.data?.verification_sent !== false,
+      });
+
+      toast.success('Cuenta creada');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al registrarse');
     } finally {
       setLoading(false);
     }
   };
+
+  if (successInfo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
+        <div className="w-full max-w-md animate-slide-up">
+          <div className="flex justify-center mb-8">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-turf rounded-xl flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-white" />
+              </div>
+              <span className="font-heading text-2xl font-bold uppercase tracking-tight">App Futbol</span>
+            </Link>
+          </div>
+
+          <Card className="border-slate-100 shadow-lg">
+            <CardHeader className="pb-4">
+              <CardTitle className="font-heading text-2xl uppercase tracking-tight text-center">
+                Revisá tu email
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-center">
+              <p className="text-slate-700">
+                Creamos tu cuenta para <strong>{successInfo.email}</strong>.
+              </p>
+
+              {successInfo.verificationSent ? (
+                <p className="text-slate-600">
+                  Te enviamos un link para verificarla. Después de eso ya vas a poder iniciar sesión.
+                </p>
+              ) : (
+                <p className="text-amber-700">
+                  La cuenta fue creada, pero no pudimos enviar el email automáticamente.
+                  Configurá el SMTP y después usá el reenvío de verificación.
+                </p>
+              )}
+
+              <Link to="/login">
+                <Button className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider text-sm">
+                  Ir a iniciar sesión
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12" data-testid="register-page">
