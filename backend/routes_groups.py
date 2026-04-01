@@ -231,6 +231,31 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
     })
 
 
+
+
+@router.delete("/{group_id}")
+async def delete_group(group_id: str, user=Depends(get_current_user)):
+    await get_group_or_404(group_id)
+    await ensure_can_manage_group(group_id, user)
+
+    match_rows = await db.matches.find({"group_id": group_id}, {"_id": 0, "id": 1}).to_list(1000)
+    match_ids = [row["id"] for row in match_rows]
+
+    if match_ids:
+        await db.match_registrations.delete_many({"match_id": {"$in": match_ids}})
+        await db.peer_ratings.delete_many({"match_id": {"$in": match_ids}})
+        await db.self_evaluations.delete_many({"match_id": {"$in": match_ids}})
+        await db.stats_proposals.delete_many({"match_id": {"$in": match_ids}})
+        await db.stats_final.delete_many({"match_id": {"$in": match_ids}})
+        await db.team_generations.delete_many({"match_id": {"$in": match_ids}})
+        await db.matches.delete_many({"id": {"$in": match_ids}})
+
+    await db.group_seed_ratings.delete_many({"group_id": group_id})
+    await db.group_members.delete_many({"group_id": group_id})
+    await db.groups.delete_one({"id": group_id})
+
+    return {"message": "Grupo borrado correctamente", "group_id": group_id, "deleted_matches": len(match_ids)}
+
 @router.get("/{group_id}/members")
 async def list_group_members(group_id: str, user=Depends(get_current_user)):
     await get_group_or_404(group_id)

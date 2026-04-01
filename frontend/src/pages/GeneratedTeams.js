@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 import FootballPitch from '../components/FootballPitch';
@@ -10,8 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
-
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 
 export default function GeneratedTeams() {
   const { id } = useParams();
@@ -44,33 +43,43 @@ export default function GeneratedTeams() {
       if (err.response?.status === 404) {
         toast.error('No se han generado equipos aun');
         navigate(`/partidos/${id}`);
+      } else {
+        toast.error(err.response?.data?.detail || 'No se pudieron cargar los equipos');
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { loadData(); }, [id]);
+  useEffect(() => {
+    loadData();
+  }, [id]);
 
   const profileId = user?.profile_id || user?.profile?.id;
-  const isOrganizer = match && (match.organizer_id === profileId || user?.role === 'admin');
+  const isOrganizer = Boolean(match && (match?.can_manage || match.organizer_id === profileId || user?.role === 'admin'));
 
   const currentAssignments = editMode ? editAssignments : (teams?.assignments || []);
-  const teamA = currentAssignments.filter(a => a.team === 'A');
-  const teamB = currentAssignments.filter(a => a.team === 'B');
+  const teamA = currentAssignments.filter((a) => a.team === 'A');
+  const teamB = currentAssignments.filter((a) => a.team === 'B');
+  const is11 = match?.modality === 11;
+  const availableFormations = teams?.available_formations || [];
+  const teamSummaryA = teams?.team_summaries?.A;
+  const teamSummaryB = teams?.team_summaries?.B;
 
   const handleSwapPlayer = (playerId) => {
-    setEditAssignments(prev => prev.map(a =>
+    setEditAssignments((prev) => prev.map((a) => (
       a.player_id === playerId
         ? { ...a, team: a.team === 'A' ? 'B' : 'A', is_manual: true }
         : a
-    ));
+    )));
   };
 
   const handleChangePosition = (playerId, newPos) => {
-    setEditAssignments(prev => prev.map(a =>
+    setEditAssignments((prev) => prev.map((a) => (
       a.player_id === playerId
         ? { ...a, position: newPos, is_manual: true }
         : a
-    ));
+    )));
   };
 
   const handleSaveAdjustments = async () => {
@@ -83,19 +92,25 @@ export default function GeneratedTeams() {
       });
       toast.success('Equipos ajustados');
       setEditMode(false);
-      loadData();
-    } catch (err) { toast.error('Error al guardar'); }
-    finally { setActionLoading(''); }
+      await loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al guardar');
+    } finally {
+      setActionLoading('');
+    }
   };
 
   const handleConfirm = async () => {
     setActionLoading('confirm');
     try {
       await api.post(`/matches/${id}/teams/confirm`);
-      toast.success('Equipos confirmados!');
-      loadData();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Error'); }
-    finally { setActionLoading(''); }
+      toast.success('Equipos confirmados');
+      await loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error');
+    } finally {
+      setActionLoading('');
+    }
   };
 
   const handleRegenerate = async () => {
@@ -103,9 +118,12 @@ export default function GeneratedTeams() {
     try {
       await api.post(`/matches/${id}/generate-teams`);
       toast.success('Equipos recalculados');
-      loadData();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Error'); }
-    finally { setActionLoading(''); }
+      await loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error');
+    } finally {
+      setActionLoading('');
+    }
   };
 
   const cancelEdit = () => {
@@ -118,35 +136,40 @@ export default function GeneratedTeams() {
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
   if (!teams) return null;
 
-  const is11 = match?.modality === 11;
-  const availableFormations = teams.available_formations || [];
-
-  const PlayerRow = ({ a, i, teamColor }) => (
+  const PlayerRow = ({ a, teamColor }) => (
     <div className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-player-${a.player_id}`}>
       <Avatar className="w-9 h-9">
-        <AvatarImage src={a.player_photo ? `${API_URL}${a.player_photo}` : undefined} />
+        <AvatarImage src={buildPhotoUrl(a.player_photo) || undefined} />
         <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
-          {a.player_name?.substring(0, 2).toUpperCase()}
+          {initialsFromName(a.player_name)}
         </AvatarFallback>
       </Avatar>
+
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
         {editMode ? (
-          <Select value={a.position} onValueChange={v => handleChangePosition(a.player_id, v)}>
+          <Select value={a.position} onValueChange={(v) => handleChangePosition(a.player_id, v)}>
             <SelectTrigger className="h-7 w-28 text-xs mt-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {positions.map(p => (
+              {positions.map((p) => (
                 <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
               ))}
               <SelectItem value="JUG" className="text-xs">Jugador</SelectItem>
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-xs text-slate-400">{a.position}{a.is_manual ? ' (manual)' : ''}</p>
+          <div className="space-y-0.5">
+            <p className="text-xs text-slate-400">{a.position}{a.is_manual ? ' (manual)' : ''}</p>
+            <p className="text-[11px] text-slate-500">
+              Valor {typeof a.player_score === 'number' ? a.player_score.toFixed(2) : '—'}
+              {a.player_age ? ` · ${a.player_age} anios` : ''}
+            </p>
+          </div>
         )}
       </div>
+
       {editMode && (
         <Button
           size="sm"
@@ -159,6 +182,34 @@ export default function GeneratedTeams() {
         </Button>
       )}
     </div>
+  );
+
+  const SummaryCard = ({ summary }) => (
+    <Card className="border-slate-100">
+      <CardHeader className="pb-2">
+        <CardTitle className="font-heading text-lg uppercase">Resumen Equipo {summary.team}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Jugadores</p>
+            <p className="text-xl font-bold text-slate-900">{summary.count}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Valor total</p>
+            <p className="text-xl font-bold text-slate-900">{summary.total_value?.toFixed?.(2) ?? summary.total_value}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Valor medio</p>
+            <p className="text-xl font-bold text-slate-900">{summary.average_value?.toFixed?.(2) ?? summary.average_value}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">Edad media</p>
+            <p className="text-xl font-bold text-slate-900">{summary.average_age ?? '—'}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -183,7 +234,6 @@ export default function GeneratedTeams() {
           </div>
         </div>
 
-        {/* Actions */}
         {isOrganizer && (
           <div className="flex flex-wrap gap-3 mb-6">
             {teams.status !== 'confirmado' && !editMode && (
@@ -212,7 +262,6 @@ export default function GeneratedTeams() {
           </div>
         )}
 
-        {/* Formation selector in edit mode */}
         {editMode && is11 && availableFormations.length > 0 && (
           <Card className="border-slate-100 mb-6">
             <CardContent className="p-4">
@@ -223,7 +272,7 @@ export default function GeneratedTeams() {
                   <Select value={editFormationA} onValueChange={setEditFormationA}>
                     <SelectTrigger className="mt-1" data-testid="formation-a-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {availableFormations.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -232,7 +281,7 @@ export default function GeneratedTeams() {
                   <Select value={editFormationB} onValueChange={setEditFormationB}>
                     <SelectTrigger className="mt-1" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {availableFormations.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -241,7 +290,6 @@ export default function GeneratedTeams() {
           </Card>
         )}
 
-        {/* Pitch Visualization (11v11, non-edit mode) */}
         {is11 && teams.formation_a && !editMode && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <FootballPitch assignments={currentAssignments} formation={teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor="#1A1D23" />
@@ -249,7 +297,14 @@ export default function GeneratedTeams() {
           </div>
         )}
 
-        {/* Team Lists */}
+        {(isOrganizer || user?.role === 'admin') && (teamSummaryA || teamSummaryB) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {[teamSummaryA, teamSummaryB].filter(Boolean).map((summary) => (
+              <SummaryCard key={summary.team} summary={summary} />
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="border-slate-100">
             <CardHeader className="pb-2">
@@ -258,7 +313,7 @@ export default function GeneratedTeams() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamA.map((a, i) => <PlayerRow key={a.player_id} a={a} i={i} teamColor="#1A1D23" />)}
+              {teamA.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#1A1D23" />)}
             </CardContent>
           </Card>
 
@@ -269,7 +324,7 @@ export default function GeneratedTeams() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamB.map((a, i) => <PlayerRow key={a.player_id} a={a} i={i} teamColor="#FF6B00" />)}
+              {teamB.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#FF6B00" />)}
             </CardContent>
           </Card>
         </div>

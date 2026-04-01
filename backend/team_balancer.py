@@ -62,6 +62,7 @@ async def generate_teams(match_id: str) -> dict:
             "secondary_positions": profile.get("secondary_positions", []),
             "unwanted_position": profile.get("unwanted_position"),
             "score": score,
+            "player_score": round(float(score), 2),
         })
 
     if modality == 11 and len(players) >= 22:
@@ -100,6 +101,7 @@ def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
             "team": "A",
             "position": p.get("primary_position") or "JUG",
             "is_manual": False,
+            "player_score": p.get("player_score"),
         })
     for p in team_b:
         assignments.append({
@@ -109,6 +111,7 @@ def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
             "team": "B",
             "position": p.get("primary_position") or "JUG",
             "is_manual": False,
+            "player_score": p.get("player_score"),
         })
 
     sum_a = sum(p["score"] for p in team_a)
@@ -227,6 +230,7 @@ def _try_formation(players: list, formation_positions: list, formation_name: str
             "team": "A",
             "position": pos,
             "is_manual": False,
+            "player_score": p.get("player_score"),
         })
     for pos, p in team_b_players:
         assignments.append({
@@ -236,6 +240,7 @@ def _try_formation(players: list, formation_positions: list, formation_name: str
             "team": "B",
             "position": pos,
             "is_manual": False,
+            "player_score": p.get("player_score"),
         })
 
     total = sum_a + sum_b

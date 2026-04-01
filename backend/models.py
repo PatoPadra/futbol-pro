@@ -120,6 +120,8 @@ class TeamAssignmentModel(BaseModel):
     player_id: str
     player_name: str
     player_photo: Optional[str] = None
+    player_score: Optional[float] = None
+    player_age: Optional[int] = None
     team: str
     position: str
     is_manual: bool = False

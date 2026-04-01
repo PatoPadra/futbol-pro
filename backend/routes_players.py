@@ -1,20 +1,14 @@
 from datetime import datetime, timezone
-from pathlib import Path
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
 from auth import get_current_user
 from database import db
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
-from pathlib import Path
-import uuid
-import os
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from services.profiles import get_my_profile_or_404
 from storage_cloudinary import upload_image_bytes
-
-
-UPLOAD_DIR = Path(
-    os.environ.get("UPLOAD_DIR", str(Path(__file__).parent / "uploads"))
-)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -60,6 +54,68 @@ async def get_player(player_id: str, user=Depends(get_current_user)):
             pass
 
     return profile
+
+
+@router.delete("/{player_id}")
+async def delete_player(player_id: str, user=Depends(get_current_user)):
+    profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Jugador no encontrado")
+
+    actor_profile = await get_my_profile_or_404(user)
+    if user["role"] != "admin":
+        if profile.get("user_id"):
+            raise HTTPException(status_code=403, detail="Solo un admin puede borrar jugadores con cuenta")
+        if profile.get("created_by") != actor_profile["id"]:
+            raise HTTPException(status_code=403, detail="Solo el creador o un admin puede borrar este jugador")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    memberships = await db.group_members.find({"player_id": player_id}, {"_id": 0}).to_list(1000)
+    group_ids = list({membership["group_id"] for membership in memberships})
+
+    active_matches = await db.matches.find(
+        {"group_id": {"$in": group_ids}, "status": {"$in": ["abierto", "cerrado", "equipos_generados", "equipos_confirmados"]}},
+        {"_id": 0, "id": 1, "status": 1},
+    ).to_list(1000) if group_ids else []
+
+    for match in active_matches:
+        reg = await db.match_registrations.find_one(
+            {"match_id": match["id"], "player_id": player_id, "status": {"$ne": "baja"}},
+            {"_id": 0},
+        )
+        if not reg:
+            continue
+
+        was_titular = reg.get("status") == "titular"
+        await db.match_registrations.update_one(
+            {"id": reg["id"]},
+            {"$set": {"status": "baja", "removed_by": actor_profile["id"], "removed_at": now, "removed_reason": "player_deleted"}},
+        )
+
+        if was_titular:
+            first_sup = await db.match_registrations.find_one(
+                {"match_id": match["id"], "status": "suplente"},
+                {"_id": 0},
+                sort=[("order", 1)],
+            )
+            if first_sup:
+                await db.match_registrations.update_one({"id": first_sup["id"]}, {"$set": {"status": "titular"}})
+
+        if match.get("status") in ["equipos_generados", "equipos_confirmados"]:
+            await db.team_generations.delete_many({"match_id": match["id"]})
+            await db.matches.update_one({"id": match["id"]}, {"$set": {"status": "cerrado", "updated_at": now}})
+
+    await db.group_members.delete_many({"player_id": player_id})
+    await db.match_registrations.delete_many({"player_id": player_id})
+    await db.group_seed_ratings.delete_many({"$or": [{"rated_player_id": player_id}, {"rater_id": player_id}]})
+    await db.peer_ratings.delete_many({"$or": [{"rated_player_id": player_id}, {"rater_id": player_id}]})
+    await db.self_evaluations.delete_many({"player_id": player_id})
+    await db.stats_proposals.delete_many({"player_id": player_id})
+    await db.stats_final.delete_many({"player_id": player_id})
+    await db.player_profiles.delete_one({"id": player_id})
+
+    return {"message": "Jugador borrado correctamente", "player_id": player_id}
 
 
 @router.get("/{player_id}/history")
@@ -145,6 +201,7 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
     await db.player_profiles.insert_one(guest_doc)
 
     return ProfileResponse(**guest_doc)
+
 
 @router.post("/{player_id}/photo")
 async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):

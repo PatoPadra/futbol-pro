@@ -56,7 +56,8 @@ export default function MatchDetail() {
     loadData();
   }, [id]);
 
-  const isOrganizer = Boolean(match?.can_manage || match?.my_group_role === 'organizador' || user?.role === 'admin');
+  const profileId = user?.profile_id || user?.profile?.id;
+  const isOrganizer = Boolean(match?.can_manage || match?.organizer_id === profileId || match?.my_group_role === 'organizador' || user?.role === 'admin');
   const isRegistered = Boolean(match?.my_registration);
   const canDelete = Boolean(match?.can_delete || user?.role === 'admin');
 

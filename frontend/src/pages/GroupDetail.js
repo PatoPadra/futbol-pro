@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Filter, Plus, Search, Shield, Star, Users } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Filter, Plus, Search, Shield, Star, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '@/lib/api';
@@ -25,6 +25,7 @@ const FILTER_OPTIONS = [
 export default function GroupDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,6 +161,20 @@ export default function GroupDetail() {
     }
   };
 
+
+  const handleDeleteGroup = async () => {
+    const confirmed = window.confirm(`¿Querés borrar definitivamente el grupo ${group.name}? También se borrarán sus partidos y equipos.`);
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/groups/${id}`);
+      toast.success('Grupo borrado');
+      navigate('/dashboard');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No se pudo borrar el grupo');
+    }
+  };
+
   if (loading) return <PageLoader />;
   if (!group) return <div className="page-container text-center text-slate-500">Grupo no encontrado</div>;
 
@@ -195,11 +210,18 @@ export default function GroupDetail() {
               </p>
             </div>
 
-            <Link to={`/partidos/crear?group_id=${group.id}`}>
-              <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-                <Plus className="w-4 h-4 mr-2" /> Crear Partido
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/partidos/crear?group_id=${group.id}`}>
+                <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
+                  <Plus className="w-4 h-4 mr-2" /> Crear Partido
+                </Button>
+              </Link>
+              {canManage && (
+                <Button variant="outline" onClick={handleDeleteGroup} className="rounded-full border-red-200 text-red-600 hover:bg-red-50">
+                  <Trash2 className="w-4 h-4 mr-2" /> Borrar Grupo
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">

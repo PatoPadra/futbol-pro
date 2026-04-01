@@ -1,6 +1,5 @@
 import React from 'react';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { buildPhotoUrl } from '@/utils/photos';
 
 export default function FootballPitch({ assignments, formation, coords, teamLabel, teamColor }) {
   const teamAssignments = assignments?.filter(a => a.team === teamLabel) || [];
@@ -11,25 +10,16 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
       style={{ aspectRatio: '2/3' }}
       data-testid={`pitch-team-${teamLabel}`}
     >
-      {/* Pitch markings */}
       <div className="absolute inset-0">
-        {/* Center line */}
         <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-white/30" />
-        {/* Center circle */}
         <div className="absolute left-1/2 top-1/2 w-20 h-20 -translate-x-1/2 -translate-y-1/2 border-2 border-white/30 rounded-full" />
-        {/* Penalty area top */}
         <div className="absolute left-1/2 -translate-x-1/2 top-0 w-2/3 h-[18%] border-b-2 border-l-2 border-r-2 border-white/30" />
-        {/* Goal area top */}
         <div className="absolute left-1/2 -translate-x-1/2 top-0 w-1/3 h-[8%] border-b-2 border-l-2 border-r-2 border-white/30" />
-        {/* Penalty area bottom */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-2/3 h-[18%] border-t-2 border-l-2 border-r-2 border-white/30" />
-        {/* Goal area bottom */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-1/3 h-[8%] border-t-2 border-l-2 border-r-2 border-white/30" />
-        {/* Border */}
         <div className="absolute inset-2 border-2 border-white/30 rounded-lg" />
       </div>
 
-      {/* Team Label */}
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
         <span
           className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white"
@@ -39,14 +29,11 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
         </span>
       </div>
 
-      {/* Players */}
       {coords?.map((coord, i) => {
         const player = teamAssignments[i];
         if (!player) return null;
 
-        const photoUrl = player.player_photo
-          ? (player.player_photo.startsWith('http') ? player.player_photo : `${BACKEND_URL}${player.player_photo}`)
-          : null;
+        const photoUrl = buildPhotoUrl(player.player_photo);
 
         return (
           <div
@@ -87,7 +74,6 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
         );
       })}
 
-      {/* Formation label */}
       {formation && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20">
           <span className="px-2 py-0.5 rounded bg-black/50 text-white text-xs font-bold">

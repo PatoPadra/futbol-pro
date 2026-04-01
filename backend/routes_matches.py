@@ -7,7 +7,7 @@ from auth import get_current_user
 from constants import MODALITY_CAPACITY
 from database import db
 from models import CreateMatchRequest, MatchResponse, RegistrationResponse, UpdateMatchRequest
-from services.matches import get_match_or_404
+from services.matches import ensure_match_manager, get_match_or_404
 from services.permissions import ensure_group_member, ensure_group_organizer
 from services.profiles import get_my_profile_or_404
 
@@ -81,13 +81,7 @@ async def ensure_can_manage_match(match: dict, user):
     if user["role"] == "admin":
         return True
 
-    profile = await get_my_profile_or_404(user)
-    if profile["id"] != match["organizer_id"]:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo el organizador del partido puede hacer esta acción",
-        )
-
+    await ensure_match_manager(match, user)
     return True
 
 
@@ -217,7 +211,21 @@ async def list_matches(
 @router.get("/{match_id}")
 async def get_match(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
-    membership = await ensure_group_member(match["group_id"], user)
+
+    profile = await db.player_profiles.find_one(
+        {"user_id": user.get("user_id") or user.get("id")}, {"_id": 0}
+    )
+    try:
+        membership = await ensure_group_member(match["group_id"], user)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        await ensure_can_manage_match(match, user)
+        membership = {
+            "player_id": profile.get("id") if profile else None,
+            "member_role": "organizador",
+            "status": "activo",
+        }
 
     titular_count = await db.match_registrations.count_documents(
         {"match_id": match_id, "status": "titular"}
@@ -229,10 +237,6 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
         {"id": match["organizer_id"]}, {"_id": 0}
     )
     group = await db.groups.find_one({"id": match["group_id"]}, {"_id": 0})
-
-    profile = await db.player_profiles.find_one(
-        {"user_id": user.get("user_id") or user.get("id")}, {"_id": 0}
-    )
 
     my_registration = None
     if profile:
@@ -254,7 +258,7 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
         "titular_count": titular_count,
         "suplente_count": suplente_count,
         "my_registration": my_registration,
-        "can_manage": user["role"] == "admin" or membership.get("member_role") == "organizador",
+        "can_manage": user["role"] == "admin" or (profile and profile.get("id") == match.get("organizer_id")) or membership.get("member_role") == "organizador",
         "can_delete": user["role"] == "admin",
     }
 
@@ -266,7 +270,7 @@ async def update_match(
     user=Depends(get_current_user),
 ):
     match = await get_match_or_404(match_id)
-    await ensure_group_organizer(match["group_id"], user)
+    await ensure_can_manage_match(match, user)
 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if update_data:
@@ -435,7 +439,12 @@ async def unregister_from_match(match_id: str, user=Depends(get_current_user)):
 @router.get("/{match_id}/registrations")
 async def get_registrations(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
-    await ensure_group_member(match["group_id"], user)
+    try:
+        await ensure_group_member(match["group_id"], user)
+    except HTTPException as exc:
+        if exc.status_code != 403:
+            raise
+        await ensure_can_manage_match(match, user)
 
     regs = await db.match_registrations.find(
         {"match_id": match_id, "status": {"$ne": "baja"}},
@@ -476,7 +485,7 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
 @router.post("/{match_id}/close")
 async def close_registrations(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
-    await ensure_group_organizer(match["group_id"], user)
+    await ensure_can_manage_match(match, user)
 
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "cerrado"}}
@@ -541,7 +550,7 @@ async def remove_registration(match_id: str, registration_id: str, user=Depends(
 @router.post("/{match_id}/duplicate")
 async def duplicate_match(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
-    await ensure_group_organizer(match["group_id"], user)
+    await ensure_can_manage_match(match, user)
     profile = await get_my_profile_or_404(user)
 
     try:
