@@ -71,9 +71,12 @@ export default function GroupDetail() {
   }, [id]);
 
   const myProfileId = user?.profile?.id || user?.profile_id;
-  const canInvite = Boolean(group?.can_invite || user?.role === 'admin');
-  const canManage = Boolean(group?.can_manage || user?.role === 'admin');
-  const canRate = Boolean(group?.can_rate_seed || user?.role === 'admin');
+  const isAdmin = user?.role === 'admin' || group?.my_global_role === 'admin';
+  const isOrganizer = ['organizador', 'admin'].includes(group?.my_group_permission);
+
+  const canInvite = Boolean(group?.can_invite || isOrganizer || isAdmin);
+  const canManage = Boolean(group?.can_manage || isOrganizer || isAdmin);
+  const canRate = Boolean(group?.can_rate_seed || isOrganizer || isAdmin);
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
