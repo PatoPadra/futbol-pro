@@ -12,6 +12,7 @@ export default function PlayerHistory() {
   const { user } = useAuth();
   const [history, setHistory] = useState([]);
   const [metrics, setMetrics] = useState(null);
+  const [historyMeta, setHistoryMeta] = useState({ can_view_peer_scores: false, can_view_self_scores: false, score_visibility_scope: 'restricted' });
   const [loading, setLoading] = useState(true);
 
   const playerId = id || user?.profile_id || user?.profile?.id;
@@ -23,7 +24,12 @@ export default function PlayerHistory() {
           api.get(`/players/${playerId}/history`),
           api.get(`/players/${playerId}/metrics`),
         ]);
-        setHistory(histRes.data || []);
+        setHistory(histRes.data?.history || []);
+        setHistoryMeta({
+          can_view_peer_scores: Boolean(histRes.data?.can_view_peer_scores),
+          can_view_self_scores: Boolean(histRes.data?.can_view_self_scores),
+          score_visibility_scope: histRes.data?.score_visibility_scope || 'restricted',
+        });
         setMetrics(metRes.data);
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
@@ -33,7 +39,7 @@ export default function PlayerHistory() {
 
   // Prepare chart data (oldest to newest)
   const chartData = [...history]
-    .filter(h => h.avg_rating != null)
+    .filter(h => historyMeta.can_view_peer_scores && h.avg_rating != null)
     .reverse()
     .map(h => ({
       fecha: h.match_date,
@@ -54,36 +60,47 @@ export default function PlayerHistory() {
 
         {/* Metrics Summary */}
         {metrics && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            <Card className="border-slate-100">
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-turf">{metrics.total_matches}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Partidos</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100">
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-slate-900">{metrics.recent_rating?.toFixed(1)}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Rating Reciente</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100">
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-slate-900">{metrics.total_goals}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Goles</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100">
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-slate-900">{metrics.total_assists}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Asistencias</p>
-              </CardContent>
-            </Card>
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <Card className="border-slate-100">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-turf">{metrics.total_matches}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Partidos</p>
+                </CardContent>
+              </Card>
+              {historyMeta.can_view_peer_scores && (
+                <Card className="border-slate-100">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl font-bold text-slate-900">{metrics.recent_rating?.toFixed(1)}</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider">Rating Reciente</p>
+                  </CardContent>
+                </Card>
+              )}
+              <Card className="border-slate-100">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-slate-900">{metrics.total_goals}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Goles</p>
+                </CardContent>
+              </Card>
+              <Card className="border-slate-100">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-slate-900">{metrics.total_assists}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Asistencias</p>
+                </CardContent>
+              </Card>
+            </div>
+            {!historyMeta.can_view_peer_scores && (
+              <Card className="border-slate-100 mb-8 bg-slate-50">
+                <CardContent className="p-4 text-sm text-slate-600">
+                  Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         {/* Rating Evolution Chart */}
-        {chartData.length >= 2 && (
+        {historyMeta.can_view_peer_scores && chartData.length >= 2 && (
           <Card className="border-slate-100 mb-8">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase">Evolucion de Rating</CardTitle>
@@ -129,7 +146,7 @@ export default function PlayerHistory() {
           </Card>
         )}
 
-        {chartData.length === 1 && (
+        {historyMeta.can_view_peer_scores && chartData.length === 1 && (
           <Card className="border-slate-100 mb-8 bg-slate-50">
             <CardContent className="p-6 text-center text-sm text-slate-500">
               Se necesitan al menos 2 partidos con evaluaciones para ver la evolucion de rating.
@@ -138,7 +155,7 @@ export default function PlayerHistory() {
         )}
 
         {/* Position Ratings */}
-        {metrics?.position_ratings && Object.keys(metrics.position_ratings).length > 0 && (
+        {historyMeta.can_view_peer_scores && metrics?.position_ratings && Object.keys(metrics.position_ratings).length > 0 && (
           <Card className="border-slate-100 mb-8">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase">Rating por Posicion</CardTitle>
@@ -183,10 +200,16 @@ export default function PlayerHistory() {
                       </div>
                     </div>
                     <div className="text-right">
-                      {h.avg_rating && (
+                      {historyMeta.can_view_peer_scores && h.avg_rating && (
                         <div className="flex items-center gap-1">
                           <Star className="w-3.5 h-3.5 text-turf" />
                           <span className="text-sm font-bold text-turf">{h.avg_rating}</span>
+                        </div>
+                      )}
+                      {!historyMeta.can_view_peer_scores && h.self_evaluation?.score != null && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-semibold text-slate-500">Auto</span>
+                          <span className="text-sm font-bold text-slate-700">{h.self_evaluation.score}</span>
                         </div>
                       )}
                       {h.stats && (

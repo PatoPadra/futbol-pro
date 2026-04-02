@@ -33,6 +33,8 @@ export default function PostMatch() {
   const activeRegistrations = useMemo(() => registrations.filter((r) => r.status !== 'baja'), [registrations]);
   const myRegistration = activeRegistrations.find((r) => r.player_id === profileId);
   const otherPlayers = activeRegistrations.filter((r) => r.player_id !== profileId);
+  const canViewAllScores = Boolean(existingRatings?.can_view_all_scores);
+  const playerSummaries = existingRatings?.player_summaries || [];
 
   useEffect(() => {
     const load = async () => {
@@ -185,6 +187,35 @@ export default function PostMatch() {
                 {myRegistration && otherPlayers.length === 0 && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                     No hay otros participantes para evaluar todavía.
+                  </div>
+                )}
+
+                {canViewAllScores && playerSummaries.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3" data-testid="organizer-score-summary">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Resumen interno de puntajes</p>
+                      <p className="text-xs text-slate-500">Visible solo para organizadores y admins.</p>
+                    </div>
+                    <div className="space-y-2">
+                      {playerSummaries.map((summary) => (
+                        <div key={summary.player_id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 border border-slate-100">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate">{summary.player_name}</p>
+                            <p className="text-xs text-slate-500">
+                              {summary.peer_rating_count} voto{summary.peer_rating_count === 1 ? '' : 's'}
+                              {summary.peer_scores?.length ? ` · ${summary.peer_scores.join(', ')}` : ' · Sin votos aún'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-turf">{summary.avg_peer_score != null ? summary.avg_peer_score : '-'}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              Auto: {summary.self_evaluation?.score ?? '-'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

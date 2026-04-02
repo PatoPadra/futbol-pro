@@ -14,6 +14,7 @@ from models import (
 from services.matches import ensure_match_participant, get_match_or_404
 from services.permissions import ensure_group_member, ensure_group_organizer
 from services.profiles import get_my_profile_or_404
+from services.score_visibility import get_score_visibility_for_group
 
 router = APIRouter(prefix="/api/matches", tags=["post-match"])
 
@@ -93,17 +94,68 @@ async def get_match_ratings(match_id: str, user=Depends(get_current_user)):
     await ensure_group_member(match["group_id"], user)
 
     profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    visibility = await get_score_visibility_for_group(match["group_id"], user)
+
     if not profile:
-        return {"my_ratings": [], "has_rated": False}
+        return {
+            "my_ratings": [],
+            "has_rated": False,
+            "can_view_all_scores": visibility["can_view_all_scores"],
+            "score_visibility_scope": visibility["scope"],
+        }
 
     my_ratings = await db.peer_ratings.find(
         {"match_id": match_id, "rater_id": profile["id"]}, {"_id": 0}
     ).to_list(100)
 
-    return {
+    response = {
         "my_ratings": my_ratings,
         "has_rated": len(my_ratings) > 0,
+        "can_view_all_scores": visibility["can_view_all_scores"],
+        "score_visibility_scope": visibility["scope"],
     }
+
+    if visibility["can_view_all_scores"]:
+        peer_ratings = await db.peer_ratings.find({"match_id": match_id}, {"_id": 0}).to_list(1000)
+        self_evaluations = await db.self_evaluations.find({"match_id": match_id}, {"_id": 0}).to_list(500)
+        registrations = await db.match_registrations.find(
+            {"match_id": match_id, "status": {"$ne": "baja"}},
+            {"_id": 0},
+        ).to_list(500)
+
+        player_ids = sorted({registration["player_id"] for registration in registrations})
+        players = await db.player_profiles.find({"id": {"$in": player_ids}}, {"_id": 0}).to_list(500)
+        player_map = {player["id"]: player for player in players}
+        self_eval_by_player = {eva["player_id"]: eva for eva in self_evaluations}
+
+        ratings_by_player = {}
+        for rating in peer_ratings:
+            ratings_by_player.setdefault(rating["rated_player_id"], []).append(rating)
+
+        player_summaries = []
+        for registration in registrations:
+            player_id = registration["player_id"]
+            player = player_map.get(player_id, {})
+            rows = ratings_by_player.get(player_id, [])
+            avg_peer_score = None
+            if rows:
+                avg_peer_score = round(sum(r["score"] for r in rows) / len(rows), 2)
+
+            player_summaries.append({
+                "player_id": player_id,
+                "player_name": player.get("name") or registration.get("player_name") or "Jugador",
+                "player_photo": player.get("photo_url"),
+                "peer_scores": [r["score"] for r in rows],
+                "peer_rating_count": len(rows),
+                "avg_peer_score": avg_peer_score,
+                "self_evaluation": self_eval_by_player.get(player_id),
+            })
+
+        response["all_peer_ratings"] = peer_ratings
+        response["all_self_evaluations"] = self_evaluations
+        response["player_summaries"] = player_summaries
+
+    return response
 
 
 @router.post("/{match_id}/self-evaluation")

@@ -73,26 +73,33 @@ export default function Dashboard() {
 
         {/* Stats Cards */}
         {metrics && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {[
-              { label: 'Partidos', value: metrics.total_matches, icon: Trophy },
-              { label: 'Rating', value: metrics.recent_rating?.toFixed(1) || '-', icon: Star },
-              { label: 'Goles', value: metrics.total_goals, icon: () => <span className="text-lg">G</span> },
-              { label: 'Asistencias', value: metrics.total_assists, icon: () => <span className="text-lg">A</span> },
-            ].map((s, i) => (
-              <Card key={i} className="border-slate-100">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-turf/10 flex items-center justify-center">
-                    {typeof s.icon === 'function' ? <s.icon className="w-5 h-5 text-turf" /> : <s.icon className="w-5 h-5 text-turf" />}
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900">{s.value}</p>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">{s.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              {[
+                { label: 'Partidos', value: metrics.total_matches, icon: Trophy },
+                ...(metrics.can_view_peer_scores ? [{ label: 'Rating', value: metrics.recent_rating?.toFixed(1) || '-', icon: Star }] : []),
+                { label: 'Goles', value: metrics.total_goals, icon: () => <span className="text-lg">G</span> },
+                { label: 'Asistencias', value: metrics.total_assists, icon: () => <span className="text-lg">A</span> },
+              ].map((s, i) => (
+                <Card key={i} className="border-slate-100">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-turf/10 flex items-center justify-center">
+                      {typeof s.icon === 'function' ? <s.icon className="w-5 h-5 text-turf" /> : <s.icon className="w-5 h-5 text-turf" />}
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-900">{s.value}</p>
+                      <p className="text-xs text-slate-500 uppercase tracking-wider">{s.label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {!metrics.can_view_peer_scores && (
+              <p className="text-xs text-slate-500 mb-8">
+                Los puntajes internos quedan visibles solo para organizadores y admins.
+              </p>
+            )}
+          </>
         )}
 
         {/* Upcoming Matches */}

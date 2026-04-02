@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Camera, Star, Trophy, Edit3, Save, X, History, Trash2 } from 'lucide-react';
+import { Camera, Star, Trophy, Edit3, Save, X, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildPhotoUrl } from '@/utils/photos';
 
@@ -72,20 +72,6 @@ export default function PlayerProfile({ isSelf }) {
     } catch (err) { toast.error('Error al subir foto'); }
   };
 
-
-  const handleDeletePlayer = async () => {
-    const confirmed = window.confirm(`¿Querés borrar definitivamente a ${profile.name}?`);
-    if (!confirmed) return;
-
-    try {
-      await api.delete(`/players/${playerId}`);
-      toast.success('Jugador borrado');
-      navigate('/dashboard');
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'No se pudo borrar el jugador');
-    }
-  };
-
   const posMap = {};
   positions.forEach(p => { posMap[p.id] = p.name; });
 
@@ -93,6 +79,7 @@ export default function PlayerProfile({ isSelf }) {
   if (!profile) return <div className="page-container text-center text-slate-500">Jugador no encontrado</div>;
 
   const photoUrl = buildPhotoUrl(profile.photo_url);
+  const canViewPeerScores = Boolean(metrics?.can_view_peer_scores);
 
   return (
     <div className="page-container max-w-2xl mx-auto" data-testid="player-profile-page">
@@ -125,9 +112,9 @@ export default function PlayerProfile({ isSelf }) {
                   {profile.age && <span className="text-sm text-slate-500">{profile.age} anios</span>}
                 </div>
               </div>
-              <div className="flex gap-2">
-                {isOwn && (
-                  editing ? (
+              {isOwn && (
+                <div className="flex gap-2">
+                  {editing ? (
                     <>
                       <Button size="sm" onClick={handleSave} className="bg-turf text-white rounded-full" data-testid="save-edit-btn">
                         <Save className="w-4 h-4 mr-1" /> Guardar
@@ -140,14 +127,9 @@ export default function PlayerProfile({ isSelf }) {
                     <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="rounded-full" data-testid="edit-profile-btn">
                       <Edit3 className="w-4 h-4 mr-1" /> Editar
                     </Button>
-                  )
-                )}
-                {user?.role === 'admin' && !isOwn && (
-                  <Button size="sm" variant="outline" onClick={handleDeletePlayer} className="rounded-full border-red-200 text-red-600 hover:bg-red-50" data-testid="delete-player-btn">
-                    <Trash2 className="w-4 h-4 mr-1" /> Borrar
-                  </Button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -179,21 +161,34 @@ export default function PlayerProfile({ isSelf }) {
 
         {/* Stats */}
         {metrics && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: 'Rating General', value: metrics.general_rating?.toFixed(1), icon: Star },
-              { label: 'Rating Reciente', value: metrics.recent_rating?.toFixed(1), icon: Star },
-              { label: 'Partidos', value: metrics.total_matches, icon: Trophy },
-              { label: 'Confianza', value: `${(metrics.confidence_index * 100).toFixed(0)}%`, icon: Trophy },
-            ].map((s, i) => (
-              <Card key={i} className="border-slate-100">
-                <CardContent className="p-4 text-center">
-                  <p className="text-xl font-bold text-slate-900">{s.value}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">{s.label}</p>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              {[
+                ...(canViewPeerScores ? [
+                  { label: 'Rating General', value: metrics.general_rating?.toFixed(1), icon: Star },
+                  { label: 'Rating Reciente', value: metrics.recent_rating?.toFixed(1), icon: Star },
+                ] : []),
+                { label: 'Partidos', value: metrics.total_matches, icon: Trophy },
+                { label: 'Goles', value: metrics.total_goals, icon: Trophy },
+                { label: 'Asistencias', value: metrics.total_assists, icon: Trophy },
+              ].map((s, i) => (
+                <Card key={i} className="border-slate-100">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-xl font-bold text-slate-900">{s.value}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">{s.label}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {!canViewPeerScores && (
+              <Card className="border-slate-100 mb-6 bg-slate-50">
+                <CardContent className="p-4 text-sm text-slate-600">
+                  Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.
+                  {isOwn ? ' En tu historial vas a seguir viendo tus autoevaluaciones.' : ''}
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {/* Positions */}

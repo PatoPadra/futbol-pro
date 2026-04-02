@@ -1,14 +1,21 @@
 from datetime import datetime, timezone
-import uuid
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-
+from pathlib import Path
 from auth import get_current_user
 from database import db
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
-from services.profiles import get_my_profile_or_404
+from services.score_visibility import get_score_visibility_for_player
+from pathlib import Path
+import uuid
+import os
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from storage_cloudinary import upload_image_bytes
+
+
+UPLOAD_DIR = Path(
+    os.environ.get("UPLOAD_DIR", str(Path(__file__).parent / "uploads"))
+)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -56,70 +63,12 @@ async def get_player(player_id: str, user=Depends(get_current_user)):
     return profile
 
 
-@router.delete("/{player_id}")
-async def delete_player(player_id: str, user=Depends(get_current_user)):
-    profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
-
-    actor_profile = await get_my_profile_or_404(user)
-    if user["role"] != "admin":
-        if profile.get("user_id"):
-            raise HTTPException(status_code=403, detail="Solo un admin puede borrar jugadores con cuenta")
-        if profile.get("created_by") != actor_profile["id"]:
-            raise HTTPException(status_code=403, detail="Solo el creador o un admin puede borrar este jugador")
-
-    now = datetime.now(timezone.utc).isoformat()
-
-    memberships = await db.group_members.find({"player_id": player_id}, {"_id": 0}).to_list(1000)
-    group_ids = list({membership["group_id"] for membership in memberships})
-
-    active_matches = await db.matches.find(
-        {"group_id": {"$in": group_ids}, "status": {"$in": ["abierto", "cerrado", "equipos_generados", "equipos_confirmados"]}},
-        {"_id": 0, "id": 1, "status": 1},
-    ).to_list(1000) if group_ids else []
-
-    for match in active_matches:
-        reg = await db.match_registrations.find_one(
-            {"match_id": match["id"], "player_id": player_id, "status": {"$ne": "baja"}},
-            {"_id": 0},
-        )
-        if not reg:
-            continue
-
-        was_titular = reg.get("status") == "titular"
-        await db.match_registrations.update_one(
-            {"id": reg["id"]},
-            {"$set": {"status": "baja", "removed_by": actor_profile["id"], "removed_at": now, "removed_reason": "player_deleted"}},
-        )
-
-        if was_titular:
-            first_sup = await db.match_registrations.find_one(
-                {"match_id": match["id"], "status": "suplente"},
-                {"_id": 0},
-                sort=[("order", 1)],
-            )
-            if first_sup:
-                await db.match_registrations.update_one({"id": first_sup["id"]}, {"$set": {"status": "titular"}})
-
-        if match.get("status") in ["equipos_generados", "equipos_confirmados"]:
-            await db.team_generations.delete_many({"match_id": match["id"]})
-            await db.matches.update_one({"id": match["id"]}, {"$set": {"status": "cerrado", "updated_at": now}})
-
-    await db.group_members.delete_many({"player_id": player_id})
-    await db.match_registrations.delete_many({"player_id": player_id})
-    await db.group_seed_ratings.delete_many({"$or": [{"rated_player_id": player_id}, {"rater_id": player_id}]})
-    await db.peer_ratings.delete_many({"$or": [{"rated_player_id": player_id}, {"rater_id": player_id}]})
-    await db.self_evaluations.delete_many({"player_id": player_id})
-    await db.stats_proposals.delete_many({"player_id": player_id})
-    await db.stats_final.delete_many({"player_id": player_id})
-    await db.player_profiles.delete_one({"id": player_id})
-
-    return {"message": "Jugador borrado correctamente", "player_id": player_id}
-
-
 @router.get("/{player_id}/history")
 async def get_player_history(player_id: str, user=Depends(get_current_user)):
+    visibility = await get_score_visibility_for_player(player_id, user)
+    can_view_peer_scores = visibility["can_view_peer_scores"]
+    can_view_self_scores = visibility["can_view_self_scores"]
+
     regs = await db.match_registrations.find({"player_id": player_id, "status": "titular"}, {"_id": 0}).to_list(500)
 
     history = []
@@ -128,11 +77,13 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         if not match:
             continue
 
-        ratings = await db.peer_ratings.find(
-            {"match_id": reg["match_id"], "rated_player_id": player_id},
-            {"_id": 0},
-        ).to_list(100)
-        avg_rating = sum(r["score"] for r in ratings) / len(ratings) if ratings else None
+        avg_rating = None
+        if can_view_peer_scores:
+            ratings = await db.peer_ratings.find(
+                {"match_id": reg["match_id"], "rated_player_id": player_id},
+                {"_id": 0},
+            ).to_list(100)
+            avg_rating = sum(r["score"] for r in ratings) / len(ratings) if ratings else None
 
         gen = await db.team_generations.find({"match_id": reg["match_id"]}, {"_id": 0}).to_list(1)
         assignment = None
@@ -145,8 +96,7 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         stats = await db.stats_final.find_one({"match_id": reg["match_id"], "player_id": player_id}, {"_id": 0})
 
         self_eval = None
-        my_profile = await db.player_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
-        if my_profile and my_profile["id"] == player_id:
+        if can_view_self_scores:
             self_eval = await db.self_evaluations.find_one(
                 {"match_id": reg["match_id"], "player_id": player_id},
                 {"_id": 0},
@@ -157,7 +107,7 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
             "match_title": match["title"],
             "match_date": match["date"],
             "modality": match["modality"],
-            "avg_rating": round(avg_rating, 2) if avg_rating else None,
+            "avg_rating": round(avg_rating, 2) if avg_rating is not None else None,
             "position_played": assignment.get("position") if assignment else None,
             "team": assignment.get("team") if assignment else None,
             "stats": stats,
@@ -165,12 +115,32 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         })
 
     history.sort(key=lambda x: x["match_date"], reverse=True)
-    return history
+    return {
+        "history": history,
+        "can_view_peer_scores": can_view_peer_scores,
+        "can_view_self_scores": can_view_self_scores,
+        "score_visibility_scope": visibility["scope"],
+    }
 
 
 @router.get("/{player_id}/metrics")
 async def get_player_metrics(player_id: str, user=Depends(get_current_user)):
-    return await calculate_player_metrics(player_id)
+    metrics = await calculate_player_metrics(player_id)
+    visibility = await get_score_visibility_for_player(player_id, user)
+    can_view_peer_scores = visibility["can_view_peer_scores"]
+
+    if not can_view_peer_scores:
+        metrics["general_rating"] = None
+        metrics["recent_rating"] = None
+        metrics["confidence_index"] = None
+        metrics["stats_bonus"] = None
+        metrics["final_score"] = None
+        metrics["position_ratings"] = {}
+
+    metrics["can_view_peer_scores"] = can_view_peer_scores
+    metrics["can_view_self_scores"] = visibility["can_view_self_scores"]
+    metrics["score_visibility_scope"] = visibility["scope"]
+    return metrics
 
 
 @router.post("/guest")
@@ -201,7 +171,6 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
     await db.player_profiles.insert_one(guest_doc)
 
     return ProfileResponse(**guest_doc)
-
 
 @router.post("/{player_id}/photo")
 async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
