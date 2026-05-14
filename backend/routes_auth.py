@@ -14,11 +14,19 @@ from email_service import send_verification_email
 import secrets
 import uuid
 import logging
+import os
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 ADMIN_EMAILS = ["padrapatricio@gmail.com"]
 logger = logging.getLogger(__name__)
+
+# En Render Free conviene dejar esto en false porque SMTP está bloqueado.
+# En Render, agregá la variable:
+# EMAIL_VERIFICATION_ENABLED=false
+EMAIL_VERIFICATION_ENABLED = (
+    os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
+)
 
 
 def _now_iso() -> str:
@@ -55,8 +63,11 @@ async def register(data: RegisterRequest):
     user_id = str(uuid.uuid4())
     profile_id = str(uuid.uuid4())
     now = _now_iso()
-    verification_token = _new_verification_token()
-    verification_token_expires_at = _new_verification_expiration_iso()
+
+    verification_token = _new_verification_token() if EMAIL_VERIFICATION_ENABLED else None
+    verification_token_expires_at = (
+        _new_verification_expiration_iso() if EMAIL_VERIFICATION_ENABLED else None
+    )
 
     user_doc = {
         "id": user_id,
@@ -64,11 +75,14 @@ async def register(data: RegisterRequest):
         "password_hash": hash_password(data.password),
         "role": role,
         "created_at": now,
-        "is_verified": False,
+
+        # Si la verificación está apagada, el usuario nace verificado.
+        "is_verified": not EMAIL_VERIFICATION_ENABLED,
         "verification_token": verification_token,
         "verification_token_expires_at": verification_token_expires_at,
-        "verified_at": None,
+        "verified_at": now if not EMAIL_VERIFICATION_ENABLED else None,
     }
+
     await db.users.insert_one(user_doc)
 
     profile_doc = {
@@ -87,17 +101,35 @@ async def register(data: RegisterRequest):
         "estimated_level": 5.0,
         "created_at": now,
     }
+
     await db.player_profiles.insert_one(profile_doc)
 
-    verification_sent = True
-    try:
-        send_verification_email(data.email, data.name, verification_token)
-    except Exception as e:
-        verification_sent = False
-        logger.exception(f"No se pudo enviar email de verificación a {data.email}: {e}")
+    verification_sent = False
+
+    if EMAIL_VERIFICATION_ENABLED:
+        try:
+            send_verification_email(data.email, data.name, verification_token)
+            verification_sent = True
+        except Exception as e:
+            logger.exception(
+                f"No se pudo enviar email de verificación a {data.email}: {e}"
+            )
+
+            # Como la verificación está activada, si no se puede enviar el mail
+            # no tiene sentido dejar avanzar el registro.
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudo enviar el email de verificación",
+            )
+
+    message = (
+        "Cuenta creada. Revisá tu email para activar la cuenta."
+        if EMAIL_VERIFICATION_ENABLED
+        else "Cuenta creada correctamente. Ya podés iniciar sesión."
+    )
 
     return RegisterResponse(
-        message="Cuenta creada. Revisá tu email para activar la cuenta.",
+        message=message,
         email=data.email,
         verification_sent=verification_sent,
     )
@@ -105,6 +137,11 @@ async def register(data: RegisterRequest):
 
 @router.get("/verify-email", response_model=VerifyEmailResponse)
 async def verify_email(token: str = Query(...)):
+    if not EMAIL_VERIFICATION_ENABLED:
+        return VerifyEmailResponse(
+            message="La verificación por email está desactivada."
+        )
+
     user = await db.users.find_one({"verification_token": token}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=400, detail="Link inválido o ya usado")
@@ -136,6 +173,11 @@ async def verify_email(token: str = Query(...)):
 
 @router.post("/resend-verification", response_model=VerifyEmailResponse)
 async def resend_verification(data: ResendVerificationRequest):
+    if not EMAIL_VERIFICATION_ENABLED:
+        return VerifyEmailResponse(
+            message="La verificación por email está desactivada."
+        )
+
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="No existe una cuenta con ese email")
@@ -162,10 +204,19 @@ async def resend_verification(data: ResendVerificationRequest):
     )
 
     try:
-        send_verification_email(user["email"], profile.get("name") or user["email"], verification_token)
+        send_verification_email(
+            user["email"],
+            profile.get("name") or user["email"],
+            verification_token,
+        )
     except Exception as e:
-        logger.exception(f"No se pudo reenviar email de verificación a {user['email']}: {e}")
-        raise HTTPException(status_code=500, detail="No se pudo reenviar el email de verificación")
+        logger.exception(
+            f"No se pudo reenviar email de verificación a {user['email']}: {e}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo reenviar el email de verificación",
+        )
 
     return VerifyEmailResponse(message="Te reenviamos el email de verificación")
 
