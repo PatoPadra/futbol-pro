@@ -65,3 +65,19 @@ async def ensure_can_rate_group(group_id: str, user):
     if user["role"] != "admin" and membership.get("member_role") not in ["organizador", "frecuente"]:
         raise HTTPException(status_code=403, detail="Solo los jugadores frecuentes u organizadores pueden calificar")
     return membership
+
+
+async def ensure_can_delete_group(group_id: str, user):
+    group = await get_group_or_404(group_id)
+    if user["role"] == "admin":
+        return group
+
+    membership = await ensure_group_member(group_id, user)
+    if membership.get("member_role") != "organizador":
+        raise HTTPException(status_code=403, detail="Solo el organizador puede borrar el grupo")
+
+    profile = await get_my_profile_or_404(user)
+    if group.get("created_by") != profile["id"]:
+        raise HTTPException(status_code=403, detail="Solo quien creó el grupo puede borrarlo")
+
+    return group

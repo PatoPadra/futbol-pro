@@ -6,8 +6,7 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
 
   return (
     <div
-      className="relative bg-pitch rounded-xl overflow-hidden border-2 border-white/20 shadow-inner"
-      style={{ aspectRatio: '2/3' }}
+      className="relative bg-pitch rounded-xl overflow-hidden border-4 border-white/20 shadow-inner aspect-[2/3] md:aspect-[3/2]"
       data-testid={`pitch-team-${teamLabel}`}
     >
       <div className="absolute inset-0">
@@ -31,7 +30,25 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
 
       {coords?.map((coord, i) => {
         const player = teamAssignments[i];
-        if (!player) return null;
+
+        if (!player) {
+          return (
+            <div
+              key={i}
+              className="absolute z-10 flex flex-col items-center"
+              style={{
+                left: `${coord.x}%`,
+                top: `${coord.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              data-testid={`player-marker-empty-${teamLabel}-${i}`}
+            >
+              <div className="w-9 h-9 rounded-full border-2 border-dashed border-white/50 bg-white/10 flex items-center justify-center text-white/70 text-[9px] font-bold">
+                {coord.pos}
+              </div>
+            </div>
+          );
+        }
 
         const photoUrl = buildPhotoUrl(player.player_photo);
 

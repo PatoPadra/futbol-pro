@@ -1,12 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Filter, Plus, Search, Shield, Star, Trash2, Users } from 'lucide-react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Filter,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Shield,
+  Star,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { GROUP_PERMISSION_LABELS, MEMBERSHIP_TYPE_LABELS } from '@/constants/groups';
 import GroupMemberCard from '@/components/groups/GroupMemberCard';
+import LinkGuestDialog from '@/components/groups/LinkGuestDialog';
 import PageLoader from '@/components/common/PageLoader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +31,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const FILTER_OPTIONS = [
   { value: 'todos', label: 'Todos' },
@@ -22,6 +49,22 @@ const FILTER_OPTIONS = [
   { value: 'organizador', label: 'Organizadores' },
 ];
 
+const PILL_BTN = 'rounded-full font-bold uppercase tracking-wider transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
+
+const inviteMemberSchema = z
+  .object({
+    name: z.string().trim().max(80, 'Nombre demasiado largo').optional().or(z.literal('')),
+    username: z.string().trim().max(50, 'Usuario demasiado largo').optional().or(z.literal('')),
+    email: z.string().trim().email('Ingresá un email válido').optional().or(z.literal('')),
+    member_role: z.enum(['frecuente', 'invitado', 'organizador']),
+  })
+  .refine((data) => Boolean(data.email || data.username || data.name), {
+    message: 'Ingresá un email, usuario o nombre para poder agregarlo',
+    path: ['name'],
+  });
+
+const inviteDefaultValues = { name: '', username: '', email: '', member_role: 'frecuente' };
+
 export default function GroupDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -29,18 +72,27 @@ export default function GroupDetail() {
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [savingInvite, setSavingInvite] = useState(false);
   const [savingRatings, setSavingRatings] = useState(false);
   const [memberActionLoading, setMemberActionLoading] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('todos');
-  const [inviteForm, setInviteForm] = useState({
-    name: '',
-    username: '',
-    email: '',
-    member_role: 'frecuente',
-  });
   const [ratingMap, setRatingMap] = useState({});
+  const [inviteServerError, setInviteServerError] = useState('');
+  const [memberPendingRemoval, setMemberPendingRemoval] = useState(null);
+  const [linkGuestTarget, setLinkGuestTarget] = useState(null);
+  const [confirmDeleteGroupOpen, setConfirmDeleteGroupOpen] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
+
+  const {
+    register: registerInvite,
+    handleSubmit: handleInviteSubmit,
+    control: inviteControl,
+    reset: resetInviteForm,
+    formState: { errors: inviteErrors, isSubmitting: savingInvite },
+  } = useForm({
+    resolver: zodResolver(inviteMemberSchema),
+    defaultValues: inviteDefaultValues,
+  });
 
   const loadData = async ({ keepLoader = false } = {}) => {
     if (!keepLoader) setLoading(true);
@@ -68,15 +120,18 @@ export default function GroupDetail() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const myProfileId = user?.profile?.id || user?.profile_id;
   const isAdmin = user?.role === 'admin' || group?.my_global_role === 'admin';
-  const isOrganizer = ['organizador', 'admin'].includes(group?.my_group_permission);
 
-  const canInvite = Boolean(group?.can_invite || isOrganizer || isAdmin);
-  const canManage = Boolean(group?.can_manage || isOrganizer || isAdmin);
-  const canRate = Boolean(group?.can_rate_seed || isOrganizer || isAdmin);
+  // Trust the backend as the single source of truth for permissions instead of
+  // re-deriving them client-side — avoids drift between what the UI shows and
+  // what the API will actually allow.
+  const canInvite = Boolean(group?.can_invite);
+  const canManage = Boolean(group?.can_manage);
+  const canRate = Boolean(group?.can_rate_seed);
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
@@ -92,6 +147,11 @@ export default function GroupDetail() {
     });
   }, [members, search, filter]);
 
+  const guestMembers = useMemo(
+    () => members.filter((member) => member.membership_type === 'invitado'),
+    [members]
+  );
+
   const rateableMembers = useMemo(() => {
     return members.filter((member) => {
       if (member.player_id === myProfileId) return false;
@@ -103,30 +163,47 @@ export default function GroupDetail() {
     });
   }, [members, myProfileId]);
 
-  const handleInvite = async (e) => {
-    e.preventDefault();
-    setSavingInvite(true);
+  const ratingErrors = useMemo(() => {
+    const errs = {};
+    Object.entries(ratingMap).forEach(([playerId, value]) => {
+      if (value === '' || value === undefined || value === null) return;
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 1 || n > 10) {
+        errs[playerId] = 'Entre 1 y 10';
+      }
+    });
+    return errs;
+  }, [ratingMap]);
 
+  const hasRatingErrors = Object.keys(ratingErrors).length > 0;
+
+  const onInviteSubmit = async (data) => {
+    setInviteServerError('');
     try {
       const payload = {
-        name: inviteForm.name || null,
-        username: inviteForm.username || null,
-        email: inviteForm.email || null,
-        member_role: inviteForm.member_role,
+        name: data.name || null,
+        username: data.username || null,
+        email: data.email || null,
+        member_role: data.member_role,
       };
 
       await api.post(`/groups/${id}/members`, payload);
       toast.success('Jugador agregado al grupo');
-      setInviteForm({ name: '', username: '', email: '', member_role: 'frecuente' });
+      resetInviteForm(inviteDefaultValues);
       await loadData({ keepLoader: true });
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Error al invitar jugador');
-    } finally {
-      setSavingInvite(false);
+      const msg = err.response?.data?.detail || 'Error al invitar jugador';
+      setInviteServerError(msg);
+      toast.error(msg);
     }
   };
 
   const handleSaveRatings = async () => {
+    if (hasRatingErrors) {
+      toast.error('Corregí los puntajes fuera de rango (entre 1 y 10) antes de guardar');
+      return;
+    }
+
     const ratings = Object.entries(ratingMap)
       .filter(([, score]) => score !== '' && !Number.isNaN(Number(score)))
       .map(([rated_player_id, score]) => ({ rated_player_id, score: Number(score) }));
@@ -148,14 +225,17 @@ export default function GroupDetail() {
     }
   };
 
-  const handleRemoveMember = async (member) => {
-    const confirmed = window.confirm(`¿Querés quitar a ${member.player_name} del grupo? También se lo dará de baja de los partidos activos de este grupo.`);
-    if (!confirmed) return;
+  const requestRemoveMember = (member) => setMemberPendingRemoval(member);
+
+  const confirmRemoveMember = async () => {
+    const member = memberPendingRemoval;
+    if (!member) return;
 
     setMemberActionLoading(member.id);
     try {
       await api.delete(`/groups/${id}/members/${member.id}`);
       toast.success('Jugador quitado del grupo');
+      setMemberPendingRemoval(null);
       await loadData({ keepLoader: true });
     } catch (err) {
       toast.error(err.response?.data?.detail || 'No se pudo quitar al jugador');
@@ -164,22 +244,60 @@ export default function GroupDetail() {
     }
   };
 
+  const requestDeleteGroup = () => setConfirmDeleteGroupOpen(true);
 
-  const handleDeleteGroup = async () => {
-    const confirmed = window.confirm(`¿Querés borrar definitivamente el grupo ${group.name}? También se borrarán sus partidos y equipos.`);
-    if (!confirmed) return;
-
+  const confirmDeleteGroup = async () => {
+    setDeletingGroup(true);
     try {
       await api.delete(`/groups/${id}`);
       toast.success('Grupo borrado');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'No se pudo borrar el grupo');
+      setDeletingGroup(false);
+      setConfirmDeleteGroupOpen(false);
     }
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setFilter('todos');
+  };
+
   if (loading) return <PageLoader />;
-  if (!group) return <div className="page-container text-center text-slate-500">Grupo no encontrado</div>;
+
+  if (!group) {
+    return (
+      <div className="page-container" data-testid="group-not-found">
+        <div className="flex flex-col items-center justify-center text-center py-20">
+          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+            <Users className="w-7 h-7 text-slate-400" />
+          </div>
+          <h2 className="font-heading text-2xl font-bold uppercase tracking-tight text-slate-900 mb-2">
+            Grupo no encontrado
+          </h2>
+          <p className="text-slate-500 mb-6 max-w-sm">
+            Puede que haya sido borrado o que no tengas acceso a él.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => loadData()}
+              className={`${PILL_BTN} h-11 px-6 border-2 border-slate-200 hover:border-slate-400`}
+              data-testid="group-not-found-retry"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" /> Reintentar
+            </Button>
+            <Link to="/dashboard">
+              <Button className={`${PILL_BTN} h-11 px-6 bg-turf hover:bg-turf-dark text-white`} data-testid="group-not-found-back">
+                <ArrowLeft className="w-4 h-4 mr-2" /> Volver
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const totalGuests = members.filter((m) => m.membership_type === 'invitado').length;
   const totalOrganizers = members.filter((m) => m.group_permission === 'organizador').length;
@@ -198,7 +316,7 @@ export default function GroupDetail() {
                 <Badge variant="outline">
                   {MEMBERSHIP_TYPE_LABELS[group.my_membership_type] || group.my_membership_type}
                 </Badge>
-                {group.my_global_role === 'admin' && (
+                {isAdmin && (
                   <Badge className="bg-slate-900 text-white">
                     <Shield className="w-3 h-3 mr-1" /> Admin
                   </Badge>
@@ -213,42 +331,50 @@ export default function GroupDetail() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Link to={`/partidos/crear?group_id=${group.id}`}>
-                <Button className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-                  <Plus className="w-4 h-4 mr-2" /> Crear Partido
-                </Button>
-              </Link>
-              {canManage && (
-                <Button variant="outline" onClick={handleDeleteGroup} className="rounded-full border-red-200 text-red-600 hover:bg-red-50">
+            {canManage && (
+              <div className="flex flex-wrap gap-2">
+                <Link to={`/partidos/crear?group_id=${group.id}`} data-testid="group-create-match-link">
+                  <Button
+                    className={`${PILL_BTN} h-12 px-6 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20`}
+                    data-testid="group-create-match-btn"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Crear Partido
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  onClick={requestDeleteGroup}
+                  className={`${PILL_BTN} h-12 px-6 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 focus-visible:ring-red-500`}
+                  data-testid="group-delete-btn"
+                >
                   <Trash2 className="w-4 h-4 mr-2" /> Borrar Grupo
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
             <Card className="border-slate-100 shadow-none">
               <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Miembros</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Miembros</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{group.members_count}</p>
               </CardContent>
             </Card>
             <Card className="border-slate-100 shadow-none">
               <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Organizan</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Organizan</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrganizers}</p>
               </CardContent>
             </Card>
             <Card className="border-slate-100 shadow-none">
               <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Invitados</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Invitados</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{totalGuests}</p>
               </CardContent>
             </Card>
             <Card className="border-slate-100 shadow-none">
               <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Tu rol</p>
+                <p className="text-xs uppercase tracking-wider text-slate-500">Tu rol</p>
                 <p className="text-lg font-bold text-slate-900 mt-1">
                   {GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
                 </p>
@@ -283,12 +409,17 @@ export default function GroupDetail() {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Buscar por nombre, email o posición"
-                      className="pl-9 bg-slate-50"
+                      aria-label="Buscar miembros por nombre, email o posición"
+                      className="pl-9 h-12 bg-slate-50 border-slate-200 focus:border-turf focus:ring-2 focus:ring-turf/20 rounded-lg"
                       data-testid="group-member-search"
                     />
                   </div>
                   <Select value={filter} onValueChange={setFilter}>
-                    <SelectTrigger className="bg-slate-50" data-testid="group-member-filter">
+                    <SelectTrigger
+                      className="h-12 bg-slate-50 border-slate-200 focus:border-turf focus:ring-2 focus:ring-turf/20 rounded-lg"
+                      aria-label="Filtrar miembros"
+                      data-testid="group-member-filter"
+                    >
                       <SelectValue placeholder="Filtrar" />
                     </SelectTrigger>
                     <SelectContent>
@@ -302,19 +433,58 @@ export default function GroupDetail() {
                 </div>
 
                 {filteredMembers.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
-                    No encontramos miembros con ese filtro.
+                  <div
+                    className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-slate-500"
+                    data-testid="group-members-empty"
+                  >
+                    {members.length === 0 ? (
+                      <>
+                        <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p>Este grupo todavía no tiene miembros.</p>
+                        {canInvite && (
+                          <p className="text-sm mt-1">Sumá al primero desde el panel de la derecha.</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p>No encontramos miembros con ese filtro.</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={clearFilters}
+                          className="mt-3 h-11 text-turf hover:text-turf-dark font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                          data-testid="group-clear-filters"
+                        >
+                          Limpiar filtros
+                        </Button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {filteredMembers.map((member) => (
-                      <GroupMemberCard
+                      <div
                         key={member.id}
-                        member={member}
-                        canManage={canManage}
-                        canRemove={member.player_id !== myProfileId && memberActionLoading !== member.id}
-                        onRemove={() => handleRemoveMember(member)}
-                      />
+                        className={
+                          memberActionLoading === member.id
+                            ? 'opacity-60 pointer-events-none transition-opacity'
+                            : 'transition-opacity'
+                        }
+                        aria-busy={memberActionLoading === member.id}
+                      >
+                        <GroupMemberCard
+                          member={member}
+                          canManage={canManage}
+                          canRemove={member.player_id !== myProfileId}
+                          onRemove={() => requestRemoveMember(member)}
+                          onLinkGuest={
+                            canManage && member.membership_type !== 'invitado' && guestMembers.length > 0
+                              ? () => setLinkGuestTarget(member)
+                              : undefined
+                          }
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
@@ -335,6 +505,7 @@ export default function GroupDetail() {
                 <CardContent className="space-y-4">
                   {rateableMembers.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
+                      <Star className="w-6 h-6 text-slate-300 mx-auto mb-2" />
                       No hay compañeros elegibles para puntuar todavía.
                     </div>
                   ) : (
@@ -342,11 +513,11 @@ export default function GroupDetail() {
                       {rateableMembers.map((member) => (
                         <div
                           key={member.player_id}
-                          className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 p-4"
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-4"
                         >
-                          <div>
-                            <p className="font-medium text-slate-900">{member.player_name}</p>
-                            <p className="text-xs text-slate-500 mt-1">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-900 truncate">{member.player_name}</p>
+                            <p className="text-xs text-slate-500 mt-1 truncate">
                               {GROUP_PERMISSION_LABELS[member.group_permission] || member.group_permission}
                               {' · '}
                               {MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type}
@@ -356,19 +527,28 @@ export default function GroupDetail() {
                             </p>
                           </div>
 
-                          <Input
-                            type="number"
-                            min="1"
-                            max="10"
-                            step="1"
-                            value={ratingMap[member.player_id] || ''}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setRatingMap((prev) => ({ ...prev, [member.player_id]: value }));
-                            }}
-                            className="w-20 text-center bg-slate-50"
-                            data-testid={`seed-rating-${member.player_id}`}
-                          />
+                          <div className="shrink-0 flex flex-col items-end gap-1">
+                            <Input
+                              type="number"
+                              min="1"
+                              max="10"
+                              step="1"
+                              value={ratingMap[member.player_id] || ''}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setRatingMap((prev) => ({ ...prev, [member.player_id]: value }));
+                              }}
+                              aria-label={`Puntaje inicial para ${member.player_name}`}
+                              aria-invalid={!!ratingErrors[member.player_id]}
+                              className={`w-20 h-11 text-center bg-slate-50 ${
+                                ratingErrors[member.player_id] ? 'border-red-300 focus-visible:ring-red-300' : ''
+                              }`}
+                              data-testid={`seed-rating-${member.player_id}`}
+                            />
+                            {ratingErrors[member.player_id] && (
+                              <span className="text-[11px] text-red-600">{ratingErrors[member.player_id]}</span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -376,10 +556,11 @@ export default function GroupDetail() {
 
                   <Button
                     onClick={handleSaveRatings}
-                    disabled={savingRatings || rateableMembers.length === 0}
-                    className="w-full bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase"
+                    disabled={savingRatings || rateableMembers.length === 0 || hasRatingErrors}
+                    className={`${PILL_BTN} w-full h-12 bg-turf hover:bg-turf-dark text-white`}
                     data-testid="save-seed-ratings"
                   >
+                    {savingRatings && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                     {savingRatings ? 'Guardando...' : 'Guardar puntajes iniciales'}
                   </Button>
                 </CardContent>
@@ -389,36 +570,63 @@ export default function GroupDetail() {
 
           <div className="space-y-6">
             {canInvite && (
-              <Card className="border-slate-100 shadow-sm sticky top-20">
+              <Card className="border-slate-100 shadow-sm xl:sticky xl:top-20">
                 <CardHeader className="pb-3">
                   <CardTitle className="font-heading text-lg uppercase">Agregar jugador</CardTitle>
                   <p className="text-sm text-slate-500">Podés sumar jugadores frecuentes o invitados al grupo.</p>
                 </CardHeader>
 
                 <CardContent>
-                  <form onSubmit={handleInvite} className="space-y-4">
+                  <form
+                    onSubmit={handleInviteSubmit(onInviteSubmit)}
+                    className="space-y-4"
+                    noValidate
+                    data-testid="group-invite-form"
+                  >
+                    {inviteServerError && (
+                      <div
+                        className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+                        role="alert"
+                        aria-live="polite"
+                        data-testid="group-invite-server-error"
+                      >
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>{inviteServerError}</span>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <Label htmlFor="invite-name">Nombre</Label>
                       <Input
                         id="invite-name"
-                        value={inviteForm.name}
-                        onChange={(event) => setInviteForm((prev) => ({ ...prev, name: event.target.value }))}
                         placeholder="Ej: Juan Pérez"
-                        className="bg-slate-50"
+                        aria-invalid={!!inviteErrors.name}
+                        className={`h-12 bg-slate-50 ${inviteErrors.name ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                         data-testid="group-invite-name"
+                        {...registerInvite('name')}
                       />
+                      {inviteErrors.name && (
+                        <p className="text-xs text-red-600" data-testid="group-invite-name-error">
+                          {inviteErrors.name.message}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="invite-username">Usuario exacto</Label>
                       <Input
                         id="invite-username"
-                        value={inviteForm.username}
-                        onChange={(event) => setInviteForm((prev) => ({ ...prev, username: event.target.value }))}
                         placeholder="Si ya existe en la app"
-                        className="bg-slate-50"
+                        aria-invalid={!!inviteErrors.username}
+                        className={`h-12 bg-slate-50 ${inviteErrors.username ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                         data-testid="group-invite-username"
+                        {...registerInvite('username')}
                       />
+                      {inviteErrors.username && (
+                        <p className="text-xs text-red-600" data-testid="group-invite-username-error">
+                          {inviteErrors.username.message}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -426,37 +634,46 @@ export default function GroupDetail() {
                       <Input
                         id="invite-email"
                         type="email"
-                        value={inviteForm.email}
-                        onChange={(event) => setInviteForm((prev) => ({ ...prev, email: event.target.value }))}
                         placeholder="email@jugador.com"
-                        className="bg-slate-50"
+                        aria-invalid={!!inviteErrors.email}
+                        className={`h-12 bg-slate-50 ${inviteErrors.email ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                         data-testid="group-invite-email"
+                        {...registerInvite('email')}
                       />
+                      {inviteErrors.email && (
+                        <p className="text-xs text-red-600" data-testid="group-invite-email-error">
+                          {inviteErrors.email.message}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label>Tipo de miembro</Label>
-                      <Select
-                        value={inviteForm.member_role}
-                        onValueChange={(value) => setInviteForm((prev) => ({ ...prev, member_role: value }))}
-                      >
-                        <SelectTrigger className="bg-slate-50" data-testid="group-invite-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="frecuente">Frecuente</SelectItem>
-                          <SelectItem value="invitado">Invitado</SelectItem>
-                          <SelectItem value="organizador">Organizador</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="invite-role">Tipo de miembro</Label>
+                      <Controller
+                        control={inviteControl}
+                        name="member_role"
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger id="invite-role" className="h-12 bg-slate-50" data-testid="group-invite-role">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="frecuente">Frecuente</SelectItem>
+                              <SelectItem value="invitado">Invitado</SelectItem>
+                              <SelectItem value="organizador">Organizador</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
 
                     <Button
                       type="submit"
                       disabled={savingInvite}
-                      className="w-full bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase"
+                      className={`${PILL_BTN} w-full h-12 bg-turf hover:bg-turf-dark text-white`}
                       data-testid="group-invite-submit"
                     >
+                      {savingInvite && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                       {savingInvite ? 'Agregando...' : 'Agregar al grupo'}
                     </Button>
                   </form>
@@ -466,6 +683,86 @@ export default function GroupDetail() {
           </div>
         </div>
       </div>
+
+      <AlertDialog
+        open={!!memberPendingRemoval}
+        onOpenChange={(open) => !open && !memberActionLoading && setMemberPendingRemoval(null)}
+      >
+        <AlertDialogContent className="rounded-2xl" data-testid="remove-member-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Quitar a {memberPendingRemoval?.player_name} del grupo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              También se lo va a dar de baja de los partidos activos de este grupo. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="remove-member-cancel"
+              disabled={!!memberActionLoading}
+              className="rounded-full font-bold uppercase tracking-wide"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRemoveMember();
+              }}
+              disabled={!!memberActionLoading}
+              className="rounded-full font-bold uppercase tracking-wide bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="remove-member-confirm"
+            >
+              {memberActionLoading ? 'Quitando...' : 'Quitar del grupo'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={confirmDeleteGroupOpen}
+        onOpenChange={(open) => !open && !deletingGroup && setConfirmDeleteGroupOpen(false)}
+      >
+        <AlertDialogContent className="rounded-2xl" data-testid="delete-group-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+              ¿Borrar el grupo {group.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Se van a borrar también sus partidos y equipos generados. Esta acción es definitiva y no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="delete-group-cancel"
+              disabled={deletingGroup}
+              className="rounded-full font-bold uppercase tracking-wide"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteGroup();
+              }}
+              disabled={deletingGroup}
+              className="rounded-full font-bold uppercase tracking-wide bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="delete-group-confirm"
+            >
+              {deletingGroup ? 'Borrando...' : 'Borrar definitivamente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <LinkGuestDialog
+        open={!!linkGuestTarget}
+        onOpenChange={(open) => !open && setLinkGuestTarget(null)}
+        groupId={id}
+        targetMember={linkGuestTarget}
+        guests={guestMembers}
+        onMerged={() => loadData({ keepLoader: true })}
+      />
     </div>
   );
 }

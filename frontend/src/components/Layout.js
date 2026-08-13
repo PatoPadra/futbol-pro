@@ -73,7 +73,7 @@ export default function Layout({ children }) {
               data-testid={`nav-${item.label.toLowerCase()}`}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                 isActive(item.path)
-                  ? 'bg-turf/10 text-turf'
+                  ? 'bg-turf/10 text-turf-accessible'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
@@ -156,7 +156,7 @@ export default function Layout({ children }) {
                 </button>
                 <button
                   onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-turf font-semibold text-sm bg-turf/5"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-turf-accessible font-semibold text-sm bg-turf/5"
                   data-testid="mobile-create-match"
                 >
                   <Plus className="w-4 h-4" /> Crear partido
@@ -194,7 +194,7 @@ export default function Layout({ children }) {
             to={item.path}
             data-testid={`mobile-nav-${item.label.toLowerCase()}`}
             className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
-              isActive(item.path) ? 'text-turf' : 'text-slate-400'
+              isActive(item.path) ? 'text-turf-accessible' : 'text-slate-400'
             }`}
           >
             <item.icon className="w-5 h-5" />

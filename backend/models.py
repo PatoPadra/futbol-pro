@@ -55,8 +55,13 @@ class ProfileResponse(BaseModel):
 # Guest
 class CreateGuestRequest(BaseModel):
     name: str
+    email: Optional[EmailStr] = None
     primary_position: Optional[str] = None
     estimated_level: float = 5.0
+
+
+class MergeGuestRequest(BaseModel):
+    guest_player_id: str
 
 
 # Match
@@ -249,7 +254,9 @@ class RegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     message: str
     email: EmailStr
+    verification_required: bool = True
     verification_sent: bool = True
+    linked_guest_history: bool = False
 
 
 class LoginRequest(BaseModel):

@@ -8,9 +8,10 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X } from 'lucide-react';
+import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X, Loader2, AlertTriangle, Info, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
+import PageLoader from '@/components/common/PageLoader';
 
 export default function GeneratedTeams() {
   const { id } = useParams();
@@ -41,7 +42,7 @@ export default function GeneratedTeams() {
       setEditFormationB(teamsRes.data.formation_b || '');
     } catch (err) {
       if (err.response?.status === 404) {
-        toast.error('No se han generado equipos aun');
+        toast.error('No se han generado equipos aún');
         navigate(`/partidos/${id}`);
       } else {
         toast.error(err.response?.data?.detail || 'No se pudieron cargar los equipos');
@@ -65,6 +66,13 @@ export default function GeneratedTeams() {
   const availableFormations = teams?.available_formations || [];
   const teamSummaryA = teams?.team_summaries?.A;
   const teamSummaryB = teams?.team_summaries?.B;
+
+  const formationChangedA = editMode && !!teams?.formation_a && editFormationA && editFormationA !== teams.formation_a;
+  const formationChangedB = editMode && !!(teams?.formation_b || teams?.formation_a) && editFormationB && editFormationB !== (teams?.formation_b || teams?.formation_a);
+  const slotsA = teams?.coords_a?.length || 0;
+  const slotsB = teams?.coords_b?.length || teams?.coords_a?.length || 0;
+  const incompleteA = is11 && slotsA > 0 && teamA.length < slotsA;
+  const incompleteB = is11 && slotsB > 0 && teamB.length < slotsB;
 
   const handleSwapPlayer = (playerId) => {
     setEditAssignments((prev) => prev.map((a) => (
@@ -133,56 +141,86 @@ export default function GeneratedTeams() {
     setEditFormationB(teams?.formation_b || '');
   };
 
-  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
-  if (!teams) return null;
+  if (loading) return <PageLoader />;
 
-  const PlayerRow = ({ a, teamColor }) => (
-    <div className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-player-${a.player_id}`}>
-      <Avatar className="w-9 h-9">
-        <AvatarImage src={buildPhotoUrl(a.player_photo) || undefined} />
-        <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
-          {initialsFromName(a.player_name)}
-        </AvatarFallback>
-      </Avatar>
+  if (!teams) {
+    return (
+      <div className="page-container max-w-5xl mx-auto" data-testid="generated-teams-empty">
+        <div className="animate-slide-up text-center py-20 rounded-3xl border border-dashed border-slate-200 bg-slate-50">
+          <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <h2 className="font-heading text-2xl font-bold uppercase tracking-tight text-slate-700">Todavía no hay equipos</h2>
+          <p className="text-slate-500 mt-1 mb-6">Generá los equipos desde el partido para poder verlos acá.</p>
+          <Button
+            data-testid="empty-back-to-match"
+            onClick={() => navigate(`/partidos/${id}`)}
+            className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase"
+          >
+            Volver al partido
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
-        {editMode ? (
-          <Select value={a.position} onValueChange={(v) => handleChangePosition(a.player_id, v)}>
-            <SelectTrigger className="h-7 w-28 text-xs mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {positions.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
-              ))}
-              <SelectItem value="JUG" className="text-xs">Jugador</SelectItem>
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="space-y-0.5">
-            <p className="text-xs text-slate-400">{a.position}{a.is_manual ? ' (manual)' : ''}</p>
-            <p className="text-[11px] text-slate-500">
-              Valor {typeof a.player_score === 'number' ? a.player_score.toFixed(2) : '—'}
-              {a.player_age ? ` · ${a.player_age} anios` : ''}
-            </p>
-          </div>
+  const PlayerRow = ({ a, teamColor }) => {
+    const destTeam = a.team === 'A' ? 'B' : 'A';
+    return (
+      <div className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-player-${a.player_id}`}>
+        <Avatar className="w-10 h-10 shrink-0">
+          <AvatarImage src={buildPhotoUrl(a.player_photo) || undefined} />
+          <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
+            {initialsFromName(a.player_name)}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
+          {editMode ? (
+            <Select value={a.position} onValueChange={(v) => handleChangePosition(a.player_id, v)}>
+              <SelectTrigger className="h-11 w-32 text-xs mt-1.5" data-testid={`position-select-${a.player_id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {positions.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                ))}
+                <SelectItem value="JUG" className="text-xs">Jugador</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-slate-500">{a.position}</p>
+                {a.is_manual && (
+                  <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wide border-orange/30 text-orange">
+                    Manual
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Valor {typeof a.player_score === 'number' ? a.player_score.toFixed(2) : '—'}
+                {a.player_age ? ` · ${a.player_age} años` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {editMode && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-11 w-11 min-h-11 min-w-11 p-0 shrink-0 text-slate-400 hover:text-turf-accessible hover:bg-turf/10 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            onClick={() => handleSwapPlayer(a.player_id)}
+            data-testid={`swap-player-${a.player_id}`}
+            title={`Mover a Equipo ${destTeam}`}
+            aria-label={`Mover a ${a.player_name} al equipo ${destTeam}`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+          </Button>
         )}
       </div>
-
-      {editMode && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 p-0 text-slate-400 hover:text-turf"
-          onClick={() => handleSwapPlayer(a.player_id)}
-          data-testid={`swap-player-${a.player_id}`}
-        >
-          <ArrowRightLeft className="w-4 h-4" />
-        </Button>
-      )}
-    </div>
-  );
+    );
+  };
 
   const SummaryCard = ({ summary }) => (
     <Card className="border-slate-100">
@@ -215,7 +253,7 @@ export default function GeneratedTeams() {
   return (
     <div className="page-container max-w-5xl mx-auto" data-testid="generated-teams-page">
       <div className="animate-slide-up">
-        <button onClick={() => navigate(`/partidos/${id}`)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4" data-testid="back-to-match">
+        <button onClick={() => navigate(`/partidos/${id}`)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 -ml-1 px-1 py-1" data-testid="back-to-match">
           <ArrowLeft className="w-4 h-4" /> Volver al partido
         </button>
 
@@ -223,11 +261,15 @@ export default function GeneratedTeams() {
           <div>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Equipos</h1>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <Badge className="bg-turf/10 text-turf border-turf/20 font-semibold">
+              <Badge className="bg-turf/10 text-turf-accessible border-turf/20 font-semibold" data-testid="balance-badge">
                 Balance: {(teams.balance_score * 100).toFixed(0)}%
               </Badge>
-              {teams.formation_a && <Badge variant="outline">Formacion: {editMode ? editFormationA : teams.formation_a}</Badge>}
-              <Badge variant={teams.status === 'confirmado' ? 'default' : 'secondary'} className={teams.status === 'confirmado' ? 'bg-turf text-white' : ''}>
+              {teams.formation_a && <Badge variant="outline">Formación: {editMode ? editFormationA : teams.formation_a}</Badge>}
+              <Badge
+                variant={teams.status === 'confirmado' ? 'default' : 'secondary'}
+                className={teams.status === 'confirmado' ? 'bg-turf text-white' : 'bg-slate-100 text-slate-600'}
+                data-testid="teams-status-badge"
+              >
                 {teams.status === 'confirmado' ? 'Confirmado' : 'Borrador'}
               </Badge>
             </div>
@@ -238,23 +280,23 @@ export default function GeneratedTeams() {
           <div className="flex flex-wrap gap-3 mb-6">
             {teams.status !== 'confirmado' && !editMode && (
               <>
-                <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-                  <Check className="w-4 h-4 mr-2" /> Confirmar
+                <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase shadow-lg shadow-turf/20 min-h-11">
+                  {actionLoading === 'confirm' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />} Confirmar
                 </Button>
-                <Button data-testid="edit-teams-btn" variant="outline" onClick={() => setEditMode(true)} className="rounded-full px-6">
+                <Button data-testid="edit-teams-btn" variant="outline" onClick={() => setEditMode(true)} disabled={!!actionLoading} className="rounded-full px-6 min-h-11">
                   <Edit3 className="w-4 h-4 mr-2" /> Ajustar
                 </Button>
-                <Button data-testid="regenerate-teams-btn" variant="outline" onClick={handleRegenerate} disabled={!!actionLoading} className="rounded-full px-6">
-                  <Shuffle className="w-4 h-4 mr-2" /> Recalcular
+                <Button data-testid="regenerate-teams-btn" variant="outline" onClick={handleRegenerate} disabled={!!actionLoading} className="rounded-full px-6 min-h-11">
+                  {actionLoading === 'regenerate' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Shuffle className="w-4 h-4 mr-2" />} Recalcular
                 </Button>
               </>
             )}
             {editMode && (
               <>
-                <Button data-testid="save-adjustments-btn" onClick={handleSaveAdjustments} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase">
-                  <Save className="w-4 h-4 mr-2" /> Guardar Cambios
+                <Button data-testid="save-adjustments-btn" onClick={handleSaveAdjustments} disabled={!!actionLoading} className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase shadow-lg shadow-turf/20 min-h-11">
+                  {actionLoading === 'save' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} Guardar Cambios
                 </Button>
-                <Button data-testid="cancel-edit-btn" variant="outline" onClick={cancelEdit} className="rounded-full px-6">
+                <Button data-testid="cancel-edit-btn" variant="outline" onClick={cancelEdit} disabled={!!actionLoading} className="rounded-full px-6 min-h-11">
                   <X className="w-4 h-4 mr-2" /> Cancelar
                 </Button>
               </>
@@ -262,24 +304,31 @@ export default function GeneratedTeams() {
           </div>
         )}
 
+        {editMode && (
+          <div className="flex items-start gap-2 rounded-xl border border-turf/20 bg-turf/5 px-4 py-3 mb-6 text-sm text-slate-700" data-testid="edit-mode-hint">
+            <Info className="w-4 h-4 text-turf-accessible shrink-0 mt-0.5" />
+            <p>Tocá <ArrowRightLeft className="w-3 h-3 inline mx-0.5 align-text-top" /> para mandar a un jugador al otro equipo, o elegí su posición en el desplegable. No olvides <strong>Guardar Cambios</strong> al terminar.</p>
+          </div>
+        )}
+
         {editMode && is11 && availableFormations.length > 0 && (
           <Card className="border-slate-100 mb-6">
             <CardContent className="p-4">
-              <p className="text-sm font-medium text-slate-700 mb-2">Cambiar formacion</p>
+              <p className="text-sm font-medium text-slate-700 mb-2">Cambiar formación</p>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="text-xs text-slate-500">Equipo A</label>
+                  <label className="text-xs text-slate-500" htmlFor="formation-a-select">Equipo A</label>
                   <Select value={editFormationA} onValueChange={setEditFormationA}>
-                    <SelectTrigger className="mt-1" data-testid="formation-a-select"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="formation-a-select" className="mt-1 h-11" data-testid="formation-a-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex-1">
-                  <label className="text-xs text-slate-500">Equipo B</label>
+                  <label className="text-xs text-slate-500" htmlFor="formation-b-select">Equipo B</label>
                   <Select value={editFormationB} onValueChange={setEditFormationB}>
-                    <SelectTrigger className="mt-1" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="formation-b-select" className="mt-1 h-11" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
@@ -290,10 +339,42 @@ export default function GeneratedTeams() {
           </Card>
         )}
 
-        {is11 && teams.formation_a && !editMode && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <FootballPitch assignments={currentAssignments} formation={teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor="#1A1D23" />
-            <FootballPitch assignments={currentAssignments} formation={teams.formation_b || teams.formation_a} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor="#FF6B00" />
+        {is11 && teams.formation_a && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8" data-testid="pitch-section">
+            <div>
+              {incompleteA && (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-2 text-xs text-amber-800" data-testid="incomplete-formation-a">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Formación incompleta: faltan {slotsA - teamA.length} jugador{slotsA - teamA.length === 1 ? '' : 'es'} en Equipo A.
+                </div>
+              )}
+              {formationChangedA ? (
+                <div className="relative bg-pitch rounded-xl overflow-hidden border-2 border-white/20 shadow-inner flex flex-col items-center justify-center text-center p-6" style={{ aspectRatio: '2/3' }} data-testid="pitch-team-A-pending">
+                  <Shuffle className="w-8 h-8 text-white/70 mb-3" />
+                  <p className="text-white font-semibold text-sm">Formación cambiada a {editFormationA}</p>
+                  <p className="text-white/70 text-xs mt-1">La cancha se actualiza al guardar los cambios.</p>
+                </div>
+              ) : (
+                <FootballPitch assignments={currentAssignments} formation={editMode ? editFormationA : teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor="#1A1D23" />
+              )}
+            </div>
+            <div>
+              {incompleteB && (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-2 text-xs text-amber-800" data-testid="incomplete-formation-b">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Formación incompleta: faltan {slotsB - teamB.length} jugador{slotsB - teamB.length === 1 ? '' : 'es'} en Equipo B.
+                </div>
+              )}
+              {formationChangedB ? (
+                <div className="relative bg-pitch rounded-xl overflow-hidden border-2 border-white/20 shadow-inner flex flex-col items-center justify-center text-center p-6" style={{ aspectRatio: '2/3' }} data-testid="pitch-team-B-pending">
+                  <Shuffle className="w-8 h-8 text-white/70 mb-3" />
+                  <p className="text-white font-semibold text-sm">Formación cambiada a {editFormationB}</p>
+                  <p className="text-white/70 text-xs mt-1">La cancha se actualiza al guardar los cambios.</p>
+                </div>
+              ) : (
+                <FootballPitch assignments={currentAssignments} formation={editMode ? (editFormationB || editFormationA) : (teams.formation_b || teams.formation_a)} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor="#FF6B00" />
+              )}
+            </div>
           </div>
         )}
 
@@ -306,25 +387,33 @@ export default function GeneratedTeams() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="border-slate-100">
+          <Card className="border-slate-100" data-testid="team-a-card">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-slate-800" /> Equipo A ({teamA.length})
+                <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: '#1A1D23' }} /> Equipo A ({teamA.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamA.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#1A1D23" />)}
+              {teamA.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-6">No hay jugadores en este equipo todavía.</p>
+              ) : (
+                teamA.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#1A1D23" />)
+              )}
             </CardContent>
           </Card>
 
-          <Card className="border-slate-100">
+          <Card className="border-slate-100" data-testid="team-b-card">
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-orange" /> Equipo B ({teamB.length})
+                <div className="w-4 h-4 rounded-full bg-orange shrink-0" /> Equipo B ({teamB.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {teamB.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#FF6B00" />)}
+              {teamB.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-6">No hay jugadores en este equipo todavía.</p>
+              ) : (
+                teamB.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#FF6B00" />)
+              )}
             </CardContent>
           </Card>
         </div>

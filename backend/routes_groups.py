@@ -10,8 +10,11 @@ from models import (
     AddGroupMemberRequest,
     CreateGroupRequest,
     GroupSeedRatingBatchRequest,
+    MergeGuestRequest,
 )
+from services.guest_merge import merge_guest_into_profile
 from services.permissions import (
+    ensure_can_delete_group,
     ensure_can_invite_to_group,
     ensure_can_manage_group,
     ensure_can_rate_group,
@@ -520,3 +523,65 @@ async def submit_group_seed_ratings(group_id: str, data: GroupSeedRatingBatchReq
         })
 
     return {"message": "Puntajes iniciales guardados"}
+
+
+@router.post("/{group_id}/members/{member_id}/merge-guest")
+async def merge_guest_member(group_id: str, member_id: str, data: MergeGuestRequest, user=Depends(get_current_user)):
+    await get_group_or_404(group_id)
+    await ensure_can_manage_group(group_id, user)
+
+    target_membership = await db.group_members.find_one(
+        {"id": member_id, "group_id": group_id, "status": "activo"}, {"_id": 0}
+    )
+    if not target_membership:
+        raise HTTPException(status_code=404, detail="Miembro no encontrado")
+
+    if data.guest_player_id == target_membership["player_id"]:
+        raise HTTPException(status_code=400, detail="No podés vincular un miembro consigo mismo")
+
+    target_profile = await db.player_profiles.find_one({"id": target_membership["player_id"]}, {"_id": 0})
+    if not target_profile or not target_profile.get("user_id"):
+        raise HTTPException(status_code=400, detail="Solo podés vincular un invitado con un miembro que tenga cuenta propia")
+
+    guest_membership = await db.group_members.find_one(
+        {
+            "group_id": group_id,
+            "player_id": data.guest_player_id,
+            "status": "activo",
+            "member_role": "invitado",
+        },
+        {"_id": 0},
+    )
+    if not guest_membership:
+        raise HTTPException(status_code=400, detail="El invitado no pertenece a este grupo")
+
+    merged = await merge_guest_into_profile(data.guest_player_id, target_membership["player_id"])
+    if not merged:
+        raise HTTPException(status_code=400, detail="Ese invitado ya no está disponible para vincular")
+
+    return {"message": f"{merged['name']} fue vinculado a {target_profile['name']}"}
+
+
+@router.delete("/{group_id}")
+async def delete_group(group_id: str, user=Depends(get_current_user)):
+    await ensure_can_delete_group(group_id, user)
+
+    match_ids = [
+        m["id"]
+        for m in await db.matches.find({"group_id": group_id}, {"_id": 0, "id": 1}).to_list(2000)
+    ]
+
+    if match_ids:
+        await db.match_registrations.delete_many({"match_id": {"$in": match_ids}})
+        await db.team_generations.delete_many({"match_id": {"$in": match_ids}})
+        await db.peer_ratings.delete_many({"match_id": {"$in": match_ids}})
+        await db.self_evaluations.delete_many({"match_id": {"$in": match_ids}})
+        await db.stats_final.delete_many({"match_id": {"$in": match_ids}})
+        await db.stats_proposals.delete_many({"match_id": {"$in": match_ids}})
+        await db.matches.delete_many({"group_id": group_id})
+
+    await db.group_members.delete_many({"group_id": group_id})
+    await db.group_seed_ratings.delete_many({"group_id": group_id})
+    await db.groups.delete_one({"id": group_id})
+
+    return {"message": "Grupo eliminado", "group_id": group_id, "matches_deleted": len(match_ids)}

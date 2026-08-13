@@ -42,6 +42,14 @@ module.exports = {
           dark: "#009624",
           light: "#69F0AE",
         },
+        // Accessible text/icon variant of `turf`. The brand DEFAULT (#00C853) is
+        // ~2.2:1 against white/off-white and fails WCAG AA for text/icon use.
+        // Use `turf-accessible` for text-turf/icon-turf color anywhere it sits
+        // on a light background; keep `turf` for large decorative surfaces
+        // (backgrounds, gradients, large filled UI where the 3:1 large-scale
+        // threshold or no threshold applies). See design_guidelines.json
+        // colors.palette.primary for the documented usage split.
+        "turf-accessible": "#007A33",
         pitch: {
           DEFAULT: "#2E7D32",
           dark: "#1B5E20",

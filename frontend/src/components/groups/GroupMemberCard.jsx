@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, Shield, UserMinus, ZoomIn } from 'lucide-react';
+import { Crown, Link2, Shield, UserMinus, ZoomIn } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ export default function GroupMemberCard({
   canManage,
   canRemove,
   onRemove,
+  onLinkGuest,
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const photoUrl = buildPhotoUrl(member.photo_url);
@@ -30,11 +31,11 @@ export default function GroupMemberCard({
           >
             <Avatar className="w-12 h-12 sm:w-14 sm:h-14 ring-2 ring-white shadow-sm">
               <AvatarImage src={photoUrl || undefined} />
-              <AvatarFallback className="bg-turf/10 text-turf text-sm font-bold">
+              <AvatarFallback className="bg-turf/10 text-turf-accessible text-sm font-bold">
                 {initialsFromName(member.player_name)}
               </AvatarFallback>
             </Avatar>
-            <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-turf transition-colors">
+            <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-turf-accessible transition-colors">
               <ZoomIn className="w-3.5 h-3.5" />
             </span>
           </button>
@@ -45,7 +46,7 @@ export default function GroupMemberCard({
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-slate-900 truncate">{member.player_name}</p>
                   {member.group_permission === 'organizador' && (
-                    <Badge className="bg-turf/10 text-turf border-turf/20">
+                    <Badge className="bg-turf/10 text-turf-accessible border-turf/20">
                       <Crown className="w-3 h-3 mr-1" /> Organiza
                     </Badge>
                   )}
@@ -87,6 +88,19 @@ export default function GroupMemberCard({
                 <Badge variant="outline">Invitado por {member.invited_by_name}</Badge>
               ) : null}
             </div>
+
+            {onLinkGuest && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onLinkGuest}
+                className="mt-2 h-9 px-2 text-slate-500 hover:text-turf-accessible hover:bg-turf/5 -ml-2"
+                data-testid={`link-guest-${member.player_id}`}
+              >
+                <Link2 className="w-3.5 h-3.5 mr-1.5" /> Vincular con invitado anterior
+              </Button>
+            )}
           </div>
         </div>
       </div>

@@ -35,7 +35,7 @@ export default function RegistrationListCard({ title, dotClassName, emptyLabel, 
             <div className="flex-1 min-w-0">
               <Link
                 to={`/jugadores/${row.player_id}`}
-                className="text-sm font-medium text-slate-900 hover:text-turf truncate block"
+                className="text-sm font-medium text-slate-900 hover:text-turf-accessible truncate block"
               >
                 {row.player_name}
               </Link>

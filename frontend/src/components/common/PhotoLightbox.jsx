@@ -39,7 +39,7 @@ export default function PhotoLightbox({
             <div className="min-h-[360px] flex flex-col items-center justify-center gap-4 text-slate-500">
               <Avatar className="w-28 h-28">
                 <AvatarImage src={undefined} />
-                <AvatarFallback className="bg-turf/10 text-turf text-2xl font-bold">
+                <AvatarFallback className="bg-turf/10 text-turf-accessible text-2xl font-bold">
                   {initialsFromName(name)}
                 </AvatarFallback>
               </Avatar>

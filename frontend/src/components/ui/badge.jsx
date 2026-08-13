@@ -4,7 +4,9 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  // Minimum 44px touch target height (design_guidelines.json accessibility.touch_targets)
+  // for badges used as interactive/clickable chips; harmless as a floor for static badges.
+  "inline-flex items-center rounded-md border px-2.5 py-1 min-h-11 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
   {
     variants: {
       variant: {

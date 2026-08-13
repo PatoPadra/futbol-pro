@@ -11,6 +11,7 @@ from models import (
 )
 from datetime import datetime, timezone, timedelta
 from email_service import send_verification_email
+from services.guest_merge import merge_guest_into_profile
 import secrets
 import uuid
 import logging
@@ -85,24 +86,39 @@ async def register(data: RegisterRequest):
 
     await db.users.insert_one(user_doc)
 
+    # Si alguien te anotó como invitado antes de que tuvieras cuenta, y usó el
+    # mismo email, recuperamos ese perfil (foto, posición, nivel) y su historial
+    # de partidos/calificaciones en vez de arrancar de cero.
+    matched_guest = await db.player_profiles.find_one(
+        {"email": data.email.lower(), "player_type": "invitado", "user_id": None},
+        {"_id": 0},
+    )
+
     profile_doc = {
         "id": profile_id,
         "user_id": user_id,
         "name": data.name,
         "email": data.email,
-        "photo_url": None,
-        "birth_date": None,
+        "photo_url": matched_guest.get("photo_url") if matched_guest else None,
+        "birth_date": matched_guest.get("birth_date") if matched_guest else None,
         "player_type": "frecuente",
-        "primary_position": None,
-        "secondary_positions": [],
-        "unwanted_position": None,
+        "primary_position": matched_guest.get("primary_position") if matched_guest else None,
+        "secondary_positions": (matched_guest.get("secondary_positions") or []) if matched_guest else [],
+        "unwanted_position": matched_guest.get("unwanted_position") if matched_guest else None,
         "matches_played": 0,
         "created_by": None,
-        "estimated_level": 5.0,
+        "estimated_level": matched_guest.get("estimated_level", 5.0) if matched_guest else 5.0,
         "created_at": now,
     }
+    if matched_guest and matched_guest.get("photo_public_id"):
+        profile_doc["photo_public_id"] = matched_guest["photo_public_id"]
 
     await db.player_profiles.insert_one(profile_doc)
+
+    linked_guest_history = False
+    if matched_guest:
+        merged = await merge_guest_into_profile(matched_guest["id"], profile_id)
+        linked_guest_history = merged is not None
 
     verification_sent = False
 
@@ -131,7 +147,9 @@ async def register(data: RegisterRequest):
     return RegisterResponse(
         message=message,
         email=data.email,
+        verification_required=EMAIL_VERIFICATION_ENABLED,
         verification_sent=verification_sent,
+        linked_guest_history=linked_guest_history,
     )
 
 

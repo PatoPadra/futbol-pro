@@ -34,7 +34,12 @@
         "DEFAULT": "#00C853",
         "foreground": "#FFFFFF",
         "hover": "#009624",
-        "description": "Neo-Turf Green. Vibrant, energetic, used for primary actions and success states."
+        "text": "#007A33",
+        "description": "Neo-Turf Green. Vibrant, energetic, used for primary actions and success states.",
+        "usage": {
+          "decorative_or_large_surface": "Use DEFAULT (#00C853) for backgrounds, gradients, filled buttons/pills with white text, large icons/illustrations, and other decorative or large-scale fills. DEFAULT is only ~2.2:1 against white/#F8FAFC, which fails the 4.5:1 text threshold but is acceptable for large-scale UI (>=3:1) or pure decoration with no contrast requirement.",
+          "text_or_icon": "Use `text` (#007A33, Tailwind token `turf-accessible`) for any turf-colored text, links, or icons rendered on white/#FFFFFF or off-white/#F8FAFC backgrounds. Verified >=4.5:1 against both (5.48:1 on white, 5.24:1 on #F8FAFC). Never use DEFAULT for small text/icon color."
+        }
       },
       "secondary": {
         "DEFAULT": "#1A1D23",
@@ -139,7 +144,7 @@
     "TESTING: Add 'data-testid' to every interactive element (buttons, inputs, cards)."
   ],
   "accessibility": {
-    "contrast": "Ensure text contrast ratio of 4.5:1. Use 'text-slate-900' on light backgrounds, 'text-white' on primary/dark backgrounds.",
+    "contrast": "Ensure text contrast ratio of 4.5:1. Use 'text-slate-900' on light backgrounds, 'text-white' on primary/dark backgrounds. For turf-green text/icons specifically, use 'text-turf-accessible' (#007A33), not 'text-turf' (#00C853, which is only ~2.2:1 and fails AA for text) — see colors.palette.primary.usage.",
     "touch_targets": "Minimum 44x44px for all clickable elements.",
     "focus_states": "Visible focus rings (ring-2 ring-primary ring-offset-2) for keyboard navigation."
   }
