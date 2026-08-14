@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from database import db
 from auth import hash_password, verify_password, create_token, get_current_user
 from models import (
@@ -12,6 +12,7 @@ from models import (
 from datetime import datetime, timezone, timedelta
 from email_service import send_verification_email
 from services.guest_merge import merge_guest_into_profile
+from services.rate_limit import check_rate_limit, clear_attempts, client_ip, record_attempt
 import re
 import secrets
 import uuid
@@ -29,6 +30,21 @@ logger = logging.getLogger(__name__)
 EMAIL_VERIFICATION_ENABLED = (
     os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
 )
+
+
+# Límites de rate limiting. El login se limita POR IP y no por email a
+# propósito: limitar por email dejaría que cualquiera bloquee la cuenta de otro
+# simplemente tipeando mal la contraseña unas cuantas veces.
+LOGIN_MAX_INTENTOS = 10
+LOGIN_VENTANA_SEGUNDOS = 15 * 60
+
+REGISTRO_MAX_INTENTOS = 10
+REGISTRO_VENTANA_SEGUNDOS = 60 * 60
+
+# Este sí va por email: el daño de un reenvío masivo lo sufre el dueño de la
+# casilla, y acá no hay riesgo de bloquear a nadie (no es una puerta de login).
+REENVIO_MAX_INTENTOS = 5
+REENVIO_VENTANA_SEGUNDOS = 60 * 60
 
 
 def _now_iso() -> str:
@@ -102,7 +118,12 @@ async def _normalize_legacy_user_email(user: dict, email: str) -> None:
 
 
 @router.post("/register", response_model=RegisterResponse)
-async def register(data: RegisterRequest):
+async def register(data: RegisterRequest, request: Request):
+    await check_rate_limit(
+        f"register:{client_ip(request)}", REGISTRO_MAX_INTENTOS, REGISTRO_VENTANA_SEGUNDOS
+    )
+    await record_attempt(f"register:{client_ip(request)}")
+
     # El email ya viene normalizado a minúscula por el modelo. La búsqueda
     # contempla cuentas legacy con mayúsculas para no crear un duplicado.
     existing = await _find_user_by_email(data.email)
@@ -242,6 +263,10 @@ async def verify_email(token: str = Query(...)):
 
 @router.post("/resend-verification", response_model=VerifyEmailResponse)
 async def resend_verification(data: ResendVerificationRequest):
+    rate_key = f"resend:{data.email}"
+    await check_rate_limit(rate_key, REENVIO_MAX_INTENTOS, REENVIO_VENTANA_SEGUNDOS)
+    await record_attempt(rate_key)
+
     if not EMAIL_VERIFICATION_ENABLED:
         return VerifyEmailResponse(
             message="La verificación por email está desactivada."
@@ -291,13 +316,21 @@ async def resend_verification(data: ResendVerificationRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, request: Request):
+    rate_key = f"login:{client_ip(request)}"
+    await check_rate_limit(rate_key, LOGIN_MAX_INTENTOS, LOGIN_VENTANA_SEGUNDOS)
+
     user = await _find_user_by_email(data.email)
     if not user:
+        await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     if not verify_password(data.password, user["password_hash"]):
+        await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Contraseña correcta: no penalizamos a quien simplemente se equivocó antes.
+    await clear_attempts(rate_key)
 
     # Cuenta vieja guardada con mayúsculas: la normalizamos ahora que sabemos
     # que la contraseña es correcta.
