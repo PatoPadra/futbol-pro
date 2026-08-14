@@ -9,7 +9,7 @@ from pathlib import Path
 import uuid
 import os
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from storage_cloudinary import upload_image_bytes
+from storage_cloudinary import delete_image, upload_image_bytes
 
 
 UPLOAD_DIR = Path(
@@ -217,6 +217,10 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
 
+    # El public_id anterior ya lo tenemos en `profile` (se trajo arriba para
+    # validar permisos), así que no hace falta otra query.
+    public_id_anterior = profile.get("photo_public_id")
+
     uploaded = upload_image_bytes(
         content=content,
         filename=file.filename or "guest.jpg",
@@ -232,4 +236,9 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
             }
         },
     )
+
+    # Recién ahora que la nueva quedó guardada borramos la vieja de Cloudinary.
+    if public_id_anterior:
+        delete_image(public_id_anterior)
+
     return {"photo_url": uploaded["photo_url"]}

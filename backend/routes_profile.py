@@ -5,7 +5,7 @@ from models import ProfileUpdate, ProfileResponse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from storage_cloudinary import upload_image_bytes
+from storage_cloudinary import delete_image, upload_image_bytes
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
@@ -77,6 +77,12 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
 
+    # Guardamos el public_id anterior para borrarlo DESPUÉS de subir el nuevo:
+    # si la subida falla, el usuario se queda con la foto que ya tenía.
+    anterior = await db.player_profiles.find_one(
+        {"user_id": user["user_id"]}, {"_id": 0, "photo_public_id": 1}
+    )
+
     uploaded = upload_image_bytes(
         content=content,
         filename=file.filename or "profile.jpg",
@@ -92,5 +98,8 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
             }
         },
     )
+
+    if anterior and anterior.get("photo_public_id"):
+        delete_image(anterior["photo_public_id"])
 
     return {"photo_url": uploaded["photo_url"]}
