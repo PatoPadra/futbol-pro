@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 import os
+import re
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
@@ -60,16 +60,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from database import client as db_client, db as app_db
+from database import client as db_client, db as app_db, ensure_indexes
 
 ADMIN_EMAILS = ["padrapatricio@gmail.com"]
 
+REQUIRED_ENV_VARS = ("MONGO_URL", "DB_NAME", "JWT_SECRET")
+
+
+def _validar_entorno():
+    """
+    Falla al arrancar y no en el primer login. Sin JWT_SECRET, auth.py lo deja en
+    None y PyJWT recién explota cuando alguien intenta loguear, con un error que
+    no dice nada. Preferimos que el deploy no levante.
+
+    Va acá y no al importar auth.py a propósito: si rompiera el import, los tests
+    que importan módulos del backend necesitarían el entorno completo seteado.
+    """
+    faltantes = [v for v in REQUIRED_ENV_VARS if not os.environ.get(v)]
+    if faltantes:
+        raise RuntimeError(
+            "Faltan variables de entorno obligatorias: "
+            + ", ".join(faltantes)
+            + ". Configuralas en backend/.env (local) o en el panel del hosting."
+        )
+
+
 @app.on_event("startup")
 async def startup():
+    _validar_entorno()
+
+    try:
+        await ensure_indexes()
+    except Exception as e:
+        # Los índices son una optimización: que fallen no debe tumbar la app.
+        logger.exception(f"No se pudieron crear los índices: {e}")
+
     try:
         for email in ADMIN_EMAILS:
+            # Case-insensitive: un admin registrado antes de que se normalizaran
+            # los emails puede estar guardado con mayúsculas y no matchearía.
             await app_db.users.update_many(
-                {"email": email},
+                {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
                 {"$set": {"role": "admin"}}
             )
         logger.info("Admin emails promoted")
