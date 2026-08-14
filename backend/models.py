@@ -1,30 +1,30 @@
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
+
+class EmailNormalizedModel(BaseModel):
+    """Baja el email a minúscula en la capa de modelo.
+
+    Así `Juan@Gmail.com` y `juan@gmail.com` son la misma cuenta en toda la app
+    (registro, login, invitados, invitaciones a grupo) sin tener que acordarse
+    de hacer `.lower()` en cada ruta.
+
+    Corre en modo `after`: primero EmailStr valida el formato, después
+    normalizamos. El valor sigue siendo un str, así que no rompe el tipo.
+    `check_fields=False` es necesario porque este modelo base no declara el
+    campo `email`; lo declaran las subclases.
+    """
+
+    @field_validator("email", mode="after", check_fields=False)
+    @classmethod
+    def _normalizar_email(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str):
+            return value.lower()
+        return value
 
 
 # Auth
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    name: str
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class TokenResponse(BaseModel):
-    token: str
-    user_id: str
-    role: str
-    profile_id: str
-    has_profile: bool
-    name: str
-
-
 # Profile
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
@@ -53,7 +53,7 @@ class ProfileResponse(BaseModel):
 
 
 # Guest
-class CreateGuestRequest(BaseModel):
+class CreateGuestRequest(EmailNormalizedModel):
     name: str
     email: Optional[EmailStr] = None
     primary_position: Optional[str] = None
@@ -220,7 +220,7 @@ class GroupResponse(BaseModel):
     members_count: int = 0
 
 
-class AddGroupMemberRequest(BaseModel):
+class AddGroupMemberRequest(EmailNormalizedModel):
     player_id: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -245,13 +245,14 @@ class GroupMemberResponse(BaseModel):
 
 
 # Auth
-class RegisterRequest(BaseModel):
+# Auth
+class RegisterRequest(EmailNormalizedModel):
     email: EmailStr
     password: str
     name: str
 
 
-class RegisterResponse(BaseModel):
+class RegisterResponse(EmailNormalizedModel):
     message: str
     email: EmailStr
     verification_required: bool = True
@@ -259,7 +260,7 @@ class RegisterResponse(BaseModel):
     linked_guest_history: bool = False
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(EmailNormalizedModel):
     email: EmailStr
     password: str
 
@@ -277,5 +278,5 @@ class VerifyEmailResponse(BaseModel):
     message: str
 
 
-class ResendVerificationRequest(BaseModel):
+class ResendVerificationRequest(EmailNormalizedModel):
     email: EmailStr
