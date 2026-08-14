@@ -1,7 +1,32 @@
+import asyncio
+import logging
 import math
 from datetime import datetime, timedelta, timezone
 
 from database import db
+
+logger = logging.getLogger(__name__)
+
+# Nivel neutro por defecto del proyecto (mismo valor que estimated_level).
+# Es el prior hacia el que encogemos cuando no hay evidencia suficiente.
+NEUTRAL_PRIOR = 5.0
+
+
+def compute_final_score(
+    recent_rating: float,
+    effective_confidence: float,
+    stats_bonus: float,
+) -> float:
+    """Shrinkage bayesiano del rating hacia el prior neutro.
+
+    Con poca evidencia el score tiende a NEUTRAL_PRIOR (5.0), no a cero.
+    Asi un jugador nuevo bueno no queda al fondo del ranking del draft.
+    """
+    return (
+        recent_rating * effective_confidence
+        + NEUTRAL_PRIOR * (1 - effective_confidence)
+        + stats_bonus
+    )
 
 
 async def calculate_player_metrics(player_id: str) -> dict:
@@ -47,7 +72,7 @@ async def calculate_player_metrics(player_id: str) -> dict:
     effective_confidence = max(confidence_index, seed_floor if seed_count else 0.3)
 
     stats_bonus = _calculate_stats_bonus(recent_stats)
-    final_score = recent_rating * effective_confidence + stats_bonus
+    final_score = compute_final_score(recent_rating, effective_confidence, stats_bonus)
 
     total_goals = sum(s.get("goals", 0) for s in all_stats)
     total_assists = sum(s.get("assists", 0) for s in all_stats)
@@ -75,7 +100,9 @@ def _default_metrics(player_id: str) -> dict:
         "recent_rating": 5.0,
         "confidence_index": 0.0,
         "stats_bonus": 0.0,
-        "final_score": 1.5,
+        # Sin evidencia alguna el jugador vale neutro, igual que compute_final_score
+        # con confianza 0.0 (5.0), no casi cero.
+        "final_score": round(compute_final_score(NEUTRAL_PRIOR, 0.0, 0.0), 2),
         "position_ratings": {},
         "total_matches": 0,
         "total_goals": 0,
@@ -111,7 +138,9 @@ def _recency_weighted_average(ratings: list, now: datetime) -> float:
         try:
             created = datetime.fromisoformat(rating["created_at"].replace("Z", "+00:00"))
             days_ago = max((now - created).days, 1)
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, TypeError, AttributeError):
+            # created_at faltante, nulo o con formato raro: lo tratamos como
+            # una calificacion de hace 30 dias en vez de romper el calculo.
             days_ago = 30
 
         weight = 1.0 / math.log2(days_ago + 1)
@@ -167,3 +196,32 @@ def _calculate_stats_bonus(recent_stats: list) -> float:
 async def get_player_score_for_balance(player_id: str) -> float:
     metrics = await calculate_player_metrics(player_id)
     return metrics["final_score"]
+
+
+async def get_player_scores_for_balance(player_ids: list[str]) -> dict[str, float]:
+    """Resuelve los final_score de varios jugadores en paralelo.
+
+    Evita el N+1 de llamar a get_player_score_for_balance en un for secuencial:
+    para un 11v11 eran ~130 round-trips en serie contra Mongo.
+    Devuelve {player_id: final_score}. Si un jugador falla, cae al prior neutro.
+    """
+    unique_ids = list(dict.fromkeys(player_ids))
+    if not unique_ids:
+        return {}
+
+    results = await asyncio.gather(
+        *(calculate_player_metrics(player_id) for player_id in unique_ids),
+        return_exceptions=True,
+    )
+
+    scores: dict[str, float] = {}
+    for player_id, result in zip(unique_ids, results):
+        if isinstance(result, BaseException):
+            logger.warning(
+                "No se pudo calcular el score del jugador %s: %s", player_id, result
+            )
+            scores[player_id] = NEUTRAL_PRIOR
+        else:
+            scores[player_id] = result["final_score"]
+
+    return scores
