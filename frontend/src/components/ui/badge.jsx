@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils"
 const badgeVariants = cva(
   // Minimum 44px touch target height (design_guidelines.json accessibility.touch_targets)
   // for badges used as interactive/clickable chips; harmless as a floor for static badges.
-  "inline-flex items-center rounded-md border px-2.5 py-1 min-h-11 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+  // rounded-full matches the pill/chip shape used throughout design_guidelines.json
+  // (status badges, position tags) — previously this was rounded-md and every call
+  // site that wanted a pill had to override it by hand.
+  "inline-flex items-center rounded-full border px-2.5 py-1 min-h-11 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
@@ -17,6 +20,12 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        // Semantic tone variants matching design_guidelines.json's brand palette,
+        // for status/meaning badges that previously reached for off-palette
+        // colors (blue, indigo, raw slate-900) on a per-page basis.
+        turf: "border-transparent bg-turf/10 text-turf-accessible",
+        orange: "border-transparent bg-orange/10 text-orange",
+        charcoal: "border-transparent bg-secondary/10 text-secondary",
       },
     },
     defaultVariants: {

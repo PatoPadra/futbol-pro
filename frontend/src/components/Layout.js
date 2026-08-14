@@ -15,8 +15,10 @@ import {
 
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { getDisplayName } from '../utils/user';
 import { isOrganizerRole } from '../utils/permissions';
+import { buildPhotoUrl, initialsFromName } from '../utils/photos';
 
 export default function Layout({ children }) {
   const { user, logout, isAuthenticated } = useAuth();
@@ -103,7 +105,13 @@ export default function Layout({ children }) {
               </Button>
             </>
           )}
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 pl-1.5 pr-3 py-1.5 text-sm text-slate-600">
+            <Avatar className="w-6 h-6">
+              <AvatarImage src={buildPhotoUrl(user?.profile?.photo_url) || undefined} />
+              <AvatarFallback className="bg-turf/10 text-turf-accessible text-[10px] font-bold">
+                {initialsFromName(displayName)}
+              </AvatarFallback>
+            </Avatar>
             <span className="font-medium text-slate-900">{displayName}</span>
           </div>
           <Button
@@ -111,6 +119,7 @@ export default function Layout({ children }) {
             size="sm"
             onClick={handleLogout}
             data-testid="logout-btn"
+            aria-label="Cerrar sesión"
             className="text-slate-500 hover:text-red-600 rounded-full"
           >
             <LogOut className="w-4 h-4" />

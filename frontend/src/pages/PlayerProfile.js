@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
+import { getRatingTone } from '@/utils/ratings';
+import StatTile from '@/components/common/StatTile';
+import PageLoader from '@/components/common/PageLoader';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -28,13 +31,6 @@ const profileFormSchema = z.object({
   secondary_positions: z.array(z.string()).optional(),
   unwanted_position: z.string().optional().or(z.literal('')),
 });
-
-function ratingTier(value) {
-  if (value == null) return { text: 'text-slate-400', label: 'Sin datos' };
-  if (value >= 7) return { text: 'text-turf-accessible', label: 'Muy bueno' };
-  if (value >= 5) return { text: 'text-orange', label: 'Promedio' };
-  return { text: 'text-slate-500', label: 'A mejorar' };
-}
 
 function confidenceMeta(index) {
   const pct = Math.round((index || 0) * 100);
@@ -169,11 +165,7 @@ export default function PlayerProfile({ isSelf }) {
   positions.forEach(p => { posMap[p.id] = p.name; });
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-20" data-testid="player-profile-loading">
-        <div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div data-testid="player-profile-loading"><PageLoader /></div>;
   }
 
   if (!profile) {
@@ -377,14 +369,14 @@ export default function PlayerProfile({ isSelf }) {
             <CardContent className="p-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <div className={`inline-flex items-center gap-1.5 ${ratingTier(metrics.general_rating).text}`}>
+                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.general_rating).text}`}>
                     <Star className="w-5 h-5 fill-current" />
                     <span className="font-heading text-3xl font-bold">{metrics.general_rating?.toFixed(1)}</span>
                   </div>
                   <p className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">Rating General</p>
                 </div>
                 <div className="text-center border-l border-slate-100">
-                  <div className={`inline-flex items-center gap-1.5 ${ratingTier(metrics.recent_rating).text}`}>
+                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.recent_rating).text}`}>
                     <Star className="w-5 h-5 fill-current" />
                     <span className="font-heading text-3xl font-bold">{metrics.recent_rating?.toFixed(1)}</span>
                   </div>
@@ -420,13 +412,7 @@ export default function PlayerProfile({ isSelf }) {
           <>
             <div className={`grid grid-cols-2 ${statTiles.length > 3 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mb-3`} data-testid="stat-tiles">
               {statTiles.map((s, i) => (
-                <Card key={i} className="border-slate-100">
-                  <CardContent className="p-4 text-center">
-                    <s.icon className="w-4 h-4 mx-auto mb-1.5 text-turf-accessible" />
-                    <p className="text-xl font-bold text-slate-900">{s.value}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">{s.label}</p>
-                  </CardContent>
-                </Card>
+                <StatTile key={i} icon={s.icon} value={s.value} label={s.label} />
               ))}
             </div>
             {!canViewPeerScores && (

@@ -30,8 +30,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const PILL_BTN = 'rounded-full font-bold uppercase tracking-wider transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
-
 const formatDeadline = (iso) => {
   if (!iso) return null;
   try {
@@ -64,7 +62,7 @@ function MatchDetailSkeleton() {
           </div>
         </div>
         <div className="h-16 bg-slate-100 rounded-xl border border-slate-100" />
-        <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.95fr] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.95fr] gap-6 items-start">
           <div className="space-y-6">
             <div className="h-64 bg-slate-100 rounded-xl border border-slate-100" />
             <div className="h-40 bg-slate-100 rounded-xl border border-slate-100" />
@@ -198,7 +196,7 @@ export default function MatchDetail() {
             Puede que haya sido borrado o que el enlace esté mal escrito.
           </p>
           <Link to="/partidos">
-            <Button data-testid="back-to-matches-btn" className={`${PILL_BTN} h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20`}>
+            <Button data-testid="back-to-matches-btn" shape="pill" className="h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20">
               <ArrowLeft className="w-4 h-4 mr-2" /> Volver a partidos
             </Button>
           </Link>
@@ -223,7 +221,8 @@ export default function MatchDetail() {
           <Button
             onClick={() => loadData()}
             data-testid="match-detail-retry-btn"
-            className={`${PILL_BTN} h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20`}
+            shape="pill"
+            className="h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20"
           >
             <RefreshCw className="w-4 h-4 mr-2" /> Reintentar
           </Button>
@@ -299,7 +298,7 @@ export default function MatchDetail() {
         label: actionLoading === 'finalize' ? 'Finalizando...' : 'Finalizar partido',
         icon: Play,
         onClick: handleFinalize,
-        className: 'bg-slate-900 hover:bg-slate-800 text-white',
+        className: 'bg-secondary text-secondary-foreground',
         testId: 'finalize-match-btn',
         description: 'Marcá el partido como jugado para habilitar estadísticas y evaluaciones.',
       };
@@ -362,7 +361,8 @@ export default function MatchDetail() {
               <Button
                 variant="outline"
                 onClick={handleShareWhatsApp}
-                className={`${PILL_BTN} h-11 border-2 border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 focus-visible:ring-green-500`}
+                shape="pill"
+                className="h-11 border-2 border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 focus-visible:ring-green-500"
                 data-testid="share-whatsapp-btn"
               >
                 <Share2 className="w-4 h-4 mr-2" /> Compartir
@@ -373,7 +373,8 @@ export default function MatchDetail() {
                   variant="outline"
                   onClick={handleDuplicate}
                   disabled={!!actionLoading}
-                  className={`${PILL_BTN} h-11 border-2 border-slate-200 hover:border-slate-400`}
+                  shape="pill"
+                  className="h-11 border-2 border-slate-200 hover:border-slate-400"
                   data-testid="duplicate-match-btn"
                 >
                   {actionLoading === 'duplicate' ? (
@@ -398,41 +399,49 @@ export default function MatchDetail() {
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-            <Card className="border-slate-100 shadow-none">
+            <Card className="border-slate-100">
               <CardContent className="p-4 flex items-center gap-3">
-                <Calendar className="w-4 h-4 text-slate-400" />
+                <div className="w-9 h-9 rounded-lg bg-turf/10 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4 text-turf-accessible" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-400">Fecha</p>
                   <p className="font-semibold text-slate-900">{match.date}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-slate-100 shadow-none">
+            <Card className="border-slate-100">
               <CardContent className="p-4 flex items-center gap-3">
-                <Clock className="w-4 h-4 text-slate-400" />
+                <div className="w-9 h-9 rounded-lg bg-turf/10 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4 text-turf-accessible" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-400">Hora</p>
                   <p className="font-semibold text-slate-900">{match.time}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-slate-100 shadow-none">
+            <Card className="border-slate-100">
               <CardContent className="p-4 flex items-center gap-3">
-                <MapPin className="w-4 h-4 text-slate-400" />
+                <div className="w-9 h-9 rounded-lg bg-turf/10 flex items-center justify-center shrink-0">
+                  <MapPin className="w-4 h-4 text-turf-accessible" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-400">Lugar</p>
                   <p className="font-semibold text-slate-900 truncate">{match.location}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-slate-100 shadow-none">
+            <Card className="border-slate-100">
               <CardContent className="p-4 flex items-center gap-3">
-                <Users className="w-4 h-4 text-slate-400" />
+                <div className="w-9 h-9 rounded-lg bg-turf/10 flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4 text-turf-accessible" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-400">Titulares</p>
                   <p className="font-semibold text-slate-900 flex items-center gap-1.5">
                     {titulars.length}/{match.max_players}
-                    {isFull && <Badge className="text-[10px] px-1.5 py-0 bg-slate-900 text-white border-0">Completo</Badge>}
+                    {isFull && <Badge variant="charcoal" className="text-[10px] px-1.5 py-0">Completo</Badge>}
                   </p>
                   {suplentes.length > 0 && (
                     <p className="text-xs text-slate-400 mt-0.5">+{suplentes.length} suplente{suplentes.length === 1 ? '' : 's'}</p>
@@ -468,17 +477,26 @@ export default function MatchDetail() {
 
               {'to' in primaryAction ? (
                 <Link to={primaryAction.to}>
-                  <Button className={`${PILL_BTN} h-11 px-6 ${primaryAction.className}`} data-testid={primaryAction.testId}>
+                  <Button shape="pill" className={`h-11 px-6 ${primaryAction.className}`} data-testid={primaryAction.testId}>
                     <primaryAction.icon className="w-4 h-4 mr-2" />
                     {primaryAction.label}
                   </Button>
                 </Link>
+              ) : primaryAction.disabled ? (
+                <div
+                  className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900"
+                  data-testid={primaryAction.testId}
+                >
+                  <primaryAction.icon className="w-4 h-4 shrink-0" />
+                  {primaryAction.label}
+                </div>
               ) : (
                 <Button
                   onClick={primaryAction.onClick}
-                  disabled={!!actionLoading || match.status === 'cancelado' || !!primaryAction.disabled}
+                  disabled={!!actionLoading || match.status === 'cancelado'}
                   variant={primaryAction.variant || 'default'}
-                  className={`${PILL_BTN} h-11 px-6 ${primaryAction.className}`}
+                  shape="pill"
+                  className={`h-11 px-6 ${primaryAction.className}`}
                   data-testid={primaryAction.testId}
                 >
                   <primaryAction.icon className="w-4 h-4 mr-2" />
@@ -489,7 +507,7 @@ export default function MatchDetail() {
           </Card>
         )}
 
-        <div className={isOrganizer ? 'grid grid-cols-1 xl:grid-cols-[1.25fr_0.95fr] gap-6 items-start' : 'grid grid-cols-1 gap-6 items-start'}>
+        <div className={isOrganizer ? 'grid grid-cols-1 lg:grid-cols-[1.25fr_0.95fr] gap-6 items-start' : 'grid grid-cols-1 gap-6 items-start'}>
           <div className="space-y-6">
             {['equipos_generados', 'equipos_confirmados'].includes(match.status) && (
               <Card className="border-slate-100 shadow-sm">
@@ -503,7 +521,8 @@ export default function MatchDetail() {
                   <Link to={`/partidos/${id}/equipos`}>
                     <Button
                       variant="outline"
-                      className={`${PILL_BTN} h-11 px-6 border-2 border-slate-200 hover:border-slate-400`}
+                      shape="pill"
+                      className="h-11 px-6 border-2 border-slate-200 hover:border-slate-400"
                       data-testid="view-teams-btn"
                     >
                       Ver equipos
@@ -588,7 +607,7 @@ export default function MatchDetail() {
 
           {isOrganizer && (
             <div className="space-y-6">
-              <Card className="border-slate-100 shadow-sm xl:sticky xl:top-20">
+              <Card className="border-slate-100 shadow-sm lg:sticky lg:top-20">
                 <CardHeader className="pb-3">
                   <CardTitle className="font-heading text-lg uppercase">Acciones del organizador</CardTitle>
                   <p className="text-sm text-slate-500">Bloque secundario para gestión y limpieza del partido.</p>
@@ -599,7 +618,8 @@ export default function MatchDetail() {
                       variant="outline"
                       onClick={handleClose}
                       disabled={!!actionLoading}
-                      className={`${PILL_BTN} w-full h-11 border-2 border-slate-200 hover:border-slate-400`}
+                      shape="pill"
+                      className="w-full h-11 border-2 border-slate-200 hover:border-slate-400"
                       data-testid="secondary-close-registrations"
                     >
                       <XCircle className="w-4 h-4 mr-2" />
@@ -611,7 +631,8 @@ export default function MatchDetail() {
                     <Button
                       onClick={handleGenerateTeams}
                       disabled={!!actionLoading}
-                      className={`${PILL_BTN} w-full h-11 bg-orange hover:bg-orange-light text-white shadow-lg shadow-orange/20`}
+                      shape="pill"
+                      className="w-full h-11 bg-orange hover:bg-orange-light text-white shadow-lg shadow-orange/20"
                       data-testid="secondary-generate-teams"
                     >
                       <Shuffle className="w-4 h-4 mr-2" />
@@ -623,7 +644,8 @@ export default function MatchDetail() {
                     <Button
                       onClick={handleFinalize}
                       disabled={!!actionLoading}
-                      className={`${PILL_BTN} w-full h-11 bg-slate-900 hover:bg-slate-800 text-white`}
+                      shape="pill"
+                      className="w-full h-11 bg-secondary text-secondary-foreground"
                       data-testid="secondary-finalize-match"
                     >
                       <Play className="w-4 h-4 mr-2" />
@@ -636,7 +658,8 @@ export default function MatchDetail() {
                       variant="outline"
                       onClick={handleCancel}
                       disabled={!!actionLoading}
-                      className={`${PILL_BTN} w-full h-11 border-2 border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300 focus-visible:ring-amber-500`}
+                      shape="pill"
+                      className="w-full h-11 border-2 border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300 focus-visible:ring-amber-500"
                       data-testid="cancel-match-btn"
                     >
                       <XCircle className="w-4 h-4 mr-2" />
@@ -649,7 +672,8 @@ export default function MatchDetail() {
                       variant="outline"
                       onClick={handleDelete}
                       disabled={!!actionLoading}
-                      className={`${PILL_BTN} w-full h-11 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 focus-visible:ring-red-500`}
+                      shape="pill"
+                      className="w-full h-11 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 focus-visible:ring-red-500"
                       data-testid="delete-match-btn"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />

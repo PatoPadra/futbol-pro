@@ -5,16 +5,22 @@ import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import {
-  Trophy, Star, ArrowLeft, Target, Users, Hand, Gauge, TrendingUp, CalendarX,
+  Trophy, Star, ArrowLeft, Target, Users, Hand, Gauge, TrendingUp, TrendingDown, CalendarX,
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getRatingTone } from '@/utils/ratings';
+import StatTile from '@/components/common/StatTile';
+import PageLoader from '@/components/common/PageLoader';
 
-function ratingTier(value) {
-  if (value == null) return { text: 'text-slate-400' };
-  if (value >= 7) return { text: 'text-turf-accessible' };
-  if (value >= 5) return { text: 'text-orange' };
-  return { text: 'text-slate-500' };
-}
+// Mirrors tailwind.config.js turf/orange — Recharts needs real color values,
+// not Tailwind classes, so this is the one place those tokens get duplicated.
+const CHART_COLORS = {
+  turf: '#00C853',
+  turfDark: '#009624',
+  orange: '#FF6B00',
+  grid: '#e2e8f0',
+  axisText: '#64748b',
+};
 
 function confidenceMeta(index) {
   const pct = Math.round((index || 0) * 100);
@@ -97,6 +103,10 @@ export default function PlayerHistory() {
 
   const confidence = metrics ? confidenceMeta(metrics.confidence_index) : null;
 
+  const ratingDelta = chartData.length >= 2
+    ? chartData[chartData.length - 1].rating - chartData[chartData.length - 2].rating
+    : null;
+
   const statTiles = [
     { label: 'Partidos', value: metrics?.total_matches ?? 0, icon: Trophy },
     { label: 'Goles', value: metrics?.total_goals ?? 0, icon: Target },
@@ -104,7 +114,7 @@ export default function PlayerHistory() {
     ...(metrics?.total_saves > 0 ? [{ label: 'Atajadas', value: metrics.total_saves, icon: Hand }] : []),
   ];
 
-  if (loading) return <div className="flex justify-center py-20" data-testid="player-history-loading"><div className="w-8 h-8 border-4 border-turf border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <div data-testid="player-history-loading"><PageLoader /></div>;
 
   return (
     <div className="page-container max-w-3xl mx-auto" data-testid="player-history-page">
@@ -125,14 +135,14 @@ export default function PlayerHistory() {
             <CardContent className="p-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <div className={`inline-flex items-center gap-1.5 ${ratingTier(metrics.general_rating).text}`}>
+                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.general_rating).text}`}>
                     <Star className="w-5 h-5 fill-current" />
                     <span className="font-heading text-3xl font-bold">{metrics.general_rating?.toFixed(1)}</span>
                   </div>
                   <p className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">Rating General</p>
                 </div>
                 <div className="text-center border-l border-slate-100">
-                  <div className={`inline-flex items-center gap-1.5 ${ratingTier(metrics.recent_rating).text}`}>
+                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.recent_rating).text}`}>
                     <Star className="w-5 h-5 fill-current" />
                     <span className="font-heading text-3xl font-bold">{metrics.recent_rating?.toFixed(1)}</span>
                   </div>
@@ -168,13 +178,7 @@ export default function PlayerHistory() {
           <>
             <div className={`grid grid-cols-2 sm:grid-cols-3 ${statTiles.length >= 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mb-3`} data-testid="stat-tiles">
               {statTiles.map((s, i) => (
-                <Card key={i} className="border-slate-100">
-                  <CardContent className="p-4 text-center">
-                    <s.icon className="w-4 h-4 mx-auto mb-1.5 text-turf-accessible" />
-                    <p className="text-xl font-bold text-slate-900">{s.value}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">{s.label}</p>
-                  </CardContent>
-                </Card>
+                <StatTile key={i} icon={s.icon} value={s.value} label={s.label} />
               ))}
             </div>
             {!historyMeta.can_view_peer_scores && (
@@ -194,14 +198,29 @@ export default function PlayerHistory() {
               <CardTitle className="font-heading text-lg uppercase">Evolución de Rating</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64" data-testid="rating-evolution-chart">
+              {ratingDelta != null && Math.abs(ratingDelta) >= 0.05 && (
+                <div
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold mb-4 ${getRatingTone(chartData[chartData.length - 1].rating).bg} ${ratingDelta >= 0 ? 'text-turf-accessible' : 'text-rose-600'}`}
+                  data-testid="rating-trend-delta"
+                >
+                  {ratingDelta >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  {ratingDelta >= 0 ? '+' : ''}{ratingDelta.toFixed(1)} desde el partido anterior
+                </div>
+              )}
+              <div className="h-64 md:h-80" data-testid="rating-evolution-chart">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <AreaChart data={chartData} margin={{ top: 5, right: 20, bottom: 10, left: 0 }}>
+                    <defs>
+                      <linearGradient id="ratingAreaFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART_COLORS.turf} stopOpacity={0.18} />
+                        <stop offset="100%" stopColor={CHART_COLORS.turf} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                     <XAxis
                       dataKey="fecha"
                       tickFormatter={formatShortDate}
-                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tick={{ fontSize: 11, fill: CHART_COLORS.axisText }}
                       minTickGap={24}
                       angle={-20}
                       textAnchor="end"
@@ -209,29 +228,30 @@ export default function PlayerHistory() {
                     />
                     <YAxis
                       domain={[0, 10]}
-                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tick={{ fontSize: 11, fill: CHART_COLORS.axisText }}
                       tickCount={6}
                       width={28}
                     />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#fff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
+                        border: `1px solid ${CHART_COLORS.grid}`,
+                        borderRadius: '12px',
                         fontSize: '13px',
                       }}
                       formatter={(value) => [`${value.toFixed(1)}`, 'Rating']}
                       labelFormatter={(label) => `Partido: ${formatFullDate(label)}`}
                     />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="rating"
-                      stroke="#00C853"
+                      stroke={CHART_COLORS.turf}
                       strokeWidth={3}
-                      dot={{ fill: '#00C853', strokeWidth: 2, r: 5 }}
-                      activeDot={{ r: 7, fill: '#FF6B00' }}
+                      fill="url(#ratingAreaFill)"
+                      dot={{ fill: CHART_COLORS.turf, strokeWidth: 2, r: 5 }}
+                      activeDot={{ r: 7, fill: CHART_COLORS.orange }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
               <p className="text-xs text-slate-400 mt-2 text-center">
@@ -274,8 +294,8 @@ export default function PlayerHistory() {
               <p className="text-xs text-slate-400 -mt-2 mb-3">Tu rating promedio en cada posición jugada.</p>
               <div className="flex flex-wrap gap-3">
                 {Object.entries(metrics.position_ratings).map(([pos, rating]) => (
-                  <div key={pos} className="bg-slate-50 rounded-lg px-4 py-2 text-center" data-testid={`position-rating-${pos}`}>
-                    <p className={`text-sm font-bold ${ratingTier(rating).text}`}>{rating.toFixed(1)}</p>
+                  <div key={pos} className="bg-slate-50 rounded-xl px-4 py-2 text-center" data-testid={`position-rating-${pos}`}>
+                    <p className={`text-sm font-bold ${getRatingTone(rating).text}`}>{rating.toFixed(1)}</p>
                     <p className="text-xs text-slate-500">{posMap[pos] || pos}</p>
                   </div>
                 ))}

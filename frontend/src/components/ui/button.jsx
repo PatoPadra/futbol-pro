@@ -27,19 +27,33 @@ const buttonVariants = cva(
         lg: "h-12 rounded-md px-8",
         icon: "h-11 w-11",
       },
+      // "pill" is the CTA/action-button shape from design_guidelines.json
+      // (components.buttons.primary/secondary): rounded-full, uppercase,
+      // bold, and a press affordance. Previously every page redefined this
+      // by hand (PRIMARY_CTA/PILL_BTN constants), causing rounded-xl vs
+      // rounded-full drift across ~10 screens — this makes it a real variant.
+      shape: {
+        default: "rounded-md",
+        pill: "rounded-full uppercase font-bold tracking-wider active:scale-95 transition-transform",
+      },
     },
+    compoundVariants: [
+      { variant: "default", shape: "pill", class: "shadow-lg shadow-primary/20 hover:shadow-xl" },
+      { variant: "outline", shape: "pill", class: "border-2" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",
+      shape: "default",
     },
   }
 )
 
-const Button = React.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
+const Button = React.forwardRef(({ className, variant, size, shape, asChild = false, ...props }, ref) => {
   const Comp = asChild ? Slot : "button"
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, shape, className }))}
       ref={ref}
       {...props} />
   );

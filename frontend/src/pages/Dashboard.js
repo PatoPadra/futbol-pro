@@ -6,12 +6,19 @@ import api from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { Calendar, MapPin, Users, Trophy, ArrowRight, Clock, Plus, Star, AlertCircle, RefreshCw } from 'lucide-react';
+import { Calendar, MapPin, Users, Trophy, ArrowRight, Clock, Plus, Star, Target, AlertCircle, RefreshCw } from 'lucide-react';
 
-import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MODALITY_LABELS } from '@/constants/matches';
+import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MATCH_STATUS_ACCENT_BORDER, MODALITY_LABELS } from '@/constants/matches';
 
-const PRIMARY_CTA = 'bg-turf hover:bg-turf-dark text-white rounded-full font-bold uppercase tracking-wider transition-transform active:scale-95 shadow-lg shadow-turf/20 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
+const PRIMARY_CTA = 'bg-turf hover:bg-turf-dark text-white focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
 const CARD_LINK_FOCUS = 'block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
+
+function todayAndTomorrow() {
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  return { today: today.toLocaleDateString('en-CA'), tomorrow: tomorrow.toLocaleDateString('en-CA') };
+}
 
 function DashboardSkeleton() {
   return (
@@ -100,6 +107,7 @@ export default function Dashboard() {
           <Button
             onClick={handleRetry}
             data-testid="dashboard-retry-btn"
+            shape="pill"
             className={`${PRIMARY_CTA} h-11 px-8`}
           >
             <RefreshCw className="w-4 h-4 mr-2" /> Reintentar
@@ -125,13 +133,26 @@ export default function Dashboard() {
             </p>
           </div>
           {(user?.role === 'organizador' || user?.role === 'admin') && (
-            <Button
-              data-testid="dashboard-create-match"
-              onClick={() => navigate('/partidos/crear')}
-              className={`hidden md:flex h-11 px-6 ${PRIMARY_CTA}`}
-            >
-              <Plus className="w-4 h-4 mr-1.5" /> Crear Partido
-            </Button>
+            <>
+              <Button
+                data-testid="dashboard-create-match-mobile"
+                onClick={() => navigate('/partidos/crear')}
+                shape="pill"
+                size="icon"
+                aria-label="Crear partido"
+                className={`md:hidden h-11 w-11 ${PRIMARY_CTA}`}
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+              <Button
+                data-testid="dashboard-create-match"
+                onClick={() => navigate('/partidos/crear')}
+                shape="pill"
+                className={`hidden md:flex h-11 px-6 ${PRIMARY_CTA}`}
+              >
+                <Plus className="w-4 h-4 mr-1.5" /> Crear Partido
+              </Button>
+            </>
           )}
         </div>
 
@@ -142,8 +163,8 @@ export default function Dashboard() {
               {[
                 { label: 'Partidos', value: metrics.total_matches ?? 0, icon: Trophy },
                 ...(metrics.can_view_peer_scores ? [{ label: 'Rating', value: metrics.recent_rating?.toFixed(1) || '-', icon: Star }] : []),
-                { label: 'Goles', value: metrics.total_goals ?? 0, icon: () => <span className="text-lg">G</span> },
-                { label: 'Asistencias', value: metrics.total_assists ?? 0, icon: () => <span className="text-lg">A</span> },
+                { label: 'Goles', value: metrics.total_goals ?? 0, icon: Target },
+                { label: 'Asistencias', value: metrics.total_assists ?? 0, icon: Users },
               ].map((s, i) => (
                 <Card key={i} className="border-slate-100" data-testid={`dashboard-stat-${s.label.toLowerCase()}`}>
                   <CardContent className="p-4 flex items-center gap-3">
@@ -184,6 +205,7 @@ export default function Dashboard() {
                 {(user?.role === 'organizador' || user?.role === 'admin') && (
                   <Button
                     onClick={() => navigate('/partidos/crear')}
+                    shape="pill"
                     className={`mt-4 h-11 px-8 ${PRIMARY_CTA}`}
                     data-testid="empty-create-match"
                   >
@@ -194,9 +216,12 @@ export default function Dashboard() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {upcomingMatches.slice(0, 6).map(m => {
+              {(() => {
+                const { today, tomorrow } = todayAndTomorrow();
+                return upcomingMatches.slice(0, 6).map(m => {
                 const spotsLeft = m.max_players - m.titular_count;
                 const isFull = spotsLeft <= 0;
+                const dayTag = m.date === today ? 'Hoy' : m.date === tomorrow ? 'Mañana' : null;
                 return (
                   <Link to={`/partidos/${m.id}`} key={m.id} data-testid={`match-card-${m.id}`} className={CARD_LINK_FOCUS}>
                     <Card className="border-slate-100 hover:shadow-lg transition-all duration-200 hover:-translate-y-1 active:scale-[0.98] cursor-pointer h-full">
@@ -205,7 +230,10 @@ export default function Dashboard() {
                           <Badge className={`text-xs font-semibold border ${MATCH_STATUS_BADGE_CLASS[m.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                             {MATCH_STATUS_LABELS[m.status] || m.status}
                           </Badge>
-                          <Badge variant="outline" className="text-xs">{MODALITY_LABELS[m.modality]}</Badge>
+                          <div className="flex items-center gap-1.5">
+                            {dayTag && <Badge variant="orange" className="text-xs font-bold" data-testid={`match-day-tag-${m.id}`}>{dayTag}</Badge>}
+                            <Badge variant="outline" className="text-xs">{MODALITY_LABELS[m.modality]}</Badge>
+                          </div>
                         </div>
                         <h3 className="font-heading text-lg font-bold uppercase tracking-tight text-slate-900 mb-3">{m.title}</h3>
                         <div className="space-y-1.5 text-sm text-slate-500">
@@ -226,7 +254,8 @@ export default function Dashboard() {
                     </Card>
                   </Link>
                 );
-              })}
+                });
+              })()}
             </div>
           )}
         </section>
@@ -238,7 +267,7 @@ export default function Dashboard() {
             <div className="space-y-3">
               {recentMatches.map(m => (
                 <Link to={`/partidos/${m.id}`} key={m.id} data-testid={`recent-match-${m.id}`} className={CARD_LINK_FOCUS}>
-                  <Card className="border-slate-100 hover:shadow-md transition-all duration-200 active:scale-[0.98] cursor-pointer">
+                  <Card className={`border-slate-100 border-l-4 ${MATCH_STATUS_ACCENT_BORDER[m.status] || 'border-l-slate-200'} hover:shadow-md transition-all duration-200 active:scale-[0.98] cursor-pointer`}>
                     <CardContent className="p-4 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-4 min-w-0">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">

@@ -49,7 +49,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12" data-testid="login-page">
+    <div
+      className="min-h-screen flex items-center justify-center bg-background px-4 py-12"
+      style={{ backgroundImage: 'radial-gradient(at 0% 0%, hsla(145,63%,42%,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(25,95%,53%,0.10) 0px, transparent 50%)' }}
+      data-testid="login-page"
+    >
       <div className="w-full max-w-md animate-slide-up">
         <div className="flex justify-center mb-8">
           <Link
@@ -64,7 +68,7 @@ export default function Login() {
           </Link>
         </div>
 
-        <Card className="border-slate-100 shadow-lg">
+        <Card className="border-slate-100 shadow-md">
           <CardHeader className="pb-4">
             <CardTitle className="font-heading text-2xl uppercase tracking-tight text-center">Iniciar Sesión</CardTitle>
           </CardHeader>
@@ -92,7 +96,7 @@ export default function Login() {
                   placeholder="tu@email.com"
                   disabled={loading}
                   aria-invalid={!!errors.email}
-                  className={`mt-1.5 h-12 bg-slate-50 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30 ${errors.email ? 'border-red-300' : 'border-slate-200'}`}
+                  className={`mt-1.5 h-12 bg-slate-50 ${errors.email ? 'border-red-300' : 'border-slate-200'}`}
                   {...register('email')}
                 />
                 {errors.email && (
@@ -110,7 +114,7 @@ export default function Login() {
                     placeholder="Tu contraseña"
                     disabled={loading}
                     aria-invalid={!!errors.password}
-                    className={`h-12 bg-slate-50 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30 pr-12 ${errors.password ? 'border-red-300' : 'border-slate-200'}`}
+                    className={`h-12 bg-slate-50 pr-12 ${errors.password ? 'border-red-300' : 'border-slate-200'}`}
                     {...register('password')}
                   />
                   <button

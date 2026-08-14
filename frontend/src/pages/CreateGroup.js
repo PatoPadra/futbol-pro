@@ -83,7 +83,8 @@ export default function CreateGroup() {
               type="submit"
               data-testid="create-group-submit"
               disabled={loading}
-              className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider transition-transform active:scale-95 shadow-lg shadow-turf/20 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
+              shape="pill"
+              className="w-full h-12 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20 disabled:active:scale-100"
             >
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />}
               {loading ? 'Creando...' : 'Crear Grupo'}

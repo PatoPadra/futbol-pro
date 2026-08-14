@@ -20,7 +20,7 @@ export default function GroupMemberCard({
 
   return (
     <>
-      <div className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md active:bg-slate-50 transition-all">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -51,7 +51,7 @@ export default function GroupMemberCard({
                     </Badge>
                   )}
                   {member.is_system_admin && (
-                    <Badge className="bg-slate-900 text-white">
+                    <Badge variant="charcoal">
                       <Shield className="w-3 h-3 mr-1" /> Admin
                     </Badge>
                   )}

@@ -9,8 +9,10 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import PageLoader from '@/components/common/PageLoader';
+import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 
 export default function OrganizerPanel() {
   const { user } = useAuth();
@@ -206,7 +208,7 @@ export default function OrganizerPanel() {
                             </Badge>
 
                             {group.my_global_role === 'admin' && (
-                              <Badge className="bg-slate-900 text-white">Admin</Badge>
+                              <Badge variant="charcoal">Admin</Badge>
                             )}
 
                             {manageable && (
@@ -406,9 +408,12 @@ export default function OrganizerPanel() {
                     >
                       <Card className="border-slate-100 hover:shadow-sm cursor-pointer transition-shadow">
                         <CardContent className="p-3 flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                            {player.name?.substring(0, 2).toUpperCase()}
-                          </div>
+                          <Avatar className="w-9 h-9 shrink-0">
+                            <AvatarImage src={buildPhotoUrl(player.photo_url) || undefined} />
+                            <AvatarFallback className="bg-slate-100 text-xs font-bold text-slate-600">
+                              {initialsFromName(player.name)}
+                            </AvatarFallback>
+                          </Avatar>
 
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{player.name}</p>

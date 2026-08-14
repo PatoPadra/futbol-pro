@@ -7,12 +7,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 
 export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, registeredPlayerIds, onRegistered }) {
@@ -85,15 +85,21 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" data-testid="add-guest-dialog">
-        <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight">Agregar invitado</DialogTitle>
-          <DialogDescription>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="max-h-[85vh]" data-testid="add-guest-dialog">
+        <DrawerHeader>
+          <DrawerTitle className="font-heading uppercase tracking-tight flex items-center justify-center sm:justify-start gap-2">
+            <span className="w-8 h-8 rounded-full bg-turf/10 flex items-center justify-center shrink-0">
+              <UserPlus className="w-4 h-4 text-turf-accessible" />
+            </span>
+            Agregar invitado
+          </DrawerTitle>
+          <DrawerDescription>
             Elegí un invitado del grupo o creá uno nuevo para anotarlo a este partido.
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
+        <div className="px-4 pb-6 space-y-4 overflow-y-auto">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
@@ -104,6 +110,7 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
             data-testid="add-guest-search"
           />
         </div>
+        <p className="text-xs text-slate-400 -mt-2">Mostrando invitados de este grupo.</p>
 
         <div className="max-h-64 overflow-y-auto -mx-1 px-1 space-y-2">
           {loadingMembers ? (
@@ -175,7 +182,8 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
             Se crea con datos básicos; podés completar foto y posición después desde su perfil.
           </p>
         </form>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }

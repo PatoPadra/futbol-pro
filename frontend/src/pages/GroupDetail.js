@@ -15,6 +15,7 @@ import {
   Shield,
   Star,
   Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +26,8 @@ import { GROUP_PERMISSION_LABELS, MEMBERSHIP_TYPE_LABELS } from '@/constants/gro
 import GroupMemberCard from '@/components/groups/GroupMemberCard';
 import LinkGuestDialog from '@/components/groups/LinkGuestDialog';
 import PageLoader from '@/components/common/PageLoader';
+import StatTile from '@/components/common/StatTile';
+import { getRatingTone } from '@/utils/ratings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,7 +52,6 @@ const FILTER_OPTIONS = [
   { value: 'organizador', label: 'Organizadores' },
 ];
 
-const PILL_BTN = 'rounded-full font-bold uppercase tracking-wider transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
 
 const inviteMemberSchema = z
   .object({
@@ -283,13 +285,14 @@ export default function GroupDetail() {
             <Button
               variant="outline"
               onClick={() => loadData()}
-              className={`${PILL_BTN} h-11 px-6 border-2 border-slate-200 hover:border-slate-400`}
+              shape="pill"
+              className="h-11 px-6 border-2 border-slate-200 hover:border-slate-400"
               data-testid="group-not-found-retry"
             >
               <RefreshCw className="w-4 h-4 mr-2" /> Reintentar
             </Button>
             <Link to="/dashboard">
-              <Button className={`${PILL_BTN} h-11 px-6 bg-turf hover:bg-turf-dark text-white`} data-testid="group-not-found-back">
+              <Button shape="pill" className="h-11 px-6 bg-turf hover:bg-turf-dark text-white" data-testid="group-not-found-back">
                 <ArrowLeft className="w-4 h-4 mr-2" /> Volver
               </Button>
             </Link>
@@ -317,7 +320,7 @@ export default function GroupDetail() {
                   {MEMBERSHIP_TYPE_LABELS[group.my_membership_type] || group.my_membership_type}
                 </Badge>
                 {isAdmin && (
-                  <Badge className="bg-slate-900 text-white">
+                  <Badge variant="charcoal">
                     <Shield className="w-3 h-3 mr-1" /> Admin
                   </Badge>
                 )}
@@ -335,7 +338,8 @@ export default function GroupDetail() {
               <div className="flex flex-wrap gap-2">
                 <Link to={`/partidos/crear?group_id=${group.id}`} data-testid="group-create-match-link">
                   <Button
-                    className={`${PILL_BTN} h-12 px-6 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20`}
+                    shape="pill"
+                    className="h-12 px-6 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20"
                     data-testid="group-create-match-btn"
                   >
                     <Plus className="w-4 h-4 mr-2" /> Crear Partido
@@ -344,7 +348,8 @@ export default function GroupDetail() {
                 <Button
                   variant="outline"
                   onClick={requestDeleteGroup}
-                  className={`${PILL_BTN} h-12 px-6 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 focus-visible:ring-red-500`}
+                  shape="pill"
+                  className="h-12 px-6 border-2 border-destructive/30 text-destructive hover:bg-destructive/10 focus-visible:ring-destructive"
                   data-testid="group-delete-btn"
                 >
                   <Trash2 className="w-4 h-4 mr-2" /> Borrar Grupo
@@ -354,32 +359,14 @@ export default function GroupDetail() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-            <Card className="border-slate-100 shadow-none">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Miembros</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{group.members_count}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100 shadow-none">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Organizan</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{totalOrganizers}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100 shadow-none">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Invitados</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{totalGuests}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-slate-100 shadow-none">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-500">Tu rol</p>
-                <p className="text-lg font-bold text-slate-900 mt-1">
-                  {GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
-                </p>
-              </CardContent>
-            </Card>
+            <StatTile icon={Users} value={group.members_count} label="Miembros" />
+            <StatTile icon={Shield} value={totalOrganizers} label="Organizan" />
+            <StatTile icon={UserPlus} value={totalGuests} label="Invitados" tone="orange" />
+            <StatTile
+              icon={Star}
+              value={GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission}
+              label="Tu rol"
+            />
           </div>
         </section>
 
@@ -540,8 +527,12 @@ export default function GroupDetail() {
                               }}
                               aria-label={`Puntaje inicial para ${member.player_name}`}
                               aria-invalid={!!ratingErrors[member.player_id]}
-                              className={`w-20 h-11 text-center bg-slate-50 ${
-                                ratingErrors[member.player_id] ? 'border-red-300 focus-visible:ring-red-300' : ''
+                              className={`w-20 h-11 text-center font-semibold ${
+                                ratingErrors[member.player_id]
+                                  ? 'border-red-300 focus-visible:ring-red-300 bg-slate-50'
+                                  : ratingMap[member.player_id]
+                                    ? `${getRatingTone(Number(ratingMap[member.player_id])).text} ${getRatingTone(Number(ratingMap[member.player_id])).bg}`
+                                    : 'bg-slate-50'
                               }`}
                               data-testid={`seed-rating-${member.player_id}`}
                             />
@@ -557,7 +548,8 @@ export default function GroupDetail() {
                   <Button
                     onClick={handleSaveRatings}
                     disabled={savingRatings || rateableMembers.length === 0 || hasRatingErrors}
-                    className={`${PILL_BTN} w-full h-12 bg-turf hover:bg-turf-dark text-white`}
+                    shape="pill"
+                    className="w-full h-12 bg-turf hover:bg-turf-dark text-white"
                     data-testid="save-seed-ratings"
                   >
                     {savingRatings && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
@@ -670,7 +662,8 @@ export default function GroupDetail() {
                     <Button
                       type="submit"
                       disabled={savingInvite}
-                      className={`${PILL_BTN} w-full h-12 bg-turf hover:bg-turf-dark text-white`}
+                      shape="pill"
+                    className="w-full h-12 bg-turf hover:bg-turf-dark text-white"
                       data-testid="group-invite-submit"
                     >
                       {savingInvite && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}

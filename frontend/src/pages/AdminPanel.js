@@ -6,7 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
@@ -23,6 +23,7 @@ import { Shield, Users, Trophy, BarChart3, UserCheck, UserCog, Search, Loader2, 
 import { toast } from 'sonner';
 import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MODALITY_LABELS } from '@/constants/matches';
 import PageLoader from '@/components/common/PageLoader';
+import { buildPhotoUrl } from '@/utils/photos';
 
 const ROLE_LABELS = {
   jugador: 'Jugador',
@@ -31,7 +32,7 @@ const ROLE_LABELS = {
 };
 
 const ROLE_BADGE_CLASS = {
-  admin: 'bg-slate-900 text-white border-transparent',
+  admin: 'bg-secondary text-secondary-foreground border-transparent',
   organizador: 'bg-turf/10 text-turf-accessible border-turf/20',
   jugador: 'bg-slate-100 text-slate-700 border-slate-200',
 };
@@ -142,8 +143,8 @@ export default function AdminPanel() {
         { key: 'total_profiles', label: 'Perfiles', value: stats.total_profiles, icon: UserCheck, tone: 'slate' },
         { key: 'guest_players', label: 'Invitados', value: stats.guest_players, icon: UserCog, tone: 'orange' },
         { key: 'total_matches', label: 'Partidos', value: stats.total_matches, icon: Trophy, tone: 'slate' },
-        { key: 'active_matches', label: 'Activos', value: stats.active_matches, icon: Trophy, tone: 'orange' },
-        { key: 'completed_matches', label: 'Completados', value: stats.completed_matches, icon: BarChart3, tone: 'turf' },
+        { key: 'active_matches', label: 'Activos', value: stats.active_matches, icon: Trophy, tone: 'turf' },
+        { key: 'completed_matches', label: 'Completados', value: stats.completed_matches, icon: BarChart3, tone: 'slate' },
       ]
     : [];
 
@@ -159,8 +160,8 @@ export default function AdminPanel() {
     <div className="page-container" data-testid="admin-panel">
       <div className="animate-slide-up">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-            <Shield className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
+            <Shield className="w-5 h-5 text-secondary-foreground" />
           </div>
           <div>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Panel Admin</h1>
@@ -217,7 +218,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredUsers.map((u) => {
                   const isSelf = currentUser?.user_id === u.id;
                   const isChangingThis = submittingChange && pendingChange?.user?.id === u.id;
@@ -226,6 +227,7 @@ export default function AdminPanel() {
                       <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <Avatar className="h-10 w-10 shrink-0">
+                            <AvatarImage src={buildPhotoUrl(u.profile?.photo_url) || undefined} />
                             <AvatarFallback className="bg-slate-100 text-slate-600 text-xs font-bold">
                               {initialsOf(u.profile?.name, u.email)}
                             </AvatarFallback>
@@ -257,7 +259,7 @@ export default function AdminPanel() {
                               onValueChange={(v) => requestRoleChange(u, v)}
                               disabled={isChangingThis}
                             >
-                              <SelectTrigger className="h-9 w-36 text-xs" data-testid={`admin-role-select-${u.id}`}>
+                              <SelectTrigger className="h-11 w-36 text-xs" data-testid={`admin-role-select-${u.id}`}>
                                 {isChangingThis ? (
                                   <span className="flex items-center gap-1.5 text-slate-400">
                                     <Loader2 className="w-3 h-3 animate-spin" /> Guardando...
@@ -304,7 +306,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredMatches.map((m) => (
                   <Link
                     to={`/partidos/${m.id}`}

@@ -152,7 +152,8 @@ export default function CompleteProfile() {
   return (
     <div className="page-container max-w-2xl mx-auto" data-testid="complete-profile-page">
       <div className="animate-slide-up">
-        <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">
+        <p className="text-xs font-semibold uppercase tracking-wider text-turf-accessible">Último paso antes de jugar</p>
+        <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase tracking-tight mt-1">
           Completá tu perfil
         </h1>
         <p className="mt-2 text-slate-500">Necesitamos algunos datos para armar equipos equilibrados.</p>

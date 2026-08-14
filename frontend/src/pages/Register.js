@@ -67,7 +67,11 @@ export default function Register() {
 
   if (successInfo) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12" data-testid="register-success-page">
+      <div
+        className="min-h-screen flex items-center justify-center bg-background px-4 py-12"
+        style={{ backgroundImage: 'radial-gradient(at 0% 0%, hsla(145,63%,42%,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(25,95%,53%,0.10) 0px, transparent 50%)' }}
+        data-testid="register-success-page"
+      >
         <div className="w-full max-w-md animate-slide-up">
           <div className="flex justify-center mb-8">
             <Link
@@ -82,7 +86,7 @@ export default function Register() {
             </Link>
           </div>
 
-          <Card className="border-slate-100 shadow-lg">
+          <Card className="border-slate-100 shadow-md">
             <CardHeader className="pb-2 items-center">
               <div className="w-14 h-14 rounded-full bg-turf/10 flex items-center justify-center mb-2">
                 <MailCheck className="w-7 h-7 text-turf-accessible" />
@@ -154,7 +158,11 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12" data-testid="register-page">
+    <div
+      className="min-h-screen flex items-center justify-center bg-background px-4 py-12"
+      style={{ backgroundImage: 'radial-gradient(at 0% 0%, hsla(145,63%,42%,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(25,95%,53%,0.10) 0px, transparent 50%)' }}
+      data-testid="register-page"
+    >
       <div className="w-full max-w-md animate-slide-up">
         <div className="flex justify-center mb-8">
           <Link
@@ -169,7 +177,7 @@ export default function Register() {
           </Link>
         </div>
 
-        <Card className="border-slate-100 shadow-lg">
+        <Card className="border-slate-100 shadow-md">
           <CardHeader className="pb-4">
             <CardTitle className="font-heading text-2xl uppercase tracking-tight text-center">Crear Cuenta</CardTitle>
           </CardHeader>
@@ -184,7 +192,7 @@ export default function Register() {
                   disabled={loading}
                   autoComplete="name"
                   aria-invalid={!!errors.name}
-                  className={`mt-1.5 h-12 bg-slate-50 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30 ${errors.name ? 'border-red-300' : 'border-slate-200'}`}
+                  className={`mt-1.5 h-12 bg-slate-50 ${errors.name ? 'border-red-300' : 'border-slate-200'}`}
                   {...register('name')}
                 />
                 {errors.name && (
@@ -202,7 +210,7 @@ export default function Register() {
                   autoComplete="email"
                   inputMode="email"
                   aria-invalid={!!errors.email}
-                  className={`mt-1.5 h-12 bg-slate-50 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30 ${errors.email ? 'border-red-300' : 'border-slate-200'}`}
+                  className={`mt-1.5 h-12 bg-slate-50 ${errors.email ? 'border-red-300' : 'border-slate-200'}`}
                   {...register('email')}
                 />
                 {errors.email && (
@@ -220,7 +228,7 @@ export default function Register() {
                     disabled={loading}
                     autoComplete="new-password"
                     aria-invalid={!!errors.password}
-                    className={`h-12 bg-slate-50 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30 pr-12 ${errors.password ? 'border-red-300' : 'border-slate-200'}`}
+                    className={`h-12 bg-slate-50 pr-12 ${errors.password ? 'border-red-300' : 'border-slate-200'}`}
                     {...register('password')}
                   />
                   <button

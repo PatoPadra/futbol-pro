@@ -223,6 +223,7 @@ export default function CreateGuest() {
                   )}
                 />
 
+                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase pt-2">Perfil de juego</p>
                 <FormField
                   control={control}
                   name="primary_position"
@@ -292,7 +293,8 @@ export default function CreateGuest() {
               type="submit"
               data-testid="create-guest-submit"
               disabled={loading}
-              className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+              shape="pill"
+              className="w-full h-12 bg-turf hover:bg-turf-dark text-white"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

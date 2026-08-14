@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
+import { getRatingTone } from '@/utils/ratings';
 
 const statRowSchema = z.object({
   goals: z.coerce
@@ -38,13 +39,6 @@ const statRowSchema = z.object({
 const statsFormSchema = z.object({
   stats: z.record(statRowSchema),
 });
-
-const scoreTone = (score) => {
-  if (score <= 3) return { text: 'text-rose-600', ring: 'ring-rose-200', bg: 'bg-rose-50' };
-  if (score <= 6) return { text: 'text-slate-700', ring: 'ring-slate-200', bg: 'bg-slate-50' };
-  if (score <= 8) return { text: 'text-turf-accessible', ring: 'ring-turf/20', bg: 'bg-turf/5' };
-  return { text: 'text-turf-accessible', ring: 'ring-turf/40', bg: 'bg-turf/10' };
-};
 
 export default function PostMatch() {
   const { id } = useParams();
@@ -294,7 +288,7 @@ export default function PostMatch() {
 
                 {otherPlayers.map((player) => {
                   const score = ratings[player.player_id] ?? 5;
-                  const tone = scoreTone(score);
+                  const tone = getRatingTone(score);
                   const setScore = (next) => setRatings((prev) => ({ ...prev, [player.player_id]: Math.min(10, Math.max(1, next)) }));
                   return (
                     <div key={player.player_id} className={`rounded-2xl border p-4 transition-colors ${tone.ring} ring-1 border-slate-100`} data-testid={`rate-player-${player.player_id}`}>
@@ -322,7 +316,7 @@ export default function PostMatch() {
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-11 w-11 rounded-full shrink-0"
+                            className="h-11 w-11 rounded-full shrink-0 active:scale-95 transition-transform"
                             onClick={() => setScore(score - 1)}
                             disabled={!myRegistration || score <= 1}
                             data-testid={`rating-decrement-${player.player_id}`}
@@ -337,7 +331,7 @@ export default function PostMatch() {
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-11 w-11 rounded-full shrink-0"
+                            className="h-11 w-11 rounded-full shrink-0 active:scale-95 transition-transform"
                             onClick={() => setScore(score + 1)}
                             disabled={!myRegistration || score >= 10}
                             data-testid={`rating-increment-${player.player_id}`}
@@ -367,7 +361,8 @@ export default function PostMatch() {
                   data-testid="submit-ratings-btn"
                   onClick={submitRatings}
                   disabled={submitting === 'ratings' || !myRegistration || otherPlayers.length === 0}
-                  className="w-full bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase min-h-12"
+                  shape="pill"
+                  className="w-full bg-turf hover:bg-turf-dark text-white min-h-12"
                 >
                   {submitting === 'ratings' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Star className="w-4 h-4 mr-2" />}
                   {existingRatings?.has_rated ? 'Actualizar evaluaciones' : 'Guardar evaluaciones'}
@@ -383,10 +378,10 @@ export default function PostMatch() {
                 <p className="text-xs text-slate-500">Solo vos podés ver esto. No afecta tu rating general.</p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className={`rounded-2xl border p-4 ${scoreTone(selfEval.score).ring} ring-1 border-slate-100`}>
+                <div className={`rounded-2xl border p-4 ${getRatingTone(selfEval.score).ring} ring-1 border-slate-100`}>
                   <div className="flex items-center justify-between">
                     <Label>Puntuación</Label>
-                    <span className={`text-lg font-bold w-10 h-10 rounded-full flex items-center justify-center ${scoreTone(selfEval.score).text} ${scoreTone(selfEval.score).bg}`} data-testid="self-eval-score-value">
+                    <span className={`text-lg font-bold w-10 h-10 rounded-full flex items-center justify-center ${getRatingTone(selfEval.score).text} ${getRatingTone(selfEval.score).bg}`} data-testid="self-eval-score-value">
                       {selfEval.score}
                     </span>
                   </div>
@@ -412,7 +407,7 @@ export default function PostMatch() {
                     placeholder="¿Cómo sentís que jugaste hoy?"
                   />
                 </div>
-                <Button data-testid="submit-self-eval" onClick={submitSelfEval} disabled={submitting === 'self'} className="w-full bg-slate-800 text-white rounded-xl font-bold uppercase min-h-12">
+                <Button data-testid="submit-self-eval" onClick={submitSelfEval} disabled={submitting === 'self'} shape="pill" className="w-full bg-secondary text-secondary-foreground min-h-12">
                   {submitting === 'self' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Guardar autoevaluación
                 </Button>
               </CardContent>

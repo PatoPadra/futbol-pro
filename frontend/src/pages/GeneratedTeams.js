@@ -11,7 +11,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X, Loader2, AlertTriangle, Info, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
-import PageLoader from '@/components/common/PageLoader';
+import PositionBadge from '@/components/common/PositionBadge';
+import { TEAM_COLORS } from '@/constants/matches';
+import PhotoLightbox from '@/components/common/PhotoLightbox';
+
+function GeneratedTeamsSkeleton() {
+  return (
+    <div className="page-container max-w-5xl mx-auto" data-testid="generated-teams-skeleton">
+      <div className="animate-pulse">
+        <div className="h-4 w-32 bg-slate-100 rounded mb-4" />
+        <div className="h-9 w-40 bg-slate-200 rounded-lg mb-3" />
+        <div className="flex gap-2 mb-6">
+          <div className="h-6 w-28 bg-slate-100 rounded-full" />
+          <div className="h-6 w-24 bg-slate-100 rounded-full" />
+        </div>
+        <div className="flex gap-3 mb-6">
+          <div className="h-11 w-32 bg-slate-200 rounded-full" />
+          <div className="h-11 w-28 bg-slate-100 rounded-full" />
+          <div className="h-11 w-32 bg-slate-100 rounded-full" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-pitch/20 rounded-xl aspect-[2/3] md:aspect-[3/2]" />
+          <div className="bg-pitch/20 rounded-xl aspect-[2/3] md:aspect-[3/2]" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-64 bg-slate-100 rounded-xl border border-slate-100" />
+          <div className="h-64 bg-slate-100 rounded-xl border border-slate-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function GeneratedTeams() {
   const { id } = useParams();
@@ -26,6 +56,16 @@ export default function GeneratedTeams() {
   const [editAssignments, setEditAssignments] = useState([]);
   const [editFormationA, setEditFormationA] = useState('');
   const [editFormationB, setEditFormationB] = useState('');
+  const [photoView, setPhotoView] = useState({ open: false, name: '', photoUrl: '', subtitle: '' });
+
+  const openPlayerPhoto = (player) => {
+    setPhotoView({
+      open: true,
+      name: player.player_name,
+      photoUrl: player.player_photo,
+      subtitle: player.position || 'Jugador',
+    });
+  };
 
   const loadData = async () => {
     try {
@@ -134,6 +174,13 @@ export default function GeneratedTeams() {
     }
   };
 
+  const balancePct = Math.round((teams?.balance_score || 0) * 100);
+  const balanceToneClass = balancePct >= 85
+    ? 'bg-turf/10 text-turf-accessible border-turf/20'
+    : balancePct >= 70
+      ? 'bg-orange/10 text-orange border-orange/20'
+      : 'bg-slate-100 text-slate-600 border-slate-200';
+
   const cancelEdit = () => {
     setEditMode(false);
     setEditAssignments(teams?.assignments || []);
@@ -141,7 +188,7 @@ export default function GeneratedTeams() {
     setEditFormationB(teams?.formation_b || '');
   };
 
-  if (loading) return <PageLoader />;
+  if (loading) return <GeneratedTeamsSkeleton />;
 
   if (!teams) {
     return (
@@ -166,12 +213,20 @@ export default function GeneratedTeams() {
     const destTeam = a.team === 'A' ? 'B' : 'A';
     return (
       <div className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0" data-testid={`team-player-${a.player_id}`}>
-        <Avatar className="w-10 h-10 shrink-0">
-          <AvatarImage src={buildPhotoUrl(a.player_photo) || undefined} />
-          <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
-            {initialsFromName(a.player_name)}
-          </AvatarFallback>
-        </Avatar>
+        <button
+          type="button"
+          onClick={() => openPlayerPhoto(a)}
+          className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+          aria-label={`Ver foto de ${a.player_name}`}
+          data-testid={`view-team-player-photo-${a.player_id}`}
+        >
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={buildPhotoUrl(a.player_photo) || undefined} />
+            <AvatarFallback className="text-white text-xs font-bold" style={{ backgroundColor: teamColor }}>
+              {initialsFromName(a.player_name)}
+            </AvatarFallback>
+          </Avatar>
+        </button>
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-900 truncate">{a.player_name}</p>
@@ -190,7 +245,7 @@ export default function GeneratedTeams() {
           ) : (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <p className="text-xs text-slate-500">{a.position}</p>
+                <PositionBadge positionId={a.position} />
                 {a.is_manual && (
                   <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-semibold uppercase tracking-wide border-orange/30 text-orange">
                     Manual
@@ -223,7 +278,8 @@ export default function GeneratedTeams() {
   };
 
   const SummaryCard = ({ summary }) => (
-    <Card className="border-slate-100">
+    <Card className="border-slate-100 overflow-hidden">
+      <div className="h-1.5" style={{ backgroundColor: TEAM_COLORS[summary.team] || TEAM_COLORS.A }} />
       <CardHeader className="pb-2">
         <CardTitle className="font-heading text-lg uppercase">Resumen Equipo {summary.team}</CardTitle>
       </CardHeader>
@@ -261,8 +317,8 @@ export default function GeneratedTeams() {
           <div>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Equipos</h1>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <Badge className="bg-turf/10 text-turf-accessible border-turf/20 font-semibold" data-testid="balance-badge">
-                Balance: {(teams.balance_score * 100).toFixed(0)}%
+              <Badge className={`${balanceToneClass} font-semibold`} data-testid="balance-badge">
+                Balance: {balancePct}%
               </Badge>
               {teams.formation_a && <Badge variant="outline">Formación: {editMode ? editFormationA : teams.formation_a}</Badge>}
               <Badge
@@ -349,13 +405,13 @@ export default function GeneratedTeams() {
                 </div>
               )}
               {formationChangedA ? (
-                <div className="relative bg-pitch rounded-xl overflow-hidden border-2 border-white/20 shadow-inner flex flex-col items-center justify-center text-center p-6" style={{ aspectRatio: '2/3' }} data-testid="pitch-team-A-pending">
+                <div className="relative bg-pitch rounded-xl overflow-hidden border-4 border-white/20 shadow-inner aspect-[2/3] md:aspect-[3/2] flex flex-col items-center justify-center text-center p-6" data-testid="pitch-team-A-pending">
                   <Shuffle className="w-8 h-8 text-white/70 mb-3" />
                   <p className="text-white font-semibold text-sm">Formación cambiada a {editFormationA}</p>
                   <p className="text-white/70 text-xs mt-1">La cancha se actualiza al guardar los cambios.</p>
                 </div>
               ) : (
-                <FootballPitch assignments={currentAssignments} formation={editMode ? editFormationA : teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor="#1A1D23" />
+                <FootballPitch assignments={currentAssignments} formation={editMode ? editFormationA : teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor={TEAM_COLORS.A} />
               )}
             </div>
             <div>
@@ -366,13 +422,13 @@ export default function GeneratedTeams() {
                 </div>
               )}
               {formationChangedB ? (
-                <div className="relative bg-pitch rounded-xl overflow-hidden border-2 border-white/20 shadow-inner flex flex-col items-center justify-center text-center p-6" style={{ aspectRatio: '2/3' }} data-testid="pitch-team-B-pending">
+                <div className="relative bg-pitch rounded-xl overflow-hidden border-4 border-white/20 shadow-inner aspect-[2/3] md:aspect-[3/2] flex flex-col items-center justify-center text-center p-6" data-testid="pitch-team-B-pending">
                   <Shuffle className="w-8 h-8 text-white/70 mb-3" />
                   <p className="text-white font-semibold text-sm">Formación cambiada a {editFormationB}</p>
                   <p className="text-white/70 text-xs mt-1">La cancha se actualiza al guardar los cambios.</p>
                 </div>
               ) : (
-                <FootballPitch assignments={currentAssignments} formation={editMode ? (editFormationB || editFormationA) : (teams.formation_b || teams.formation_a)} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor="#FF6B00" />
+                <FootballPitch assignments={currentAssignments} formation={editMode ? (editFormationB || editFormationA) : (teams.formation_b || teams.formation_a)} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor={TEAM_COLORS.B} />
               )}
             </div>
           </div>
@@ -387,37 +443,47 @@ export default function GeneratedTeams() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="border-slate-100" data-testid="team-a-card">
+          <Card className="border-slate-100 overflow-hidden" data-testid="team-a-card">
+            <div className="h-1.5" style={{ backgroundColor: TEAM_COLORS.A }} />
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: '#1A1D23' }} /> Equipo A ({teamA.length})
+                <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: TEAM_COLORS.A }} /> Equipo A ({teamA.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {teamA.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-6">No hay jugadores en este equipo todavía.</p>
               ) : (
-                teamA.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#1A1D23" />)
+                teamA.map((a) => <PlayerRow key={a.player_id} a={a} teamColor={TEAM_COLORS.A} />)
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-slate-100" data-testid="team-b-card">
+          <Card className="border-slate-100 overflow-hidden" data-testid="team-b-card">
+            <div className="h-1.5" style={{ backgroundColor: TEAM_COLORS.B }} />
             <CardHeader className="pb-2">
               <CardTitle className="font-heading text-lg uppercase flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-orange shrink-0" /> Equipo B ({teamB.length})
+                <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: TEAM_COLORS.B }} /> Equipo B ({teamB.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {teamB.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-6">No hay jugadores en este equipo todavía.</p>
               ) : (
-                teamB.map((a) => <PlayerRow key={a.player_id} a={a} teamColor="#FF6B00" />)
+                teamB.map((a) => <PlayerRow key={a.player_id} a={a} teamColor={TEAM_COLORS.B} />)
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <PhotoLightbox
+        open={photoView.open}
+        onOpenChange={(open) => setPhotoView((prev) => ({ ...prev, open }))}
+        name={photoView.name}
+        photoUrl={photoView.photoUrl}
+        subtitle={photoView.subtitle}
+      />
     </div>
   );
 }

@@ -63,8 +63,8 @@ export default function VerifyEmail() {
     },
     success: {
       title: 'Cuenta verificada',
-      icon: <CheckCircle2 className="w-7 h-7 text-turf-accessible" aria-hidden="true" />,
-      iconBg: 'bg-turf/10',
+      icon: <CheckCircle2 className="w-7 h-7 text-white animate-in zoom-in duration-300" aria-hidden="true" />,
+      iconBg: 'bg-turf',
       textClass: 'text-slate-700',
     },
     error: {
@@ -127,7 +127,8 @@ export default function VerifyEmail() {
                   type="submit"
                   disabled={resending}
                   data-testid="resend-verification-submit-btn"
-                  className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                  shape="pill"
+                  className="w-full h-12 bg-turf hover:bg-turf-dark text-white"
                 >
                   {resending && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                   {resending ? 'Reenviando...' : 'Reenviar email de verificación'}
@@ -144,10 +145,11 @@ export default function VerifyEmail() {
             <Button
               asChild
               data-testid="verify-email-login-btn"
+              shape="pill"
               className={
                 status === 'error' && !resendDone
-                  ? 'w-full h-12 bg-white border-2 border-slate-200 text-slate-800 rounded-xl font-bold uppercase tracking-wider text-sm hover:border-slate-800 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2'
-                  : 'w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2'
+                  ? 'w-full h-12 bg-white border-2 border-slate-200 text-slate-800 hover:border-slate-800 hover:text-slate-900'
+                  : 'w-full h-12 bg-turf hover:bg-turf-dark text-white'
               }
             >
               <Link to="/login">Ir a iniciar sesión</Link>

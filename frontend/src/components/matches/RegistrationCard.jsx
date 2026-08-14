@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import PhotoLightbox from '@/components/common/PhotoLightbox';
+import PositionBadge from '@/components/common/PositionBadge';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 
 export default function RegistrationCard({
@@ -20,10 +21,14 @@ export default function RegistrationCard({
   return (
     <>
       <div
-        className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 hover:bg-slate-50/70 transition-colors"
+        className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 hover:bg-slate-50/70 active:bg-slate-100 transition-colors"
         data-testid={`${registration.status}-${registration.player_id}`}
       >
-        <span className="text-xs font-bold text-slate-400 w-5 text-center">{index + 1}</span>
+        <span
+          className={`text-xs font-bold w-5 text-center ${registration.status === 'titular' ? 'text-turf-accessible' : 'text-orange'}`}
+        >
+          {index + 1}
+        </span>
 
         <button
           type="button"
@@ -60,9 +65,13 @@ export default function RegistrationCard({
               </Badge>
             ) : null}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {registration.primary_position || 'Sin posición cargada'}
-          </p>
+          <div className="mt-1">
+            {registration.primary_position ? (
+              <PositionBadge positionId={registration.primary_position} />
+            ) : (
+              <p className="text-xs text-slate-400">Sin posición cargada</p>
+            )}
+          </div>
         </div>
 
         {canManage && (
@@ -71,7 +80,7 @@ export default function RegistrationCard({
             size="sm"
             variant="outline"
             onClick={onRemove}
-            className="rounded-full border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+            className="rounded-full border-destructive/30 text-destructive hover:bg-destructive/10 shrink-0"
             data-testid={`remove-registration-${registration.id}`}
           >
             <UserMinus className="w-4 h-4 mr-1" />

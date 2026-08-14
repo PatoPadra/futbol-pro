@@ -1,8 +1,10 @@
 import React from 'react';
 import { buildPhotoUrl } from '@/utils/photos';
+import { TEAM_COLORS } from '@/constants/matches';
 
 export default function FootballPitch({ assignments, formation, coords, teamLabel, teamColor }) {
   const teamAssignments = assignments?.filter(a => a.team === teamLabel) || [];
+  const resolvedColor = teamColor || (teamLabel === 'A' ? TEAM_COLORS.A : TEAM_COLORS.B);
 
   return (
     <div
@@ -22,7 +24,7 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
         <span
           className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white"
-          style={{ backgroundColor: teamColor || (teamLabel === 'A' ? '#1A1D23' : '#FF6B00') }}
+          style={{ backgroundColor: resolvedColor }}
         >
           Equipo {teamLabel}
         </span>
@@ -42,6 +44,8 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
                 transform: 'translate(-50%, -50%)',
               }}
               data-testid={`player-marker-empty-${teamLabel}-${i}`}
+              role="group"
+              aria-label={`Posición vacía: ${coord.pos}`}
             >
               <div className="w-9 h-9 rounded-full border-2 border-dashed border-white/50 bg-white/10 flex items-center justify-center text-white/70 text-[9px] font-bold">
                 {coord.pos}
@@ -62,29 +66,31 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
               transform: 'translate(-50%, -50%)',
             }}
             data-testid={`player-marker-${teamLabel}-${i}`}
+            role="group"
+            aria-label={`${player.player_name}, ${coord.pos}, Equipo ${teamLabel}`}
           >
             {photoUrl ? (
               <img
                 src={photoUrl}
-                alt={player.player_name}
+                alt=""
                 className="w-9 h-9 rounded-full border-2 shadow-lg object-cover"
-                style={{ borderColor: teamColor || (teamLabel === 'A' ? '#1A1D23' : '#FF6B00') }}
+                style={{ borderColor: resolvedColor }}
               />
             ) : (
               <div
                 className="w-9 h-9 rounded-full border-2 shadow-lg flex items-center justify-center text-white text-xs font-bold"
                 style={{
-                  backgroundColor: teamColor || (teamLabel === 'A' ? '#1A1D23' : '#FF6B00'),
+                  backgroundColor: resolvedColor,
                   borderColor: 'white',
                 }}
               >
                 {player.player_name?.substring(0, 2).toUpperCase()}
               </div>
             )}
-            <span className="mt-0.5 text-[8px] font-bold text-white bg-black/60 px-1.5 py-0.5 rounded-full whitespace-nowrap max-w-[60px] truncate">
+            <span className="mt-0.5 text-[10px] leading-tight font-bold text-white bg-black/60 px-1.5 py-0.5 rounded-full whitespace-nowrap max-w-[72px] truncate">
               {player.player_name?.split(' ')[0]}
             </span>
-            <span className="text-[7px] text-white/80 font-medium">
+            <span className="mt-0.5 text-[9px] leading-tight font-bold text-white bg-black/60 px-1.5 py-0.5 rounded-full whitespace-nowrap">
               {coord.pos}
             </span>
           </div>

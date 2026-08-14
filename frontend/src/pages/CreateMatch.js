@@ -132,6 +132,7 @@ export default function CreateMatch() {
                 <CardTitle className="font-heading text-lg uppercase">Detalles</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase">¿Qué partido es?</p>
                 <FormField
                   control={control}
                   name="group_id"
@@ -213,7 +214,17 @@ export default function CreateMatch() {
                         <SelectContent>
                           {[5, 6, 7, 8, 9, 10, 11].map((value) => (
                             <SelectItem key={value} value={String(value)}>
-                              Fútbol {value} ({capacities[value]} jugadores)
+                              <span className="flex items-center gap-2">
+                                <span className="flex gap-0.5 shrink-0">
+                                  {Array.from({ length: 7 }).map((_, di) => (
+                                    <span
+                                      key={di}
+                                      className={`w-1.5 h-1.5 rounded-full ${di < value - 4 ? 'bg-turf' : 'bg-slate-200'}`}
+                                    />
+                                  ))}
+                                </span>
+                                Fútbol {value} ({capacities[value]} jugadores)
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -223,6 +234,7 @@ export default function CreateMatch() {
                   )}
                 />
 
+                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase pt-2">¿Cuándo y dónde?</p>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={control}
