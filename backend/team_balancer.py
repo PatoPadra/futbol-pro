@@ -1,6 +1,6 @@
 from database import db
 from constants import FORMATIONS, FORMATION_COORDS, MODALITY_CAPACITY, POSITION_MAP
-from rating_calculator import get_player_score_for_balance
+from rating_calculator import get_player_scores_for_balance
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,15 +45,30 @@ async def generate_teams(match_id: str) -> dict:
     if len(registrations) < 2:
         raise ValueError("Se necesitan al menos 2 jugadores para generar equipos")
 
-    # Get player profiles and scores
+    # Perfiles y scores en batch. Antes esto era un for con dos awaits adentro:
+    # un find_one del perfil + get_player_score_for_balance (que a su vez hace 4
+    # queries). Para un 11v11 daba ~130 round-trips seriales. Ahora son 1 query
+    # de perfiles + las métricas resueltas en paralelo con asyncio.gather.
+    player_ids = [reg["player_id"] for reg in registrations]
+
+    profiles = await db.player_profiles.find(
+        {"id": {"$in": player_ids}}, {"_id": 0}
+    ).to_list(len(player_ids) or 1)
+    profile_by_id = {p["id"]: p for p in profiles}
+
+    # Sólo pedimos score de los que tienen perfil: los otros se descartan igual.
+    scores_by_id = await get_player_scores_for_balance(
+        [pid for pid in player_ids if pid in profile_by_id]
+    )
+
+    # Recorremos registrations y no profiles para conservar el orden de anotación
+    # (el sort("order", 1) de arriba), que es el que define el snake draft.
     players = []
     for reg in registrations:
-        profile = await db.player_profiles.find_one(
-            {"id": reg["player_id"]}, {"_id": 0}
-        )
+        profile = profile_by_id.get(reg["player_id"])
         if not profile:
             continue
-        score = await get_player_score_for_balance(reg["player_id"])
+        score = scores_by_id[reg["player_id"]]
         players.append({
             "id": profile["id"],
             "name": profile["name"],
