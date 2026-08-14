@@ -9,7 +9,7 @@ from pathlib import Path
 import uuid
 import os
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from storage_cloudinary import upload_image_bytes
+from storage_cloudinary import delete_image, upload_image_bytes
 
 
 UPLOAD_DIR = Path(
@@ -71,36 +71,64 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
 
     regs = await db.match_registrations.find({"player_id": player_id, "status": "titular"}, {"_id": 0}).to_list(500)
 
+    # Antes esto hacía hasta 5 queries POR PARTIDO adentro del for: un jugador con
+    # 40 partidos disparaba ~200 round-trips seriales. Ahora es una query por
+    # colección con $in y el cruce se resuelve en memoria.
+    match_ids = [reg["match_id"] for reg in regs]
+    limite = len(match_ids) or 1
+
+    matches = await db.matches.find({"id": {"$in": match_ids}}, {"_id": 0}).to_list(limite)
+    match_by_id = {m["id"]: m for m in matches}
+
+    # Sólo traemos lo que el que mira tiene permitido ver, igual que antes.
+    avg_rating_by_match = {}
+    if can_view_peer_scores:
+        ratings = await db.peer_ratings.find(
+            {"match_id": {"$in": match_ids}, "rated_player_id": player_id},
+            {"_id": 0},
+        ).to_list(limite * 100)
+        acumulado = {}
+        for r in ratings:
+            suma, cuenta = acumulado.get(r["match_id"], (0, 0))
+            acumulado[r["match_id"]] = (suma + r["score"], cuenta + 1)
+        avg_rating_by_match = {mid: s / c for mid, (s, c) in acumulado.items() if c}
+
+    generations = await db.team_generations.find(
+        {"match_id": {"$in": match_ids}}, {"_id": 0}
+    ).to_list(limite)
+    # Nos quedamos con la primera generación de cada partido, que es lo que hacía
+    # el .to_list(1) de antes (no había sort, así que era la primera que viniera).
+    assignment_by_match = {}
+    for gen in generations:
+        if gen["match_id"] in assignment_by_match:
+            continue
+        for a in gen.get("assignments", []):
+            if a["player_id"] == player_id:
+                assignment_by_match[gen["match_id"]] = a
+                break
+
+    stats_docs = await db.stats_final.find(
+        {"match_id": {"$in": match_ids}, "player_id": player_id}, {"_id": 0}
+    ).to_list(limite)
+    stats_by_match = {s["match_id"]: s for s in stats_docs}
+
+    self_eval_by_match = {}
+    if can_view_self_scores:
+        self_evals = await db.self_evaluations.find(
+            {"match_id": {"$in": match_ids}, "player_id": player_id}, {"_id": 0}
+        ).to_list(limite)
+        self_eval_by_match = {e["match_id"]: e for e in self_evals}
+
     history = []
     for reg in regs:
-        match = await db.matches.find_one({"id": reg["match_id"]}, {"_id": 0})
+        match = match_by_id.get(reg["match_id"])
         if not match:
             continue
 
-        avg_rating = None
-        if can_view_peer_scores:
-            ratings = await db.peer_ratings.find(
-                {"match_id": reg["match_id"], "rated_player_id": player_id},
-                {"_id": 0},
-            ).to_list(100)
-            avg_rating = sum(r["score"] for r in ratings) / len(ratings) if ratings else None
-
-        gen = await db.team_generations.find({"match_id": reg["match_id"]}, {"_id": 0}).to_list(1)
-        assignment = None
-        if gen:
-            for a in gen[0].get("assignments", []):
-                if a["player_id"] == player_id:
-                    assignment = a
-                    break
-
-        stats = await db.stats_final.find_one({"match_id": reg["match_id"], "player_id": player_id}, {"_id": 0})
-
-        self_eval = None
-        if can_view_self_scores:
-            self_eval = await db.self_evaluations.find_one(
-                {"match_id": reg["match_id"], "player_id": player_id},
-                {"_id": 0},
-            )
+        avg_rating = avg_rating_by_match.get(reg["match_id"])
+        assignment = assignment_by_match.get(reg["match_id"])
+        stats = stats_by_match.get(reg["match_id"])
+        self_eval = self_eval_by_match.get(reg["match_id"])
 
         history.append({
             "match_id": match["id"],
@@ -189,6 +217,10 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
 
+    # El public_id anterior ya lo tenemos en `profile` (se trajo arriba para
+    # validar permisos), así que no hace falta otra query.
+    public_id_anterior = profile.get("photo_public_id")
+
     uploaded = upload_image_bytes(
         content=content,
         filename=file.filename or "guest.jpg",
@@ -204,4 +236,9 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
             }
         },
     )
+
+    # Recién ahora que la nueva quedó guardada borramos la vieja de Cloudinary.
+    if public_id_anterior:
+        delete_image(public_id_anterior)
+
     return {"photo_url": uploaded["photo_url"]}

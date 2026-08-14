@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from database import db
 from auth import hash_password, verify_password, create_token, get_current_user
 from models import (
@@ -12,6 +12,8 @@ from models import (
 from datetime import datetime, timezone, timedelta
 from email_service import send_verification_email
 from services.guest_merge import merge_guest_into_profile
+from services.rate_limit import check_rate_limit, clear_attempts, client_ip, record_attempt
+import re
 import secrets
 import uuid
 import logging
@@ -28,6 +30,21 @@ logger = logging.getLogger(__name__)
 EMAIL_VERIFICATION_ENABLED = (
     os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
 )
+
+
+# Límites de rate limiting. El login se limita POR IP y no por email a
+# propósito: limitar por email dejaría que cualquiera bloquee la cuenta de otro
+# simplemente tipeando mal la contraseña unas cuantas veces.
+LOGIN_MAX_INTENTOS = 10
+LOGIN_VENTANA_SEGUNDOS = 15 * 60
+
+REGISTRO_MAX_INTENTOS = 10
+REGISTRO_VENTANA_SEGUNDOS = 60 * 60
+
+# Este sí va por email: el daño de un reenvío masivo lo sufre el dueño de la
+# casilla, y acá no hay riesgo de bloquear a nadie (no es una puerta de login).
+REENVIO_MAX_INTENTOS = 5
+REENVIO_VENTANA_SEGUNDOS = 60 * 60
 
 
 def _now_iso() -> str:
@@ -52,14 +69,69 @@ def _is_expired(iso_value: str | None) -> bool:
     return expires_at < datetime.now(timezone.utc)
 
 
+async def _find_user_by_email(email: str) -> dict | None:
+    """Busca el usuario por email, contemplando cuentas legacy.
+
+    Los modelos ya normalizan el email a minúscula, así que el find_one exacto
+    resuelve el 99% de los casos y usa el índice. El fallback case-insensitive
+    existe sólo para las cuentas creadas ANTES de la normalización, que pueden
+    tener el email guardado con mayúsculas: sin esto no podrían loguear nunca
+    más.
+    """
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if user:
+        return user
+
+    return await db.users.find_one(
+        {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
+        {"_id": 0},
+    )
+
+
+async def _normalize_legacy_user_email(user: dict, email: str) -> None:
+    """Migra en caliente el email de una cuenta legacy a minúscula.
+
+    Se llama recién después de validar la contraseña, así el arreglo lo dispara
+    el dueño de la cuenta y no cualquiera que tipee el mail. Si ya existe otra
+    cuenta con el email en minúscula (duplicado por mayúsculas) no tocamos nada
+    y lo dejamos logueado igual: resolverlo pisando datos sería peor.
+    """
+    if user.get("email") == email:
+        return
+
+    conflict = await db.users.find_one(
+        {"email": email, "id": {"$ne": user["id"]}}, {"_id": 0}
+    )
+    if conflict:
+        logger.warning(
+            f"No se normalizó el email de {user['id']}: ya existe otra cuenta con {email}"
+        )
+        return
+
+    await db.users.update_one({"id": user["id"]}, {"$set": {"email": email}})
+
+    # El perfil también guarda el email y se busca en minúscula (invitados,
+    # invitaciones a grupo), así que lo dejamos alineado.
+    await db.player_profiles.update_many(
+        {"user_id": user["id"]}, {"$set": {"email": email}}
+    )
+
+
 @router.post("/register", response_model=RegisterResponse)
-async def register(data: RegisterRequest):
-    existing = await db.users.find_one({"email": data.email}, {"_id": 0})
+async def register(data: RegisterRequest, request: Request):
+    await check_rate_limit(
+        f"register:{client_ip(request)}", REGISTRO_MAX_INTENTOS, REGISTRO_VENTANA_SEGUNDOS
+    )
+    await record_attempt(f"register:{client_ip(request)}")
+
+    # El email ya viene normalizado a minúscula por el modelo. La búsqueda
+    # contempla cuentas legacy con mayúsculas para no crear un duplicado.
+    existing = await _find_user_by_email(data.email)
     if existing:
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
     user_count = await db.users.count_documents({})
-    role = "admin" if user_count == 0 or data.email.lower() in ADMIN_EMAILS else "jugador"
+    role = "admin" if user_count == 0 or data.email in ADMIN_EMAILS else "jugador"
 
     user_id = str(uuid.uuid4())
     profile_id = str(uuid.uuid4())
@@ -90,7 +162,7 @@ async def register(data: RegisterRequest):
     # mismo email, recuperamos ese perfil (foto, posición, nivel) y su historial
     # de partidos/calificaciones en vez de arrancar de cero.
     matched_guest = await db.player_profiles.find_one(
-        {"email": data.email.lower(), "player_type": "invitado", "user_id": None},
+        {"email": data.email, "player_type": "invitado", "user_id": None},
         {"_id": 0},
     )
 
@@ -191,12 +263,16 @@ async def verify_email(token: str = Query(...)):
 
 @router.post("/resend-verification", response_model=VerifyEmailResponse)
 async def resend_verification(data: ResendVerificationRequest):
+    rate_key = f"resend:{data.email}"
+    await check_rate_limit(rate_key, REENVIO_MAX_INTENTOS, REENVIO_VENTANA_SEGUNDOS)
+    await record_attempt(rate_key)
+
     if not EMAIL_VERIFICATION_ENABLED:
         return VerifyEmailResponse(
             message="La verificación por email está desactivada."
         )
 
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    user = await _find_user_by_email(data.email)
     if not user:
         raise HTTPException(status_code=404, detail="No existe una cuenta con ese email")
 
@@ -240,13 +316,25 @@ async def resend_verification(data: ResendVerificationRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
+async def login(data: LoginRequest, request: Request):
+    rate_key = f"login:{client_ip(request)}"
+    await check_rate_limit(rate_key, LOGIN_MAX_INTENTOS, LOGIN_VENTANA_SEGUNDOS)
+
+    user = await _find_user_by_email(data.email)
     if not user:
+        await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     if not verify_password(data.password, user["password_hash"]):
+        await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Contraseña correcta: no penalizamos a quien simplemente se equivocó antes.
+    await clear_attempts(rate_key)
+
+    # Cuenta vieja guardada con mayúsculas: la normalizamos ahora que sabemos
+    # que la contraseña es correcta.
+    await _normalize_legacy_user_email(user, data.email)
 
     # Importante: los usuarios legacy sin este campo siguen pudiendo entrar.
     if user.get("is_verified", True) is not True:

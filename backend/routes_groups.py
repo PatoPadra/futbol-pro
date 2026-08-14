@@ -147,13 +147,29 @@ async def create_group(data: CreateGroupRequest, user=Depends(get_current_user))
     })
 
 
+async def _contar_miembros_activos(group_ids: list) -> dict:
+    """
+    Un solo aggregate en vez de un count_documents por grupo. Los grupos sin
+    miembros activos no aparecen en el resultado, por eso quien lo consume usa
+    .get(id, 0) y no indexado directo.
+    """
+    if not group_ids:
+        return {}
+    cursor = db.group_members.aggregate([
+        {"$match": {"group_id": {"$in": group_ids}, "status": "activo"}},
+        {"$group": {"_id": "$group_id", "total": {"$sum": 1}}},
+    ])
+    return {row["_id"]: row["total"] async for row in cursor}
+
+
 @router.get("")
 async def list_groups(user=Depends(get_current_user)):
     if user["role"] == "admin":
         groups = await db.groups.find({}, {"_id": 0}).to_list(500)
+        counts = await _contar_miembros_activos([g["id"] for g in groups])
         result = []
         for group in groups:
-            members_count = await db.group_members.count_documents({"group_id": group["id"], "status": "activo"})
+            members_count = counts.get(group["id"], 0)
             result.append(clean_mongo({
                 **group,
                 "my_member_role": "admin",
@@ -177,11 +193,13 @@ async def list_groups(user=Depends(get_current_user)):
     groups = await db.groups.find({"id": {"$in": group_ids}}, {"_id": 0}).to_list(500)
     membership_by_group = {m["group_id"]: m for m in memberships}
 
+    counts = await _contar_miembros_activos([g["id"] for g in groups])
+
     result = []
     for group in groups:
         membership = membership_by_group.get(group["id"])
         member_role = membership.get("member_role") if membership else None
-        members_count = await db.group_members.count_documents({"group_id": group["id"], "status": "activo"})
+        members_count = counts.get(group["id"], 0)
 
         result.append(clean_mongo({
             **group,
@@ -411,15 +429,22 @@ async def remove_group_member(group_id: str, member_id: str, user=Depends(get_cu
         {"_id": 0, "id": 1, "status": 1},
     ).to_list(500)
 
+    # Las registraciones del jugador en todos los partidos activos, de una sola
+    # query en vez de un find_one por partido. Las escrituras de abajo quedan por
+    # partido a propósito: son condicionales (sólo corren donde estaba anotado) y
+    # la promoción del suplente depende del orden.
+    regs_activas = await db.match_registrations.find(
+        {
+            "match_id": {"$in": [m["id"] for m in active_matches]},
+            "player_id": member["player_id"],
+            "status": {"$ne": "baja"},
+        },
+        {"_id": 0},
+    ).to_list(len(active_matches) or 1)
+    reg_by_match = {r["match_id"]: r for r in regs_activas}
+
     for match in active_matches:
-        reg = await db.match_registrations.find_one(
-            {
-                "match_id": match["id"],
-                "player_id": member["player_id"],
-                "status": {"$ne": "baja"},
-            },
-            {"_id": 0},
-        )
+        reg = reg_by_match.get(match["id"])
         if not reg:
             continue
 

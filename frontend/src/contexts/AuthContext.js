@@ -50,14 +50,6 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
-  const register = async (email, password, name) => {
-    const res = await axios.post(`${API}/auth/register`, { email, password, name });
-    const data = res.data;
-    localStorage.setItem('token', data.token);
-    setUser({ ...data, email });
-    return data;
-  };
-
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -67,20 +59,13 @@ export function AuthProvider({ children }) {
     setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
-  const authHeader = () => {
-    const token = user?.token || localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   return (
     <AuthContext.Provider value={{
       user,
       loading,
       login,
-      register,
       logout,
       updateUser,
-      authHeader,
       isAuthenticated: !!user,
     }}>
       {children}
