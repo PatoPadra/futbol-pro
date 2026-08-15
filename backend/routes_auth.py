@@ -196,19 +196,22 @@ async def register(data: RegisterRequest, request: Request):
 
     if EMAIL_VERIFICATION_ENABLED:
         try:
-            send_verification_email(data.email, data.name, verification_token)
+            await send_verification_email(data.email, data.name, verification_token)
             verification_sent = True
         except Exception as e:
             logger.exception(
                 f"No se pudo enviar email de verificación a {data.email}: {e}"
             )
 
-            # Como la verificación está activada, si no se puede enviar el mail
-            # no tiene sentido dejar avanzar el registro.
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudo enviar el email de verificación",
-            )
+            # Antes acá se tiraba un 500, pero la cuenta YA quedaba creada unas
+            # líneas más arriba. Eso dejaba a la persona trabada: no podía entrar
+            # (figura sin verificar) ni volver a registrarse (el email ya existe),
+            # y lo único que veía era un error.
+            #
+            # Devolvemos 200 con verification_sent=False. El frontend ya tiene esa
+            # pantalla: avisa que la cuenta se creó pero el mail no salió, y
+            # ofrece el botón de reenvío.
+            verification_sent = False
 
     message = (
         "Cuenta creada. Revisá tu email para activar la cuenta."
@@ -298,7 +301,7 @@ async def resend_verification(data: ResendVerificationRequest):
     )
 
     try:
-        send_verification_email(
+        await send_verification_email(
             user["email"],
             profile.get("name") or user["email"],
             verification_token,
