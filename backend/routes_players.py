@@ -1,21 +1,14 @@
 from datetime import datetime, timezone
-from pathlib import Path
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
 from auth import get_current_user
 from database import db
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
 from services.score_visibility import get_score_visibility_for_player
-from pathlib import Path
-import uuid
-import os
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from storage_cloudinary import delete_image, upload_image_bytes
-
-
-UPLOAD_DIR = Path(
-    os.environ.get("UPLOAD_DIR", str(Path(__file__).parent / "uploads"))
-)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
