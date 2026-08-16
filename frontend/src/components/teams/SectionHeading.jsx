@@ -32,9 +32,11 @@ export default function SectionHeading({
         {Icono && (
           <span
             aria-hidden="true"
-            className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', TONOS[tono] || TONOS.turf)}
+            // Chip de 36px como los otros paneles de seccion: en PostMatch este
+            // encabezado convive con ellos y un chip de 40px se notaba distinto.
+            className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl', TONOS[tono] || TONOS.turf)}
           >
-            <Icono className="h-5 w-5" />
+            <Icono className="h-4 w-4" />
           </span>
         )}
         <div className="min-w-0">

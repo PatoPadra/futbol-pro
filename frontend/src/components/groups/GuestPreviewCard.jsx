@@ -16,7 +16,9 @@ import { initialsFromName } from '@/utils/photos';
  *
  * Es 100% derivada de los valores del form: no guarda estado propio.
  */
-const FOTO = getFoto(36315147); // dos chicos jugando en una calle arbolada, vertical
+// Horizontal a proposito: la tarjeta es ancha y baja, y una foto vertical
+// queda recortada a una tira sin sentido. Mismo contexto (chicos en la calle).
+const FOTO = getFoto(14059349);
 
 export default function GuestPreviewCard({ nombre, photoPreview, posicion, nivel, nivelLabel }) {
   const nombreVisible = (nombre || '').trim();

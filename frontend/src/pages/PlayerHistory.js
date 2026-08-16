@@ -5,7 +5,7 @@ import api from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import {
-  Trophy, ArrowLeft, TrendingUp, TrendingDown, CalendarX, LineChart, Compass, Info, CalendarDays,
+  Trophy, TrendingUp, TrendingDown, CalendarX, LineChart, Compass, Info, CalendarDays,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { getRatingTone } from '@/utils/ratings';
@@ -141,17 +141,15 @@ export default function PlayerHistory() {
 
   return (
     <div className="page-container mx-auto max-w-3xl" data-testid="player-history-page">
-      <Link
-        to={isOwn ? '/mi-perfil' : `/jugadores/${playerId}`}
-        className="mb-3 -ml-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 motion-reduce:transition-none"
-        data-testid="back-to-profile-link"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Volver al perfil
-      </Link>
-
       <PageHeader
         slug="historial"
         priority
+        // El volver va adentro de la banda como en las otras 11 paginas. Antes
+        // era un Link propio encima del encabezado, en gris sobre fondo claro:
+        // saltaba de lugar y de color al navegar entre perfil e historial.
+        volverA={isOwn ? '/mi-perfil' : `/jugadores/${playerId}`}
+        volverLabel="Volver al perfil"
+        volverTestId="back-to-profile-link"
         icono={CalendarDays}
         eyebrow={isOwn ? 'Todo lo que jugaste' : 'Todo lo que jugó'}
         titulo="Historial"

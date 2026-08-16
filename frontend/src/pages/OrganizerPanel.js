@@ -27,7 +27,7 @@ import PageLoader from '@/components/common/PageLoader';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import PanelSection from '@/components/panels/PanelSection';
-import MetricTiles from '@/components/panels/MetricTiles';
+import CounterTiles from '@/components/panels/CounterTiles';
 import PanelSearch from '@/components/panels/PanelSearch';
 import { EstadoChip, MetaChip } from '@/components/panels/StatusChip';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
@@ -179,7 +179,7 @@ export default function OrganizerPanel() {
           }
         />
 
-        <MetricTiles className="mt-6" items={tiles} />
+        <CounterTiles className="mt-6" items={tiles} />
 
         <Tabs defaultValue="grupos" className="mt-6 space-y-5">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-4">

@@ -42,7 +42,9 @@ export default function PanelSection({
   return (
     <section
       className={cn(
-        'overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-lift',
+        // Alineado con los otros paneles de seccion: antes era rounded-2xl y la
+        // esquina cambiaba al pasar de OrganizerPanel a MatchDetail.
+        'overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-lift',
         className,
       )}
       data-testid={testId}

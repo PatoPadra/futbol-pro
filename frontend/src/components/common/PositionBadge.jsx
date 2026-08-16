@@ -17,7 +17,7 @@ const LINE_CLASSES = {
   gk: 'bg-secondary/10 text-secondary border-secondary/20',
   def: 'bg-slate-100 text-slate-600 border-slate-200',
   mid: 'bg-turf/15 text-turf-accessible border-turf/30',
-  att: 'bg-orange/15 text-orange border-orange/30',
+  att: 'bg-orange/15 text-orange-accessible border-orange/30',
   neutral: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 

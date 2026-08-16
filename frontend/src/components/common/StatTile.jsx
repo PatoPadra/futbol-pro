@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 const TONE_CLASSES = {
   turf: 'bg-turf/10 text-turf-accessible',
-  orange: 'bg-orange/10 text-orange',
+  orange: 'bg-orange/10 text-orange-accessible',
   charcoal: 'bg-secondary/10 text-secondary',
   slate: 'bg-slate-100 text-slate-500',
 };

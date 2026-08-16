@@ -143,6 +143,8 @@ export default function FootballPitch({ assignments, formation, coords, teamLabe
               {photoUrl ? (
                 <img
                   src={photoUrl}
+                  loading="lazy"
+                  decoding="async"
                   alt=""
                   className="h-11 w-11 rounded-full border-2 object-cover shadow-lg ring-1 ring-slate-950/30"
                   style={{ borderColor: resolvedColor }}

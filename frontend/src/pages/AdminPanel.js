@@ -23,7 +23,7 @@ import PageLoader from '@/components/common/PageLoader';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import PanelSection from '@/components/panels/PanelSection';
-import MetricTiles from '@/components/panels/MetricTiles';
+import CounterTiles from '@/components/panels/CounterTiles';
 import PanelSearch from '@/components/panels/PanelSearch';
 import { EstadoChip, RolChip } from '@/components/panels/StatusChip';
 import { buildPhotoUrl } from '@/utils/photos';
@@ -178,7 +178,7 @@ export default function AdminPanel() {
 
         {/* Stats */}
         {statCards.length > 0 && (
-          <MetricTiles
+          <CounterTiles
             className="mt-6"
             items={statCards.map((s) => ({ ...s, testId: `admin-stat-${s.key}` }))}
           />

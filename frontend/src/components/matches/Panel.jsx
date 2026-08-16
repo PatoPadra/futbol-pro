@@ -38,7 +38,9 @@ export default function Panel({
   return (
     <section
       className={cn(
-        'overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm',
+        // Alineado con groups/SectionPanel y panels/PanelSection: mismo rol,
+        // misma sombra. Antes era shadow-sm y se veia mas plano que los otros.
+        'overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-lift',
         className,
       )}
       data-testid={testId}

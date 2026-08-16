@@ -49,8 +49,14 @@ export default function PageHeader({
   icono: Icono,
   className,
   testId,
-  /** Solo en la primera pantalla que ve el usuario al entrar. */
-  priority = false,
+  /**
+   * Por defecto `true`, al revés que en PhotoBackdrop: la banda de encabezado
+   * está SIEMPRE en el primer viewport, así que es el LCP de la pantalla.
+   * Con lazy el navegador la posterga hasta después del layout y en 4G se ve el
+   * rectángulo oscuro vacío hasta que la foto entra de golpe. Sólo poné `false`
+   * si alguna vez este encabezado no fuera lo primero que se ve.
+   */
+  priority = true,
 }) {
   const elegida = foto || fotoDePagina(slug);
 

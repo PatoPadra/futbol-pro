@@ -17,7 +17,7 @@ const TONOS = {
   charcoal: { chip: 'bg-secondary/10 text-secondary', barra: 'bg-secondary' },
 };
 
-export default function MetricTiles({
+export default function CounterTiles({
   /** [{ key, label, value, icon, tone, testId }] */
   items = [],
   className,
