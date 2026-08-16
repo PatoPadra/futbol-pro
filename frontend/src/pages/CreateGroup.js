@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Users, Loader2 } from 'lucide-react';
+import { Users, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form';
+import PageHeader from '../components/common/PageHeader';
+import SectionPanel from '../components/groups/SectionPanel';
 
 const groupSchema = z.object({
   name: z
@@ -43,52 +44,63 @@ export default function CreateGroup() {
   };
 
   return (
-    <div className="page-container max-w-xl mx-auto" data-testid="create-group-page">
-      <div className="animate-slide-up">
-        <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight mb-2">Crear Grupo</h1>
-        <p className="text-slate-500 mb-8">
-          Solo organizadores y admins pueden crear grupos. Al terminar, te llevamos directo a crear el primer partido con el grupo preseleccionado.
-        </p>
+    <div className="page-container mx-auto max-w-xl" data-testid="create-group-page">
+      <div className="animate-slide-up space-y-6">
+        <PageHeader
+          slug="crear-grupo"
+          eyebrow="Nuevo grupo"
+          titulo="Crear grupo"
+          bajada="Un nombre y listo. Después le sumás la gente."
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={Users}
+          testId="create-group-header"
+        />
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate data-testid="create-group-form">
-            <Card className="border-slate-100">
-              <CardContent className="p-5 space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Nombre del grupo <span className="text-orange">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          data-testid="create-group-name-input"
-                          placeholder="Ej: Fútbol de los jueves"
-                          className="mt-1.5 h-12 bg-slate-50"
-                          autoFocus
-                        />
-                      </FormControl>
-                      <p className="text-xs text-slate-500">Lo van a ver todos los miembros del grupo, elegí un nombre claro.</p>
-                      <FormMessage data-testid="create-group-name-error" />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate data-testid="create-group-form">
+            <SectionPanel icono={Sparkles} titulo="¿Cómo se llama?">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Nombre del grupo <span className="text-orange-accessible">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        data-testid="create-group-name-input"
+                        placeholder="Ej: Fútbol de los jueves"
+                        className="mt-1.5 h-12 rounded-xl bg-slate-50"
+                        autoFocus
+                      />
+                    </FormControl>
+                    <p className="text-xs leading-relaxed text-slate-600">
+                      Lo van a ver todos los miembros del grupo, elegí un nombre claro.
+                    </p>
+                    <FormMessage data-testid="create-group-name-error" />
+                  </FormItem>
+                )}
+              />
+            </SectionPanel>
 
             <Button
               type="submit"
               data-testid="create-group-submit"
               disabled={loading}
               shape="pill"
-              className="w-full h-12 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20 disabled:active:scale-100"
+              className="h-12 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark disabled:active:scale-100"
             >
-              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />}
-              {loading ? 'Creando...' : 'Crear Grupo'}
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+              {loading ? 'Creando...' : 'Crear grupo'}
             </Button>
+
+            <p className="text-center text-xs leading-relaxed text-slate-600">
+              Solo organizadores y admins pueden crear grupos. Cuando termines te llevamos derecho a
+              crear el primer partido, con el grupo ya elegido.
+            </p>
           </form>
         </Form>
       </div>

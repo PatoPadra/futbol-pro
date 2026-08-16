@@ -1,18 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Plus, Search, Settings, Trophy, UserPlus, Users } from 'lucide-react';
+import {
+  Calendar,
+  CalendarClock,
+  ChevronRight,
+  Clock,
+  History,
+  MapPin,
+  Plus,
+  Repeat,
+  Settings,
+  Shield,
+  Trophy,
+  UserCog,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
-import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MODALITY_LABELS } from '@/constants/matches';
-import { Badge } from '../components/ui/badge';
+import { MATCH_STATUS_ACCENT_BORDER, MODALITY_LABELS } from '@/constants/matches';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
-import { Input } from '../components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import PageLoader from '@/components/common/PageLoader';
+import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
+import PanelSection from '@/components/panels/PanelSection';
+import MetricTiles from '@/components/panels/MetricTiles';
+import PanelSearch from '@/components/panels/PanelSearch';
+import { EstadoChip, MetaChip } from '@/components/panels/StatusChip';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
+
+const TAB_TRIGGER_CLASS =
+  'h-10 rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm sm:text-sm';
 
 export default function OrganizerPanel() {
   const { user } = useAuth();
@@ -82,365 +103,462 @@ export default function OrganizerPanel() {
   if (error) {
     return (
       <div className="page-container" data-testid="organizer-panel">
-        <Card className="border-dashed border-slate-200 mt-8">
-          <CardContent className="p-10 text-center">
-            <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium mb-4">
-              No pudimos cargar el panel del organizador
-            </p>
+        <PageHeader
+          slug="organizador"
+          eyebrow="Herramientas"
+          titulo="Panel Organizador"
+          bajada="Grupos, partidos y jugadores en un solo lugar."
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={Settings}
+        />
+
+        <EmptyState
+          variante={3}
+          icono={Trophy}
+          titulo="No pudimos cargar el panel"
+          descripcion="Se cayó alguna de las consultas de partidos, jugadores o grupos. Probá de nuevo en un momento."
+          className="mt-6"
+          accion={
             <Button
               onClick={load}
               variant="outline"
-              className="rounded-full"
+              shape="pill"
+              className="border-2 border-white/70 bg-white/10 px-6 text-white hover:bg-white/20 hover:text-white"
               data-testid="org-retry"
             >
               Reintentar
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       </div>
     );
   }
 
+  const tiles = [
+    { key: 'grupos', label: 'Grupos', value: myGroups.length, icon: Users, tone: 'charcoal' },
+    { key: 'gestionables', label: 'Gestionables', value: myMatches.length, icon: Settings, tone: 'slate' },
+    { key: 'activos', label: 'Activos', value: activeMatches.length, icon: CalendarClock, tone: 'turf' },
+    { key: 'pasados', label: 'Pasados', value: pastMatches.length, icon: History, tone: 'slate' },
+    { key: 'jugadores', label: 'Jugadores', value: players.length, icon: Users, tone: 'slate' },
+    { key: 'invitados', label: 'Invitados', value: guests.length, icon: UserCog, tone: 'orange' },
+  ];
+
   return (
     <div className="page-container" data-testid="organizer-panel">
-      <div className="animate-slide-up">
-        <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
-          <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">
-              Panel Organizador
-            </h1>
-            <p className="mt-1 text-slate-500">
-              {myMatches.length} partidos gestionables · {myGroups.length} grupos
-            </p>
-          </div>
+      <div className="animate-slide-up motion-reduce:animate-none">
+        <PageHeader
+          slug="organizador"
+          eyebrow="Herramientas"
+          titulo="Panel Organizador"
+          bajada={`${myMatches.length} partidos gestionables · ${myGroups.length} grupos`}
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={Settings}
+          acciones={
+            <>
+              <Button
+                onClick={() => navigate('/grupos/crear')}
+                variant="outline"
+                shape="pill"
+                className="border-2 border-white/60 bg-white/10 px-5 text-white backdrop-blur hover:bg-white/20 hover:text-white"
+                data-testid="org-create-group"
+              >
+                <Users className="h-4 w-4" aria-hidden="true" /> Nuevo Grupo
+              </Button>
 
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => navigate('/grupos/crear')}
-              variant="outline"
-              className="rounded-full px-6 font-bold uppercase"
-              data-testid="org-create-group"
-            >
-              <Users className="w-4 h-4 mr-1.5" /> Nuevo Grupo
-            </Button>
+              <Button
+                onClick={() => navigate('/partidos/crear')}
+                shape="pill"
+                className="bg-turf px-5 text-white hover:bg-turf-dark"
+                data-testid="org-create-match"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" /> Nuevo Partido
+              </Button>
+            </>
+          }
+        />
 
-            <Button
-              onClick={() => navigate('/partidos/crear')}
-              className="bg-turf hover:bg-turf-dark text-white rounded-full px-6 font-bold uppercase"
-              data-testid="org-create-match"
-            >
-              <Plus className="w-4 h-4 mr-1.5" /> Nuevo Partido
-            </Button>
-          </div>
-        </div>
+        <MetricTiles className="mt-6" items={tiles} />
 
-        <Tabs defaultValue="grupos" className="space-y-6">
-          <TabsList className="w-full grid grid-cols-4 h-12 bg-slate-100 rounded-xl">
-            <TabsTrigger value="grupos" className="rounded-lg font-semibold text-sm" data-testid="org-tab-grupos">
+        <Tabs defaultValue="grupos" className="mt-6 space-y-5">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-4">
+            <TabsTrigger value="grupos" className={TAB_TRIGGER_CLASS} data-testid="org-tab-grupos">
               Grupos ({myGroups.length})
             </TabsTrigger>
-            <TabsTrigger value="activos" className="rounded-lg font-semibold text-sm" data-testid="org-tab-activos">
+            <TabsTrigger value="activos" className={TAB_TRIGGER_CLASS} data-testid="org-tab-activos">
               Activos ({activeMatches.length})
             </TabsTrigger>
-            <TabsTrigger value="pasados" className="rounded-lg font-semibold text-sm" data-testid="org-tab-pasados">
+            <TabsTrigger value="pasados" className={TAB_TRIGGER_CLASS} data-testid="org-tab-pasados">
               Pasados ({pastMatches.length})
             </TabsTrigger>
-            <TabsTrigger value="jugadores" className="rounded-lg font-semibold text-sm" data-testid="org-tab-jugadores">
+            <TabsTrigger value="jugadores" className={TAB_TRIGGER_CLASS} data-testid="org-tab-jugadores">
               Jugadores ({players.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="grupos">
             {myGroups.length === 0 && (
-              <Card className="border-dashed border-slate-200" data-testid="org-groups-empty">
-                <CardContent className="p-8 text-center">
-                  <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">No pertenecés a ningún grupo todavía</p>
-                  <Button
-                    onClick={() => navigate('/grupos/crear')}
-                    className="mt-4 bg-turf hover:bg-turf-dark text-white rounded-full"
-                    data-testid="org-groups-empty-create"
-                  >
-                    Crear tu primer grupo
-                  </Button>
-                </CardContent>
-              </Card>
+              <div data-testid="org-groups-empty">
+                <EmptyState
+                  variante={4}
+                  icono={Users}
+                  titulo="Todavía no tenés grupos"
+                  descripcion="Un grupo junta a los que juegan siempre: desde ahí armás las fechas y los equipos salen parejos."
+                  accion={
+                    <Button
+                      onClick={() => navigate('/grupos/crear')}
+                      shape="pill"
+                      className="bg-turf px-6 text-white hover:bg-turf-dark"
+                      data-testid="org-groups-empty-create"
+                    >
+                      Crear tu primer grupo
+                    </Button>
+                  }
+                />
+              </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myGroups.map((group) => {
-                const manageable = canManageGroup(group);
+            {myGroups.length > 0 && (
+              <PanelSection
+                icono={Users}
+                tono="charcoal"
+                titulo="Tus grupos"
+                contador={myGroups.length}
+                descripcion="Los grupos gestionables son los que podés administrar."
+                sinPadding
+              >
+                <ul className="divide-y divide-slate-100">
+                  {myGroups.map((group) => {
+                    const manageable = canManageGroup(group);
 
-                return (
-                  <Link
-                    to={`/grupos/${group.id}`}
-                    key={group.id}
-                    className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                    data-testid={`org-group-${group.id}`}
-                  >
-                    <Card className="border-slate-100 hover:shadow-sm cursor-pointer transition-shadow">
-                      <CardContent className="p-5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-heading text-xl font-bold uppercase tracking-tight">
+                    return (
+                      <li key={group.id} className="even:bg-slate-50/60">
+                        <Link
+                          to={`/grupos/${group.id}`}
+                          className={`flex items-start gap-3 border-l-4 px-4 py-4 transition-colors hover:bg-turf/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-turf md:px-5 ${
+                            manageable ? 'border-l-turf' : 'border-l-slate-200'
+                          }`}
+                          data-testid={`org-group-${group.id}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <h3 className="truncate font-heading text-xl font-bold uppercase tracking-tight text-slate-900">
                               {group.name}
                             </h3>
 
-                            <p className="text-xs text-slate-500 mt-1">
+                            <p className="mt-0.5 text-xs tabular-nums text-slate-500">
                               {group.members_count} miembros
                             </p>
 
-                            <p className="text-[11px] text-slate-400 mt-2">
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <MetaChip
+                                icono={group.my_group_permission === 'organizador' ? Settings : Users}
+                              >
+                                {group.my_group_permission === 'organizador' ? 'Organizador' : 'Miembro'}
+                              </MetaChip>
+
+                              <MetaChip
+                                tono={
+                                  group.my_membership_type === 'invitado'
+                                    ? 'border-orange/25 bg-orange/10 text-orange-accessible'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                                }
+                              >
+                                {group.my_membership_type === 'invitado' ? 'Invitado' : 'Frecuente'}
+                              </MetaChip>
+
+                              {group.my_global_role === 'admin' && (
+                                <MetaChip
+                                  icono={Shield}
+                                  tono="border-transparent bg-secondary text-secondary-foreground"
+                                >
+                                  Admin
+                                </MetaChip>
+                              )}
+
+                              {manageable && (
+                                <MetaChip
+                                  icono={Settings}
+                                  tono="border-turf/25 bg-turf/10 text-turf-accessible"
+                                >
+                                  Gestionable
+                                </MetaChip>
+                              )}
+                            </div>
+
+                            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                               {manageable
                                 ? 'Podés administrar este grupo'
                                 : 'Podés entrar al grupo y cargar puntajes iniciales'}
                             </p>
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge variant="outline">
-                              {group.my_group_permission === 'organizador' ? 'Organizador' : 'Miembro'}
-                            </Badge>
-
-                            <Badge variant="outline">
-                              {group.my_membership_type === 'invitado' ? 'Invitado' : 'Frecuente'}
-                            </Badge>
-
-                            {group.my_global_role === 'admin' && (
-                              <Badge variant="charcoal">Admin</Badge>
-                            )}
-
-                            {manageable && (
-                              <Badge className="text-xs bg-turf/10 text-turf-accessible border-turf/20">
-                                Gestionable
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
+                          <ChevronRight
+                            className="mt-1 h-4 w-4 shrink-0 text-slate-500"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </PanelSection>
+            )}
           </TabsContent>
 
           <TabsContent value="activos">
             {activeMatches.length === 0 && (
-              <Card className="border-dashed border-slate-200" data-testid="org-active-matches-empty">
-                <CardContent className="p-8 text-center">
-                  <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">No hay partidos activos</p>
-                  <Button
-                    onClick={() => navigate('/partidos/crear')}
-                    className="mt-4 bg-turf hover:bg-turf-dark text-white rounded-full"
-                    data-testid="org-active-matches-empty-create"
-                  >
-                    Crear Partido
-                  </Button>
-                </CardContent>
-              </Card>
+              <div data-testid="org-active-matches-empty">
+                <EmptyState
+                  variante={5}
+                  icono={CalendarClock}
+                  titulo="No hay partidos activos"
+                  descripcion="Ninguna fecha abierta por ahora. Armá una y empezá a sumar gente."
+                  accion={
+                    <Button
+                      onClick={() => navigate('/partidos/crear')}
+                      shape="pill"
+                      className="bg-turf px-6 text-white hover:bg-turf-dark"
+                      data-testid="org-active-matches-empty-create"
+                    >
+                      Crear Partido
+                    </Button>
+                  }
+                />
+              </div>
             )}
 
-            <div className="space-y-4">
-              {activeMatches.map((match) => (
-                <Card
-                  key={match.id}
-                  className="border-slate-100 hover:shadow-md transition-shadow"
-                  data-testid={`org-match-${match.id}`}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <Badge variant="outline" className="text-xs">
-                            {MODALITY_LABELS[match.modality] || `Futbol ${match.modality}`}
-                          </Badge>
+            {activeMatches.length > 0 && (
+              <PanelSection
+                icono={CalendarClock}
+                tono="turf"
+                titulo="Partidos activos"
+                contador={activeMatches.length}
+                descripcion="Fechas en juego: abiertas, cerradas o con equipos armados."
+                sinPadding
+              >
+                <ul className="divide-y divide-slate-100">
+                  {activeMatches.map((match) => (
+                    <li
+                      key={match.id}
+                      data-testid={`org-match-${match.id}`}
+                      className={`border-l-4 px-4 py-4 transition-colors even:bg-slate-50/60 hover:bg-turf/5 md:px-5 ${MATCH_STATUS_ACCENT_BORDER[match.status] || 'border-l-slate-200'}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                            <EstadoChip status={match.status} />
+                            <MetaChip>
+                              {MODALITY_LABELS[match.modality] || `Futbol ${match.modality}`}
+                            </MetaChip>
+                          </div>
 
-                          <Badge
-                            className={`text-xs font-semibold border ${MATCH_STATUS_BADGE_CLASS[match.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}
-                          >
-                            {MATCH_STATUS_LABELS[match.status] || match.status}
-                          </Badge>
+                          <h3 className="font-heading text-xl font-bold uppercase tracking-tight text-slate-900">
+                            {match.title}
+                          </h3>
+
+                          {match.group_name && (
+                            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Grupo: {match.group_name}
+                            </p>
+                          )}
+
+                          <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <dt className="sr-only">Fecha</dt>
+                              <dd className="tabular-nums">{match.date}</dd>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <dt className="sr-only">Hora</dt>
+                              <dd className="tabular-nums">{match.time}</dd>
+                            </div>
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <dt className="sr-only">Lugar</dt>
+                              <dd className="truncate">{match.location}</dd>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <dt className="sr-only">Anotados</dt>
+                              <dd className="font-semibold tabular-nums text-slate-800">
+                                {match.titular_count}/{match.max_players}
+                              </dd>
+                            </div>
+                          </dl>
                         </div>
 
-                        <h3 className="font-heading text-xl font-bold uppercase tracking-tight">
-                          {match.title}
-                        </h3>
-
-                        {match.group_name && (
-                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mt-1">
-                            Grupo: {match.group_name}
-                          </p>
-                        )}
-
-                        <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {match.date}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {match.time}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {match.location}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Users className="w-3 h-3" />
-                            {match.titular_count}/{match.max_players}
-                          </span>
+                        <div className="flex gap-2">
+                          <Link to={`/partidos/${match.id}`} data-testid={`org-manage-match-${match.id}`}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              shape="pill"
+                              className="border-slate-300 text-xs focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                            >
+                              <Settings className="h-3.5 w-3.5" aria-hidden="true" /> Gestionar
+                            </Button>
+                          </Link>
                         </div>
                       </div>
-
-                      <div className="flex gap-2">
-                        <Link to={`/partidos/${match.id}`} data-testid={`org-manage-match-${match.id}`}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full text-xs focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                          >
-                            <Settings className="w-3 h-3 mr-1" /> Gestionar
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </li>
+                  ))}
+                </ul>
+              </PanelSection>
+            )}
           </TabsContent>
 
           <TabsContent value="pasados">
             {pastMatches.length === 0 && (
-              <Card className="border-dashed border-slate-200" data-testid="org-past-matches-empty">
-                <CardContent className="p-8 text-center">
-                  <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">No hay partidos pasados</p>
-                </CardContent>
-              </Card>
+              <div data-testid="org-past-matches-empty">
+                <EmptyState
+                  variante={0}
+                  icono={History}
+                  titulo="No hay partidos pasados"
+                  descripcion="Cuando cierres una fecha, va a quedar acá con su resultado."
+                />
+              </div>
             )}
 
-            <div className="space-y-3">
-              {pastMatches.map((match) => (
-                <Link
-                  to={`/partidos/${match.id}`}
-                  key={match.id}
-                  className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                  data-testid={`org-past-match-${match.id}`}
-                >
-                  <Card className="border-slate-100 hover:shadow-sm cursor-pointer transition-shadow">
-                    <CardContent className="p-4 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{match.title}</p>
-                        <p className="text-xs text-slate-500">
-                          {match.date} - {MODALITY_LABELS[match.modality] || `Futbol ${match.modality}`}
-                        </p>
-                        {match.group_name && (
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            Grupo: {match.group_name}
-                          </p>
-                        )}
-                      </div>
-
-                      <Badge
-                        className={`text-xs font-semibold border shrink-0 ${MATCH_STATUS_BADGE_CLASS[match.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}
+            {pastMatches.length > 0 && (
+              <PanelSection
+                icono={History}
+                titulo="Partidos pasados"
+                contador={pastMatches.length}
+                descripcion="Fechas finalizadas, completadas o canceladas."
+                sinPadding
+              >
+                <ul className="divide-y divide-slate-100">
+                  {pastMatches.map((match) => (
+                    <li key={match.id} className="even:bg-slate-50/60">
+                      <Link
+                        to={`/partidos/${match.id}`}
+                        className={`flex min-h-[56px] items-center gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-turf md:px-5 ${MATCH_STATUS_ACCENT_BORDER[match.status] || 'border-l-slate-200'}`}
+                        data-testid={`org-past-match-${match.id}`}
                       >
-                        {MATCH_STATUS_LABELS[match.status] || match.status}
-                      </Badge>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-900">{match.title}</p>
+                          <p className="text-xs tabular-nums text-slate-500">
+                            {match.date} · {MODALITY_LABELS[match.modality] || `Futbol ${match.modality}`}
+                          </p>
+                          {match.group_name && (
+                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                              Grupo: {match.group_name}
+                            </p>
+                          )}
+                        </div>
+
+                        <EstadoChip status={match.status} className="shrink-0" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </PanelSection>
+            )}
           </TabsContent>
 
           <TabsContent value="jugadores">
-            <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
-              <p className="text-sm text-slate-500">
-                {players.length} jugadores, {guests.length} invitados
-              </p>
+            <PanelSection
+              icono={Users}
+              titulo="Jugadores"
+              contador={`${players.length} · ${guests.length} invitados`}
+              descripcion="Todos los jugadores que podés convocar. Los invitados vienen de una sola fecha."
+              sinPadding
+              acciones={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  shape="pill"
+                  onClick={() => navigate('/invitar-jugador')}
+                  className="border-slate-300 text-xs"
+                  data-testid="org-invite-guest"
+                >
+                  <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Invitar
+                </Button>
+              }
+            >
+              <div className="border-b border-slate-100 p-4 md:p-5">
+                <PanelSearch
+                  id="org-player-search-input"
+                  label="Buscar jugador por nombre"
+                  value={playerSearch}
+                  onChange={(e) => setPlayerSearch(e.target.value)}
+                  onLimpiar={() => setPlayerSearch('')}
+                  placeholder="Buscar jugador por nombre..."
+                  resultados={filteredPlayers.length}
+                  sustantivo="jugadores"
+                  testId="org-player-search"
+                />
+              </div>
 
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate('/invitar-jugador')}
-                className="rounded-full text-xs"
-                data-testid="org-invite-guest"
-              >
-                <UserPlus className="w-3 h-3 mr-1" /> Invitar
-              </Button>
-            </div>
-
-            <div className="relative mb-4">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-                placeholder="Buscar jugador por nombre..."
-                className="h-12 bg-slate-50 border-slate-200 focus:border-turf focus:ring-2 focus:ring-turf/20 rounded-lg pl-10"
-                data-testid="org-player-search"
-              />
-            </div>
-
-            {filteredPlayers.length === 0 ? (
-              <Card className="border-dashed border-slate-200" data-testid="org-players-empty">
-                <CardContent className="p-8 text-center">
-                  <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">
-                    {playerSearch
-                      ? 'No encontramos jugadores con ese nombre'
-                      : 'Todavía no hay jugadores para mostrar'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {visiblePlayers.map((player) => (
-                    <Link
-                      to={`/jugadores/${player.id}`}
-                      key={player.id}
-                      className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                      data-testid={`org-player-${player.id}`}
-                    >
-                      <Card className="border-slate-100 hover:shadow-sm cursor-pointer transition-shadow">
-                        <CardContent className="p-3 flex items-center gap-3">
-                          <Avatar className="w-9 h-9 shrink-0">
+              {filteredPlayers.length === 0 ? (
+                <div className="p-4 md:p-5" data-testid="org-players-empty">
+                  <EmptyState
+                    variante={1}
+                    icono={Users}
+                    titulo={playerSearch ? 'Sin resultados' : 'Todavía no hay jugadores'}
+                    descripcion={
+                      playerSearch
+                        ? 'No encontramos jugadores con ese nombre. Probá con parte del nombre.'
+                        : 'Todavía no hay jugadores para mostrar. Invitá a alguien y arrancá.'
+                    }
+                  />
+                </div>
+              ) : (
+                <>
+                  <ul className="divide-y divide-slate-100">
+                    {visiblePlayers.map((player) => (
+                      <li key={player.id} className="even:bg-slate-50/60">
+                        <Link
+                          to={`/jugadores/${player.id}`}
+                          className="flex min-h-[56px] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-turf/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-turf md:px-5"
+                          data-testid={`org-player-${player.id}`}
+                        >
+                          <Avatar className="h-9 w-9 shrink-0 ring-1 ring-slate-200">
                             <AvatarImage src={buildPhotoUrl(player.photo_url) || undefined} />
                             <AvatarFallback className="bg-slate-100 text-xs font-bold text-slate-600">
                               {initialsFromName(player.name)}
                             </AvatarFallback>
                           </Avatar>
 
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{player.name}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900">{player.name}</p>
                             <p className="text-xs text-slate-500">
-                              {player.primary_position || 'Sin posición'} · {player.matches_played} partidos
+                              {player.primary_position || 'Sin posición'} ·{' '}
+                              <span className="tabular-nums">{player.matches_played}</span> partidos
                             </p>
                           </div>
 
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] shrink-0 ${player.player_type === 'invitado' ? 'bg-orange/10 text-orange border-orange/20' : 'bg-turf/10 text-turf-accessible border-turf/20'}`}
+                          <MetaChip
+                            icono={player.player_type === 'invitado' ? UserPlus : Repeat}
+                            tono={
+                              player.player_type === 'invitado'
+                                ? 'border-orange/25 bg-orange/10 text-orange-accessible'
+                                : 'border-turf/25 bg-turf/10 text-turf-accessible'
+                            }
+                            className="shrink-0"
                           >
                             {player.player_type === 'invitado' ? 'Invitado' : 'Frecuente'}
-                          </Badge>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
+                          </MetaChip>
 
-                {filteredPlayers.length > visiblePlayers.length && (
-                  <p className="text-xs text-slate-500 text-center mt-4">
-                    Mostrando {visiblePlayers.length} de {filteredPlayers.length} jugadores. Refiná tu búsqueda para ver más.
-                  </p>
-                )}
-              </>
-            )}
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {filteredPlayers.length > visiblePlayers.length && (
+                    <p className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-center text-xs text-slate-500 md:px-5">
+                      Mostrando <span className="font-semibold tabular-nums text-slate-700">{visiblePlayers.length}</span> de{' '}
+                      <span className="font-semibold tabular-nums text-slate-700">{filteredPlayers.length}</span> jugadores.
+                      Refiná tu búsqueda para ver más.
+                    </p>
+                  )}
+                </>
+              )}
+            </PanelSection>
           </TabsContent>
         </Tabs>
       </div>

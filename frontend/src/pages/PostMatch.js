@@ -1,16 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, CheckCircle2, ClipboardList, Loader2, Minus, Plus, Send, Star, UserCircle2, ZoomIn } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  ClipboardList,
+  Eye,
+  Loader2,
+  Send,
+  Star,
+  UserCircle2,
+  Users,
+  ZoomIn,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import PageLoader from '@/components/common/PageLoader';
 import PhotoLightbox from '@/components/common/PhotoLightbox';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import PageHeader from '@/components/common/PageHeader';
+import SectionHeading from '@/components/teams/SectionHeading';
+import PeerRatingCard from '@/components/teams/PeerRatingCard';
+import ProgressTrack from '@/components/teams/ProgressTrack';
+import MetaChip from '@/components/matches/MetaChip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
@@ -40,10 +55,15 @@ const statsFormSchema = z.object({
   stats: z.record(statRowSchema),
 });
 
+/** Panel claro. Las tres pestañas usan el mismo, así se leen como hermanas. */
+const PANEL = 'rounded-3xl border border-slate-200/70 bg-white p-5 shadow-lift sm:p-6';
+const AVISO = 'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+const NEUTRO = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600';
+const CAMPO = 'h-11 bg-slate-50 text-center tabular-nums';
+
 export default function PostMatch() {
   const { id } = useParams();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState([]);
   const [ratings, setRatings] = useState({});
   const [selfEval, setSelfEval] = useState({ score: 5, notes: '' });
@@ -205,333 +225,403 @@ export default function PostMatch() {
     });
   };
 
+  /**
+   * Qué puntajes ya están guardados en el servidor, para mostrarlo por tarjeta.
+   * Se deriva de lo que ya vino en `my_ratings`: no agrega ningún pedido ni
+   * cambia el envío, sólo evita que en una lista de veinte compañeros no se
+   * sepa cuáles quedaron grabados y cuáles todavía están tocados a mano.
+   */
+  const guardados = useMemo(() => {
+    const previos = new Map(
+      (existingRatings?.my_ratings || []).map((r) => [r.rated_player_id, r.score]),
+    );
+    const set = new Set();
+    previos.forEach((score, playerId) => {
+      if ((ratings[playerId] ?? 5) === score) set.add(playerId);
+    });
+    return set;
+  }, [existingRatings, ratings]);
+
   if (loading) return <PageLoader />;
 
+  const totalAEvaluar = otherPlayers.length;
+  const yaGuardados = otherPlayers.filter((p) => guardados.has(p.player_id)).length;
+  const propuestasHechas = activeRegistrations.filter((p) => proposedPlayerIds.has(p.player_id)).length;
+
   return (
-    <div className="page-container max-w-4xl mx-auto" data-testid="post-match-page">
+    <div className="page-container mx-auto max-w-4xl" data-testid="post-match-page">
       <div className="animate-slide-up space-y-6">
-        <button
-          onClick={() => navigate(`/partidos/${id}`)}
-          className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 -ml-1 px-1 py-1"
-          data-testid="back-to-match-post"
-        >
-          <ArrowLeft className="w-4 h-4" /> Volver al partido
-        </button>
+        <PageHeader
+          slug="post-partido"
+          eyebrow="Terminó el partido"
+          titulo="Post partido"
+          bajada="Evaluá a tus compañeros, cargá tu autoevaluación y proponé las estadísticas de la fecha."
+          volverA={`/partidos/${id}`}
+          volverLabel="Volver al partido"
+          volverTestId="back-to-match-post"
+          icono={ClipboardList}
+          meta={
+            <>
+              <MetaChip icono={Users}>
+                {activeRegistrations.length} {activeRegistrations.length === 1 ? 'jugador' : 'jugadores'}
+              </MetaChip>
+              <MetaChip icono={Star} tono={totalAEvaluar > 0 ? 'turf' : 'apagado'}>
+                {totalAEvaluar} a evaluar
+              </MetaChip>
+              <MetaChip tono={myRegistration ? 'turf' : 'alerta'} punto>
+                {myRegistration ? 'Jugaste este partido' : 'No estabas anotado'}
+              </MetaChip>
+            </>
+          }
+        />
 
-        <section className="rounded-3xl border border-slate-100 bg-white p-5 sm:p-7 shadow-sm">
-          <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Post Partido</h1>
-          <p className="text-slate-500 mt-2">
-            Evaluá a tus compañeros, cargá tu autoevaluación y proponé estadísticas. Las fotos también se pueden ampliar.
-          </p>
-
-          <div className="grid grid-cols-3 gap-3 mt-6">
-            <Card className="border-slate-100 shadow-none"><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Jugadores</p><p className="text-2xl font-bold mt-1">{activeRegistrations.length}</p></CardContent></Card>
-            <Card className="border-slate-100 shadow-none"><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">A evaluar</p><p className="text-2xl font-bold mt-1">{otherPlayers.length}</p></CardContent></Card>
-            <Card className="border-slate-100 shadow-none"><CardContent className="p-4"><p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Tu estado</p><p className="text-lg font-bold mt-1">{myRegistration ? 'Participante' : 'Sin inscripción'}</p></CardContent></Card>
-          </div>
-        </section>
-
-        <Tabs defaultValue="evaluaciones" className="space-y-6">
-          <TabsList className="w-full grid grid-cols-3 h-12 bg-slate-100 rounded-xl">
-            <TabsTrigger value="evaluaciones" className="rounded-lg font-semibold text-sm" data-testid="tab-evaluaciones">Evaluaciones</TabsTrigger>
-            <TabsTrigger value="autoevaluacion" className="rounded-lg font-semibold text-sm" data-testid="tab-autoevaluacion">Autoevaluación</TabsTrigger>
-            <TabsTrigger value="estadisticas" className="rounded-lg font-semibold text-sm" data-testid="tab-estadisticas">Estadísticas</TabsTrigger>
+        <Tabs defaultValue="evaluaciones" className="space-y-5">
+          {/* Control segmentado: pastilla blanca sobre riel gris, 44px de alto. */}
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-slate-200/70 bg-slate-100 p-1 shadow-sm">
+            {[
+              { value: 'evaluaciones', label: 'Evaluaciones', testId: 'tab-evaluaciones' },
+              { value: 'autoevaluacion', label: 'Autoevaluación', testId: 'tab-autoevaluacion' },
+              { value: 'estadisticas', label: 'Estadísticas', testId: 'tab-estadisticas' },
+            ].map((t) => (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                data-testid={t.testId}
+                className="min-h-11 rounded-xl text-xs font-bold uppercase tracking-wide data-[state=active]:bg-white data-[state=active]:text-turf-accessible data-[state=active]:shadow-sm sm:text-sm"
+              >
+                {t.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="evaluaciones">
-            <Card className="border-slate-100 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="font-heading text-lg uppercase flex items-center gap-2"><Star className="w-4 h-4" /> Evaluá a tus compañeros</CardTitle>
-                <p className="text-xs text-slate-500">Puntuación del 1 al 10. Tus cambios se pueden actualizar después.</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* ---------------- Evaluaciones ---------------- */}
+          <TabsContent value="evaluaciones" className="mt-0">
+            <div className={PANEL}>
+              <SectionHeading
+                icono={Star}
+                titulo="Evaluá a tus compañeros"
+                bajada="Puntuación del 1 al 10. Podés volver a cambiarla más adelante."
+                acciones={
+                  totalAEvaluar > 0 ? (
+                    <span className="text-xs font-semibold tabular-nums text-slate-600">
+                      {yaGuardados}/{totalAEvaluar} guardadas
+                    </span>
+                  ) : null
+                }
+              />
+
+              {totalAEvaluar > 0 && (
+                <ProgressTrack valor={yaGuardados} total={totalAEvaluar} className="mt-4" />
+              )}
+
+              <div className="mt-5 space-y-4">
                 {!myRegistration && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className={AVISO}>
                     Tenés que estar anotado en este partido para poder evaluar y proponer estadísticas.
-                  </div>
+                  </p>
                 )}
 
                 {myRegistration && otherPlayers.length === 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    No hay otros participantes para evaluar todavía.
-                  </div>
+                  <p className={NEUTRO}>No hay otros participantes para evaluar todavía.</p>
                 )}
 
                 {canViewAllScores && playerSummaries.length > 0 && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3" data-testid="organizer-score-summary">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Resumen interno de puntajes</p>
-                      <p className="text-xs text-slate-500">Visible solo para organizadores y admins.</p>
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    data-testid="organizer-score-summary"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-200 text-slate-700">
+                        <Eye className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">Resumen interno de puntajes</p>
+                        <p className="text-xs text-slate-600">Visible sólo para organizadores y admins.</p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {playerSummaries.map((summary) => (
-                        <div key={summary.player_id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 border border-slate-100">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-900 truncate">{summary.player_name}</p>
-                            <p className="text-xs text-slate-500">
-                              {summary.peer_rating_count} voto{summary.peer_rating_count === 1 ? '' : 's'}
-                              {summary.peer_scores?.length ? ` · ${summary.peer_scores.join(', ')}` : ' · Sin votos aún'}
-                            </p>
+                    <div className="mt-3 space-y-2">
+                      {playerSummaries.map((summary) => {
+                        const tono = getRatingTone(summary.avg_peer_score);
+                        return (
+                          <div
+                            key={summary.player_id}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-slate-900">{summary.player_name}</p>
+                              <p className="text-xs text-slate-600">
+                                {summary.peer_rating_count} voto{summary.peer_rating_count === 1 ? '' : 's'}
+                                {summary.peer_scores?.length
+                                  ? ` · ${summary.peer_scores.join(', ')}`
+                                  : ' · Sin votos aún'}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className={`font-heading text-lg font-bold tabular-nums ${tono.text}`}>
+                                {summary.avg_peer_score != null ? summary.avg_peer_score : '-'}
+                              </p>
+                              <p className="text-[11px] text-slate-600">
+                                Auto: {summary.self_evaluation?.score ?? '-'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-turf-accessible">{summary.avg_peer_score != null ? summary.avg_peer_score : '-'}
-                            </p>
-                            <p className="text-[11px] text-slate-500">
-                              Auto: {summary.self_evaluation?.score ?? '-'}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {otherPlayers.map((player) => {
                   const score = ratings[player.player_id] ?? 5;
-                  const tone = getRatingTone(score);
-                  const setScore = (next) => setRatings((prev) => ({ ...prev, [player.player_id]: Math.min(10, Math.max(1, next)) }));
+                  const setScore = (next) =>
+                    setRatings((prev) => ({
+                      ...prev,
+                      [player.player_id]: Math.min(10, Math.max(1, next)),
+                    }));
                   return (
-                    <div key={player.player_id} className={`rounded-2xl border p-4 transition-colors ${tone.ring} ring-1 border-slate-100`} data-testid={`rate-player-${player.player_id}`}>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => openPhoto(player)}
-                          className="relative group rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                          data-testid={`view-photo-${player.player_id}`}
-                          aria-label={`Ver foto de ${player.player_name}`}
+                    <PeerRatingCard
+                      key={player.player_id}
+                      player={player}
+                      score={score}
+                      tone={getRatingTone(score)}
+                      guardado={guardados.has(player.player_id)}
+                      disabled={!myRegistration}
+                      onScoreChange={setScore}
+                      onOpenPhoto={openPhoto}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Barra de envío pegada abajo: con veinte compañeros el botón queda
+                  a varios scrolls de la última tarjeta. */}
+              <div className="sticky bottom-3 z-10 mt-5">
+                <div className="glass rounded-2xl p-2 shadow-lift">
+                  <Button
+                    data-testid="submit-ratings-btn"
+                    onClick={submitRatings}
+                    disabled={submitting === 'ratings' || !myRegistration || otherPlayers.length === 0}
+                    shape="pill"
+                    className="min-h-12 w-full bg-turf font-bold uppercase tracking-wider text-white hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                  >
+                    {submitting === 'ratings' ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Star className="mr-2 h-4 w-4" />
+                    )}
+                    {existingRatings?.has_rated ? 'Actualizar evaluaciones' : 'Guardar evaluaciones'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ---------------- Autoevaluación ---------------- */}
+          <TabsContent value="autoevaluacion" className="mt-0">
+            <div className={PANEL}>
+              <SectionHeading
+                icono={UserCircle2}
+                tono="slate"
+                titulo="Tu autoevaluación"
+                bajada="Sólo la ves vos. No afecta tu rating general."
+              />
+
+              <div className="mt-5 space-y-4">
+                {(() => {
+                  const tono = getRatingTone(selfEval.score);
+                  return (
+                    <div className={`rounded-2xl border p-5 ${tono.border} ${tono.bg}`}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-900">
+                            ¿Cómo te fue?
+                          </Label>
+                          <p className={`mt-0.5 text-xs font-bold uppercase tracking-wide ${tono.text}`}>
+                            {tono.label}
+                          </p>
+                        </div>
+                        <span
+                          className={`grid h-16 w-16 place-items-center rounded-2xl bg-white/80 font-heading text-4xl font-bold tabular-nums ${tono.text}`}
+                          data-testid="self-eval-score-value"
                         >
-                          <Avatar className="w-11 h-11 ring-2 ring-white shadow-sm">
-                            <AvatarImage src={buildPhotoUrl(player.player_photo) || undefined} />
-                            <AvatarFallback className="bg-turf/10 text-turf-accessible text-xs font-bold">{initialsFromName(player.player_name)}</AvatarFallback>
-                          </Avatar>
-                          <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-turf-accessible transition-colors"><ZoomIn className="w-3 h-3" /></span>
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{player.player_name}</p>
-                          <p className="text-xs text-slate-500">{player.primary_position || 'Sin posición cargada'}</p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-11 w-11 rounded-full shrink-0 active:scale-95 transition-transform"
-                            onClick={() => setScore(score - 1)}
-                            disabled={!myRegistration || score <= 1}
-                            data-testid={`rating-decrement-${player.player_id}`}
-                            aria-label={`Bajar puntaje de ${player.player_name}`}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                          <span className={`text-lg font-bold w-10 h-10 rounded-full flex items-center justify-center ${tone.text} ${tone.bg}`} data-testid={`rating-value-${player.player_id}`}>
-                            {score}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-11 w-11 rounded-full shrink-0 active:scale-95 transition-transform"
-                            onClick={() => setScore(score + 1)}
-                            disabled={!myRegistration || score >= 10}
-                            data-testid={`rating-increment-${player.player_id}`}
-                            aria-label={`Subir puntaje de ${player.player_name}`}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
+                          {selfEval.score}
+                        </span>
                       </div>
-
                       <Slider
                         min={1}
                         max={10}
                         step={1}
-                        value={[score]}
-                        onValueChange={(value) => setScore(value[0])}
-                        className="mt-4"
-                        disabled={!myRegistration}
-                        data-testid={`rating-slider-${player.player_id}`}
-                        aria-label={`Puntuación para ${player.player_name}`}
+                        value={[selfEval.score]}
+                        onValueChange={(value) => setSelfEval((prev) => ({ ...prev, score: value[0] }))}
+                        className="mt-5"
+                        data-testid="self-eval-slider"
+                        aria-label="Tu puntuación de autoevaluación"
                       />
+                      <div className="mt-1.5 flex justify-between text-[10px] font-semibold text-slate-500" aria-hidden="true">
+                        <span>1</span>
+                        <span>10</span>
+                      </div>
                     </div>
                   );
-                })}
+                })()}
 
-                <Button
-                  data-testid="submit-ratings-btn"
-                  onClick={submitRatings}
-                  disabled={submitting === 'ratings' || !myRegistration || otherPlayers.length === 0}
-                  shape="pill"
-                  className="w-full bg-turf hover:bg-turf-dark text-white min-h-12"
-                >
-                  {submitting === 'ratings' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Star className="w-4 h-4 mr-2" />}
-                  {existingRatings?.has_rated ? 'Actualizar evaluaciones' : 'Guardar evaluaciones'}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="autoevaluacion">
-            <Card className="border-slate-100 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="font-heading text-lg uppercase flex items-center gap-2"><UserCircle2 className="w-4 h-4" /> Tu autoevaluación</CardTitle>
-                <p className="text-xs text-slate-500">Solo vos podés ver esto. No afecta tu rating general.</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className={`rounded-2xl border p-4 ${getRatingTone(selfEval.score).ring} ring-1 border-slate-100`}>
-                  <div className="flex items-center justify-between">
-                    <Label>Puntuación</Label>
-                    <span className={`text-lg font-bold w-10 h-10 rounded-full flex items-center justify-center ${getRatingTone(selfEval.score).text} ${getRatingTone(selfEval.score).bg}`} data-testid="self-eval-score-value">
-                      {selfEval.score}
-                    </span>
-                  </div>
-                  <Slider
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={[selfEval.score]}
-                    onValueChange={(value) => setSelfEval((prev) => ({ ...prev, score: value[0] }))}
-                    className="mt-3"
-                    data-testid="self-eval-slider"
-                    aria-label="Tu puntuación de autoevaluación"
-                  />
-                </div>
                 <div>
-                  <Label htmlFor="self-eval-notes">Notas (opcional)</Label>
+                  <Label htmlFor="self-eval-notes" className="text-sm font-semibold text-slate-900">
+                    Notas (opcional)
+                  </Label>
                   <textarea
                     id="self-eval-notes"
                     data-testid="self-eval-notes"
                     value={selfEval.notes}
                     onChange={(event) => setSelfEval((prev) => ({ ...prev, notes: event.target.value }))}
-                    className="mt-1.5 w-full h-28 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm resize-none focus:border-turf focus:ring-2 focus:ring-turf/20"
+                    className="mt-1.5 h-28 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm placeholder:text-slate-500 focus:border-turf focus:ring-2 focus:ring-turf/20"
                     placeholder="¿Cómo sentís que jugaste hoy?"
                   />
                 </div>
-                <Button data-testid="submit-self-eval" onClick={submitSelfEval} disabled={submitting === 'self'} shape="pill" className="w-full bg-secondary text-secondary-foreground min-h-12">
-                  {submitting === 'self' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Guardar autoevaluación
+
+                <Button
+                  data-testid="submit-self-eval"
+                  onClick={submitSelfEval}
+                  disabled={submitting === 'self'}
+                  shape="pill"
+                  className="min-h-12 w-full bg-secondary font-bold uppercase tracking-wider text-secondary-foreground"
+                >
+                  {submitting === 'self' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Guardar autoevaluación
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
 
-          <TabsContent value="estadisticas">
-            <Card className="border-slate-100 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="font-heading text-lg uppercase flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Proponer estadísticas</CardTitle>
-                <p className="text-xs text-slate-500">Las estadísticas después se validan con votos del resto de los jugadores.</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* ---------------- Estadísticas ---------------- */}
+          <TabsContent value="estadisticas" className="mt-0">
+            <div className={PANEL}>
+              <SectionHeading
+                icono={ClipboardList}
+                tono="orange"
+                titulo="Proponer estadísticas"
+                bajada="Después se validan con los votos del resto de los jugadores."
+                acciones={
+                  activeRegistrations.length > 0 ? (
+                    <span className="text-xs font-semibold tabular-nums text-slate-600">
+                      {propuestasHechas}/{activeRegistrations.length} propuestas
+                    </span>
+                  ) : null
+                }
+              />
+
+              <div className="mt-5 space-y-4">
                 {!myRegistration && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className={AVISO}>
                     Tenés que estar anotado en este partido para poder proponer estadísticas.
-                  </div>
+                  </p>
                 )}
 
                 {activeRegistrations.length === 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    No hay participantes cargados para este partido todavía.
-                  </div>
+                  <p className={NEUTRO}>No hay participantes cargados para este partido todavía.</p>
                 )}
 
                 {activeRegistrations.map((player) => {
                   const alreadyProposed = proposedPlayerIds.has(player.player_id);
+                  const errores = statsErrors.stats?.[player.player_id];
                   return (
-                    <div key={player.player_id} className="border border-slate-100 rounded-2xl p-4" data-testid={`stats-player-${player.player_id}`}>
-                      <div className="flex items-center gap-3 mb-4">
+                    <div
+                      key={player.player_id}
+                      className={`rounded-2xl border p-4 transition-colors ${
+                        alreadyProposed ? 'border-turf/25 bg-turf/5' : 'border-slate-200 bg-white'
+                      }`}
+                      data-testid={`stats-player-${player.player_id}`}
+                    >
+                      <div className="mb-4 flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => openPhoto(player)}
-                          className="relative group rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                          className="group relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
                           aria-label={`Ver foto de ${player.player_name}`}
                         >
-                          <Avatar className="w-10 h-10 ring-2 ring-white shadow-sm">
+                          <Avatar className="h-11 w-11 shadow-sm ring-2 ring-white">
                             <AvatarImage src={buildPhotoUrl(player.player_photo) || undefined} />
-                            <AvatarFallback className="bg-turf/10 text-turf-accessible text-xs font-bold">{initialsFromName(player.player_name)}</AvatarFallback>
+                            <AvatarFallback className="bg-turf/10 text-xs font-bold text-turf-accessible">
+                              {initialsFromName(player.player_name)}
+                            </AvatarFallback>
                           </Avatar>
-                          <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-turf-accessible transition-colors"><ZoomIn className="w-3 h-3" /></span>
+                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors group-hover:text-turf-accessible">
+                            <ZoomIn className="h-3 w-3" aria-hidden="true" />
+                          </span>
                         </button>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium block truncate">{player.player_name}</span>
-                          <span className="text-xs text-slate-500">{player.primary_position || 'Sin posición cargada'}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-900">
+                            {player.player_name}
+                          </span>
+                          <span className="text-xs text-slate-600">
+                            {player.primary_position || 'Sin posición cargada'}
+                          </span>
                         </div>
                         {alreadyProposed && (
-                          <Badge className="bg-turf/10 text-turf-accessible border-turf/20 font-semibold gap-1" data-testid={`proposed-badge-${player.player_id}`}>
-                            <CheckCircle2 className="w-3 h-3" /> Propuesto
+                          <Badge
+                            className="min-h-0 gap-1 border-turf/25 bg-turf/10 font-semibold text-turf-accessible"
+                            data-testid={`proposed-badge-${player.player_id}`}
+                          >
+                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Propuesto
                           </Badge>
                         )}
                       </div>
 
                       <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <Label className="text-xs" htmlFor={`goals-${player.player_id}`}>Goles</Label>
-                          <Input
-                            id={`goals-${player.player_id}`}
-                            data-testid={`stat-goals-${player.player_id}`}
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            className="h-11 bg-slate-50 text-center"
-                            disabled={!myRegistration}
-                            {...registerStat(`stats.${player.player_id}.goals`)}
-                          />
-                          {statsErrors.stats?.[player.player_id]?.goals && (
-                            <p className="mt-1 text-[11px] text-destructive" data-testid={`stat-goals-error-${player.player_id}`}>
-                              {statsErrors.stats[player.player_id].goals.message}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-xs" htmlFor={`assists-${player.player_id}`}>Asistencias</Label>
-                          <Input
-                            id={`assists-${player.player_id}`}
-                            data-testid={`stat-assists-${player.player_id}`}
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            className="h-11 bg-slate-50 text-center"
-                            disabled={!myRegistration}
-                            {...registerStat(`stats.${player.player_id}.assists`)}
-                          />
-                          {statsErrors.stats?.[player.player_id]?.assists && (
-                            <p className="mt-1 text-[11px] text-destructive" data-testid={`stat-assists-error-${player.player_id}`}>
-                              {statsErrors.stats[player.player_id].assists.message}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-xs" htmlFor={`saves-${player.player_id}`}>Atajadas</Label>
-                          <Input
-                            id={`saves-${player.player_id}`}
-                            data-testid={`stat-saves-${player.player_id}`}
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            className="h-11 bg-slate-50 text-center"
-                            disabled={!myRegistration}
-                            {...registerStat(`stats.${player.player_id}.saves`)}
-                          />
-                          {statsErrors.stats?.[player.player_id]?.saves && (
-                            <p className="mt-1 text-[11px] text-destructive" data-testid={`stat-saves-error-${player.player_id}`}>
-                              {statsErrors.stats[player.player_id].saves.message}
-                            </p>
-                          )}
-                        </div>
+                        {/* Los data-testid van escritos enteros a proposito y no armados
+                            como `stat-${campo}-...`: hay tests que dependen de estos
+                            nombres, y si el prefijo se arma con una variable dejan de
+                            aparecer al buscarlos en el codigo. */}
+                        {[
+                          { campo: 'goals', label: 'Goles', testId: 'stat-goals', errorTestId: 'stat-goals-error' },
+                          { campo: 'assists', label: 'Asistencias', testId: 'stat-assists', errorTestId: 'stat-assists-error' },
+                          { campo: 'saves', label: 'Atajadas', testId: 'stat-saves', errorTestId: 'stat-saves-error' },
+                        ].map(({ campo, label, testId, errorTestId }) => (
+                          <div key={campo}>
+                            <Label
+                              className="text-[11px] font-semibold uppercase tracking-wide text-slate-600"
+                              htmlFor={`${campo}-${player.player_id}`}
+                            >
+                              {label}
+                            </Label>
+                            <Input
+                              id={`${campo}-${player.player_id}`}
+                              data-testid={`${testId}-${player.player_id}`}
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              className={CAMPO}
+                              disabled={!myRegistration}
+                              aria-invalid={errores?.[campo] ? 'true' : undefined}
+                              {...registerStat(`stats.${player.player_id}.${campo}`)}
+                            />
+                            {errores?.[campo] && (
+                              <p
+                                className="mt-1 text-[11px] text-destructive"
+                                data-testid={`${errorTestId}-${player.player_id}`}
+                              >
+                                {errores[campo].message}
+                              </p>
+                            )}
+                          </div>
+                        ))}
                       </div>
 
                       <Button
-                        size="sm"
-                        variant={alreadyProposed ? 'ghost' : 'outline'}
-                        className="mt-3 w-full rounded-xl text-xs min-h-11"
+                        variant={alreadyProposed ? 'outline' : 'default'}
+                        className={`mt-4 min-h-11 w-full rounded-xl text-xs font-bold uppercase tracking-wide ${
+                          alreadyProposed ? '' : 'bg-turf text-white hover:bg-turf-dark'
+                        }`}
                         onClick={() => submitStats(player.player_id)}
                         disabled={submitting === `stats-${player.player_id}` || !myRegistration}
                         data-testid={`submit-stats-${player.player_id}`}
                       >
                         {submitting === `stats-${player.player_id}` ? (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         ) : alreadyProposed ? (
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                         ) : (
-                          <Send className="w-3 h-3 mr-1" />
+                          <Send className="mr-1.5 h-3.5 w-3.5" />
                         )}
                         {alreadyProposed ? 'Actualizar propuesta' : 'Proponer'}
                       </Button>
@@ -539,13 +629,19 @@ export default function PostMatch() {
                   );
                 })}
 
-                <Link to={`/partidos/${id}/estadisticas`}>
-                  <Button variant="outline" className="w-full rounded-xl min-h-11" data-testid="go-to-stats-confirmation">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="min-h-11 w-full rounded-xl font-semibold"
+                  data-testid="go-to-stats-confirmation"
+                >
+                  <Link to={`/partidos/${id}/estadisticas`}>
                     Ver estado de confirmación
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+                    <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

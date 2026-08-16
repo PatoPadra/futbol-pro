@@ -4,19 +4,23 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, Clock, LayoutGrid, MapPin, Repeat, Users } from 'lucide-react';
 
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form';
+import PageHeader from '@/components/common/PageHeader';
+import Panel from '@/components/matches/Panel';
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
 const capacities = { 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 22 };
+
+/** Un solo lugar para el alto y el fondo de los inputs del formulario. */
+const FIELD = 'mt-1.5 h-12 bg-slate-50';
 
 const matchSchema = z.object({
   group_id: z.string().min(1, 'Seleccioná un grupo'),
@@ -119,237 +123,301 @@ export default function CreateMatch() {
 
   return (
     <div className="page-container max-w-2xl mx-auto" data-testid="create-match-page">
-      <div className="animate-slide-up">
-        <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase tracking-tight mb-2">
-          Crear Partido
-        </h1>
-        <p className="text-slate-500 mb-8">Configurá los detalles del partido.</p>
+      <div className="animate-slide-up space-y-6">
+        <PageHeader
+          slug="crear-partido"
+          eyebrow="Nueva fecha"
+          titulo="Crear partido"
+          bajada="Cuatro cosas y listo: quiénes, con qué formato, cuándo y dónde."
+          volverA="/partidos"
+          volverLabel="Partidos"
+          icono={CalendarPlus}
+          testId="create-match-header"
+        />
 
         <Form {...form}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-            <Card className="border-slate-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="font-heading text-lg uppercase">Detalles</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase">¿Qué partido es?</p>
-                <FormField
-                  control={control}
-                  name="group_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Grupo</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        disabled={loadingGroups || groups.length === 0}
+            <Panel
+              icono={Users}
+              titulo="¿Quiénes juegan?"
+              bajada="El grupo al que le sale el partido y cómo lo van a reconocer en la lista."
+              tono="turf"
+              testId="create-match-quienes"
+              contentClassName="space-y-4 p-4 sm:p-5"
+            >
+              <FormField
+                control={control}
+                name="group_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Grupo</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={loadingGroups || groups.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger className={FIELD} data-testid="match-group-select">
+                          <SelectValue placeholder={loadingGroups ? 'Cargando grupos...' : 'Seleccioná un grupo'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {groups.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage data-testid="match-group-error" />
+                    {!loadingGroups && groups.length === 0 && (
+                      <div
+                        className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start gap-2"
+                        data-testid="no-groups-notice"
                       >
-                        <FormControl>
-                          <SelectTrigger className="mt-1.5 h-12 bg-slate-50" data-testid="match-group-select">
-                            <SelectValue placeholder={loadingGroups ? 'Cargando grupos...' : 'Seleccioná un grupo'} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {groups.map((group) => (
-                            <SelectItem key={group.id} value={group.id}>
-                              {group.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage data-testid="match-group-error" />
-                      {!loadingGroups && groups.length === 0 && (
-                        <div
-                          className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start gap-2"
-                          data-testid="no-groups-notice"
-                        >
-                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                          <div className="text-sm">
-                            <p className="text-amber-900">No tenés grupos donde puedas crear partidos todavía.</p>
-                            <Link
-                              to="/grupos/crear"
-                              data-testid="create-first-group-link"
-                              className="inline-block mt-1 font-semibold text-turf-accessible hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                            >
-                              Crear mi primer grupo
-                            </Link>
-                          </div>
+                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" aria-hidden="true" />
+                        <div className="text-sm">
+                          <p className="text-amber-900">No tenés grupos donde puedas crear partidos todavía.</p>
+                          <Link
+                            to="/grupos/crear"
+                            data-testid="create-first-group-link"
+                            className="inline-flex min-h-[44px] items-center font-semibold text-turf-accessible hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                          >
+                            Crear mi primer grupo
+                          </Link>
                         </div>
-                      )}
-                    </FormItem>
-                  )}
-                />
+                      </div>
+                    )}
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Título del partido</FormLabel>
+              <FormField
+                control={control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Título del partido</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        data-testid="match-title-input"
+                        placeholder="Ej: Partido del sábado"
+                        className={FIELD}
+                      />
+                    </FormControl>
+                    <FormMessage data-testid="match-title-error" />
+                  </FormItem>
+                )}
+              />
+            </Panel>
+
+            <Panel
+              icono={LayoutGrid}
+              titulo="¿Qué formato?"
+              bajada="La modalidad define el cupo de titulares."
+              tono="orange"
+              testId="create-match-formato"
+              contentClassName="space-y-4 p-4 sm:p-5"
+            >
+              <FormField
+                control={control}
+                name="modality"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Modalidad</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <Input
-                          {...field}
-                          data-testid="match-title-input"
-                          placeholder="Ej: Partido del sábado"
-                          className="mt-1.5 h-12 bg-slate-50"
-                        />
+                        <SelectTrigger className={FIELD} data-testid="match-modality-select">
+                          <SelectValue />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage data-testid="match-title-error" />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={control}
-                  name="modality"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Modalidad</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="mt-1.5 h-12 bg-slate-50" data-testid="match-modality-select">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {[5, 6, 7, 8, 9, 10, 11].map((value) => (
-                            <SelectItem key={value} value={String(value)}>
-                              <span className="flex items-center gap-2">
-                                <span className="flex gap-0.5 shrink-0">
-                                  {Array.from({ length: 7 }).map((_, di) => (
-                                    <span
-                                      key={di}
-                                      className={`w-1.5 h-1.5 rounded-full ${di < value - 4 ? 'bg-turf' : 'bg-slate-200'}`}
-                                    />
-                                  ))}
-                                </span>
-                                Fútbol {value} ({capacities[value]} jugadores)
+                      <SelectContent>
+                        {[5, 6, 7, 8, 9, 10, 11].map((value) => (
+                          <SelectItem key={value} value={String(value)}>
+                            <span className="flex items-center gap-2">
+                              <span aria-hidden="true" className="flex gap-0.5 shrink-0">
+                                {Array.from({ length: 7 }).map((_, di) => (
+                                  <span
+                                    key={di}
+                                    className={`w-1.5 h-1.5 rounded-full ${di < value - 4 ? 'bg-turf' : 'bg-slate-200'}`}
+                                  />
+                                ))}
                               </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage data-testid="match-modality-error" />
-                    </FormItem>
-                  )}
-                />
+                              Fútbol {value} ({capacities[value]} jugadores)
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage data-testid="match-modality-error" />
+                  </FormItem>
+                )}
+              />
 
-                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase pt-2">¿Cuándo y dónde?</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fecha</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="date"
-                            data-testid="match-date-input"
-                            min={TODAY_ISO}
-                            className="mt-1.5 h-12 bg-slate-50"
-                          />
-                        </FormControl>
-                        <FormMessage data-testid="match-date-error" />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="time"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Hora</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="time"
-                            data-testid="match-time-input"
-                            className="mt-1.5 h-12 bg-slate-50"
-                          />
-                        </FormControl>
-                        <FormMessage data-testid="match-time-error" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+              <div className="rounded-2xl border border-turf/20 bg-mesh-turf bg-white p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-turf-accessible">
+                  Capacidad
+                </p>
+                <p className="mt-1 flex items-baseline gap-2">
+                  <span className="font-heading text-3xl font-bold leading-none text-slate-900 tabular-nums">
+                    {capacities[parseInt(selectedModality, 10)]}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-600">
+                    titulares · Fútbol {selectedModality}
+                  </span>
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  Los que se anoten después del cupo quedan como suplentes. La inscripción cierra el día
+                  del partido al mediodía.
+                </p>
+              </div>
+            </Panel>
 
+            <Panel
+              icono={Clock}
+              titulo="¿Cuándo?"
+              bajada="Día y hora del encuentro."
+              tono="turf"
+              testId="create-match-cuando"
+              contentClassName="space-y-4 p-4 sm:p-5"
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                   control={control}
-                  name="location"
+                  name="date"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Lugar</FormLabel>
+                      <FormLabel>Fecha</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          data-testid="match-location-input"
-                          placeholder="Ej: Cancha Municipal"
-                          className="mt-1.5 h-12 bg-slate-50"
+                          type="date"
+                          data-testid="match-date-input"
+                          min={TODAY_ISO}
+                          className={FIELD}
                         />
                       </FormControl>
-                      <FormMessage data-testid="match-location-error" />
+                      <FormMessage data-testid="match-date-error" />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={control}
-                  name="maps_link"
+                  name="time"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Link de ubicación (opcional)</FormLabel>
+                      <FormLabel>Hora</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          type="url"
-                          data-testid="match-maps-input"
-                          placeholder="https://maps.google.com/..."
-                          className="mt-1.5 h-12 bg-slate-50"
+                          type="time"
+                          data-testid="match-time-input"
+                          className={FIELD}
                         />
                       </FormControl>
-                      <FormMessage data-testid="match-maps-error" />
+                      <FormMessage data-testid="match-time-error" />
                     </FormItem>
                   )}
                 />
+              </div>
 
-                <FormField
-                  control={control}
-                  name="is_recurring"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between py-2 space-y-0">
-                      <div>
-                        <FormLabel className="font-medium">Partido recurrente</FormLabel>
+              <FormField
+                control={control}
+                name="is_recurring"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 space-y-0">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-turf/10 text-turf-accessible"
+                      >
+                        <Repeat className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <FormLabel className="font-semibold">Partido recurrente</FormLabel>
                         <p className="text-xs text-slate-500">Se repite semanalmente</p>
                       </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="match-recurring-switch"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="match-recurring-switch"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </Panel>
 
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <p className="text-sm text-slate-600">
-                <strong>Capacidad:</strong> {capacities[parseInt(selectedModality, 10)]} titulares (Fútbol {selectedModality}). Los jugadores que se anoten luego del cupo quedarán como suplentes. El cierre de inscripción será el día del partido al mediodía.
-              </p>
-            </div>
-
-            <Button
-              type="submit"
-              data-testid="create-match-submit"
-              disabled={loading || loadingGroups || groups.length === 0}
-              className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-full font-bold uppercase tracking-wider transition-transform active:scale-95 shadow-lg shadow-turf/20 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
+            <Panel
+              icono={MapPin}
+              titulo="¿Dónde?"
+              bajada="El nombre de la cancha y, si tenés, el link del mapa."
+              tono="slate"
+              testId="create-match-donde"
+              contentClassName="space-y-4 p-4 sm:p-5"
             >
-              {loading ? 'Creando...' : 'Crear Partido'}
-            </Button>
+              <FormField
+                control={control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Lugar</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        data-testid="match-location-input"
+                        placeholder="Ej: Cancha Municipal"
+                        className={FIELD}
+                      />
+                    </FormControl>
+                    <FormMessage data-testid="match-location-error" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={control}
+                name="maps_link"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Link de ubicación (opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="url"
+                        data-testid="match-maps-input"
+                        placeholder="https://maps.google.com/..."
+                        className={FIELD}
+                      />
+                    </FormControl>
+                    <FormMessage data-testid="match-maps-error" />
+                  </FormItem>
+                )}
+              />
+            </Panel>
+
+            {/* Barra de envío pegada al pie: en un formulario largo el botón no
+                puede quedar a tres scrolls de distancia del campo que estás llenando. */}
+            <div className="sticky bottom-3 z-10 rounded-3xl border border-slate-200/70 bg-white/85 p-3 shadow-lift backdrop-blur-md sm:bottom-4">
+              <Button
+                type="submit"
+                data-testid="create-match-submit"
+                disabled={loading || loadingGroups || groups.length === 0}
+                shape="pill"
+                className="w-full h-12 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/25 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
+              >
+                <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+                {loading ? 'Creando...' : 'Crear partido'}
+              </Button>
+              {!loadingGroups && groups.length === 0 && (
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Necesitás ser organizador de al menos un grupo para crear partidos.
+                </p>
+              )}
+            </div>
           </form>
         </Form>
       </div>

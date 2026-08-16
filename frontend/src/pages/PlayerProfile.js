@@ -5,24 +5,30 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import PhotoLightbox from '../components/common/PhotoLightbox';
 import {
-  Camera, Star, Trophy, Edit3, Save, X, History,
-  Gauge, TrendingUp, Target, Users, Hand, UserX,
+  Edit3, Save, X, History, Trophy, UserX, User, Info, IdCard, Compass,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
-import { getRatingTone } from '@/utils/ratings';
-import StatTile from '@/components/common/StatTile';
+import { buildPhotoUrl } from '@/utils/photos';
 import PageLoader from '@/components/common/PageLoader';
+import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
+import Reveal from '@/components/common/Reveal';
+import MetricTiles from '@/components/players/MetricTiles';
+import RatingPanel from '@/components/players/RatingPanel';
+import PositionPicker from '@/components/players/PositionPicker';
+import PlayerIdentityCard from '@/components/players/PlayerIdentityCard';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/** Chip de la banda del encabezado: sobre foto, siempre blanco sobre vidrio oscuro. */
+const CHIP_SOBRE_FOTO =
+  'glass-dark inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-white';
 
 const profileFormSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),
@@ -161,6 +167,14 @@ export default function PlayerProfile({ isSelf }) {
     setValue('unwanted_position', editForm.unwanted_position === posId ? '' : posId, { shouldDirty: true });
   };
 
+  const selectPrimaryPosition = (posId) => {
+    setValue('primary_position', posId, { shouldDirty: true });
+    setValue('secondary_positions', (editForm.secondary_positions || []).filter(id2 => id2 !== posId), { shouldDirty: true });
+    if (editForm.unwanted_position === posId) {
+      setValue('unwanted_position', '', { shouldDirty: true });
+    }
+  };
+
   const posMap = {};
   positions.forEach(p => { posMap[p.id] = p.name; });
 
@@ -170,15 +184,24 @@ export default function PlayerProfile({ isSelf }) {
 
   if (!profile) {
     return (
-      <div className="page-container max-w-md mx-auto text-center py-16" data-testid="player-profile-not-found">
-        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <UserX className="w-8 h-8 text-slate-400" />
-        </div>
-        <h2 className="font-heading text-xl font-bold uppercase text-slate-700">Jugador no encontrado</h2>
-        <p className="text-sm text-slate-500 mt-2">Puede que el perfil no exista o que no tengas acceso a él.</p>
-        <Button variant="outline" className="mt-6 rounded-full h-11" onClick={() => navigate(-1)} data-testid="profile-not-found-back-btn">
-          Volver
-        </Button>
+      <div className="page-container mx-auto max-w-md">
+        <EmptyState
+          variante={5}
+          icono={UserX}
+          titulo="Jugador no encontrado"
+          descripcion="Puede que el perfil no exista o que no tengas acceso a él."
+          testId="player-profile-not-found"
+          accion={(
+            <Button
+              shape="pill"
+              onClick={() => navigate(-1)}
+              data-testid="profile-not-found-back-btn"
+              className="glass-dark h-11 border border-white/25 bg-white/10 px-6 text-white hover:bg-white/20 focus-visible:ring-white focus-visible:ring-offset-transparent"
+            >
+              Volver
+            </Button>
+          )}
+        />
       </div>
     );
   }
@@ -190,295 +213,225 @@ export default function PlayerProfile({ isSelf }) {
   const unwantedOptions = positions.filter(p => p.id !== editForm.primary_position && !(editForm.secondary_positions || []).includes(p.id));
 
   const statTiles = [
-    { label: 'Partidos', value: metrics?.total_matches ?? 0, icon: Trophy },
-    { label: 'Goles', value: metrics?.total_goals ?? 0, icon: Target },
-    { label: 'Asistencias', value: metrics?.total_assists ?? 0, icon: Users },
-    ...(metrics?.total_saves > 0 ? [{ label: 'Atajadas', value: metrics.total_saves, icon: Hand }] : []),
+    { label: 'Partidos', value: metrics?.total_matches ?? 0 },
+    { label: 'Goles', value: metrics?.total_goals ?? 0 },
+    { label: 'Asistencias', value: metrics?.total_assists ?? 0 },
+    ...(metrics?.total_saves > 0 ? [{ label: 'Atajadas', value: metrics.total_saves }] : []),
   ];
 
+  const tipoJugador = profile.player_type === 'frecuente' ? 'Jugador Frecuente' : 'Invitado';
+  const posicionPrincipal = profile.primary_position
+    ? (posMap[profile.primary_position] || profile.primary_position)
+    : null;
+  const bajada = posicionPrincipal
+    ? `${isOwn ? 'Jugás' : 'Juega'} de ${posicionPrincipal}.`
+    : `${isOwn ? 'Todavía no elegiste' : 'Todavía no eligió'} posición principal.`;
+
   return (
-    <div className="page-container max-w-2xl mx-auto" data-testid="player-profile-page">
-      <div className="animate-slide-up">
-        {/* Header Card */}
-        <Card className="border-slate-100 overflow-hidden mb-6">
-          <div className="bg-gradient-to-r from-turf to-turf-dark h-24 relative" />
-          <CardContent className="relative px-6 pb-6">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-12">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPhotoLightboxOpen(true)}
-                  className="block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                  aria-label="Ver foto de perfil en grande"
-                  data-testid="view-profile-photo-btn"
-                >
-                  <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
-                    <AvatarImage src={photoUrl} />
-                    <AvatarFallback className="bg-turf/10 text-turf-accessible text-2xl font-bold font-heading">
-                      {initialsFromName(profile.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-                {uploadingPhoto && (
-                  <div className="absolute inset-0 rounded-full bg-slate-900/50 flex items-center justify-center pointer-events-none">
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-                {isOwn && (
-                  <label
-                    className="absolute -bottom-1 -right-1 w-11 h-11 flex items-center justify-center cursor-pointer"
-                    aria-label="Cambiar foto de perfil"
-                    data-testid="photo-upload-label"
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only peer"
-                      onChange={handlePhotoUpload}
-                      disabled={uploadingPhoto}
-                      data-testid="photo-upload-input"
-                    />
-                    <span className="w-8 h-8 bg-turf rounded-full flex items-center justify-center shadow-md hover:bg-turf-dark transition-colors pointer-events-none peer-focus-visible:ring-2 peer-focus-visible:ring-turf peer-focus-visible:ring-offset-2">
-                      <Camera className="w-4 h-4 text-white" />
-                    </span>
-                  </label>
-                )}
-              </div>
-              <div className="text-center sm:text-left flex-1">
-                <h1 className="font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight">{profile.name}</h1>
-                <div className="flex flex-wrap items-center gap-2 mt-1 justify-center sm:justify-start">
-                  <Badge className="bg-turf/10 text-turf-accessible border-turf/20 text-xs">
-                    {profile.player_type === 'frecuente' ? 'Jugador Frecuente' : 'Invitado'}
-                  </Badge>
-                  {profile.age && <span className="text-sm text-slate-500">{profile.age} años</span>}
-                </div>
-              </div>
-              {isOwn && (
-                <div className="flex gap-2">
-                  {editing ? (
-                    <>
-                      <Button size="sm" onClick={handleSave} className="bg-turf hover:bg-turf-dark text-white rounded-full h-11 px-5 text-sm" data-testid="save-edit-btn">
-                        <Save className="w-4 h-4 mr-1" /> Guardar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditing(false)}
-                        className="rounded-full h-11 w-11 p-0"
-                        aria-label="Cancelar edición"
-                        data-testid="cancel-edit-btn"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="rounded-full h-11 px-5 text-sm" data-testid="edit-profile-btn">
-                      <Edit3 className="w-4 h-4 mr-1" /> Editar
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Form */}
-        {editing && (
-          <Card className="border-slate-100 mb-6">
-            <CardContent className="p-5 space-y-5">
-              <div>
-                <Label htmlFor="edit-name">Nombre</Label>
-                <Input id="edit-name" className="mt-1 h-12 bg-slate-50" data-testid="edit-name" {...register('name')} />
-                {errors.name && (
-                  <p className="mt-1 text-xs text-destructive" data-testid="edit-name-error">{errors.name.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="edit-birthdate">Fecha de nacimiento</Label>
-                <Input id="edit-birthdate" type="date" className="mt-1 h-12 bg-slate-50" data-testid="edit-birthdate" {...register('birth_date')} />
-                {errors.birth_date && (
-                  <p className="mt-1 text-xs text-destructive" data-testid="edit-birthdate-error">{errors.birth_date.message}</p>
-                )}
-              </div>
-              <div>
-                <Label>Posición principal</Label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {positions.map(p => (
-                    <Badge
-                      key={p.id}
-                      data-testid={`edit-primary-pos-${p.id}`}
-                      variant={editForm.primary_position === p.id ? 'default' : 'outline'}
-                      className={`cursor-pointer min-h-[44px] flex items-center px-4 text-sm ${editForm.primary_position === p.id ? 'bg-turf text-white border-turf' : ''}`}
-                      onClick={() => {
-                        setValue('primary_position', p.id, { shouldDirty: true });
-                        setValue('secondary_positions', (editForm.secondary_positions || []).filter(id => id !== p.id), { shouldDirty: true });
-                        if (editForm.unwanted_position === p.id) {
-                          setValue('unwanted_position', '', { shouldDirty: true });
-                        }
-                      }}
-                    >
-                      {p.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label>Posiciones secundarias</Label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {secondaryOptions.map(p => {
-                    const selected = (editForm.secondary_positions || []).includes(p.id);
-                    return (
-                      <Badge
-                        key={p.id}
-                        data-testid={`edit-secondary-pos-${p.id}`}
-                        variant={selected ? 'default' : 'outline'}
-                        className={`cursor-pointer min-h-[44px] flex items-center px-4 text-sm ${selected ? 'bg-turf text-white border-turf' : ''}`}
-                        onClick={() => toggleSecondaryPosition(p.id)}
-                      >
-                        {p.name}
-                      </Badge>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-slate-400 mt-1.5">Elegí hasta 3 posiciones donde también te sentís cómodo jugando.</p>
-              </div>
-              <div>
-                <Label>Posición que preferís evitar</Label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {unwantedOptions.map(p => (
-                    <Badge
-                      key={p.id}
-                      data-testid={`edit-unwanted-pos-${p.id}`}
-                      variant={editForm.unwanted_position === p.id ? 'destructive' : 'outline'}
-                      className="cursor-pointer min-h-[44px] flex items-center px-4 text-sm"
-                      onClick={() => toggleUnwantedPosition(p.id)}
-                    >
-                      {p.name}
-                    </Badge>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-400 mt-1.5">Opcional. El organizador va a evitar ubicarte ahí si es posible.</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Rating summary */}
-        {metrics && canViewPeerScores && (
-          <Card className="border-slate-100 mb-3" data-testid="rating-summary-card">
-            <CardContent className="p-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.general_rating).text}`}>
-                    <Star className="w-5 h-5 fill-current" />
-                    <span className="font-heading text-3xl font-bold">{metrics.general_rating?.toFixed(1)}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">Rating General</p>
-                </div>
-                <div className="text-center border-l border-slate-100">
-                  <div className={`inline-flex items-center gap-1.5 ${getRatingTone(metrics.recent_rating).text}`}>
-                    <Star className="w-5 h-5 fill-current" />
-                    <span className="font-heading text-3xl font-bold">{metrics.recent_rating?.toFixed(1)}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 uppercase tracking-wider mt-1">Rating Reciente</p>
-                </div>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
-                    <Gauge className="w-3.5 h-3.5" /> Confianza del rating
-                  </span>
-                  <span className="text-xs font-bold text-slate-700" data-testid="confidence-index-value">{confidence.pct}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${confidence.bar}`} style={{ width: `${confidence.pct}%` }} />
-                </div>
-                <p className="text-xs text-slate-400 mt-1.5">{confidence.msg}</p>
-
-                {metrics.stats_bonus > 0 && (
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-orange bg-orange/10 rounded-full px-3 py-1.5 w-fit mt-3" data-testid="stats-bonus-chip">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Bono de +{metrics.stats_bonus.toFixed(1)} por tu buen rendimiento reciente
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Stats */}
-        {metrics && (
+    <div className="page-container mx-auto max-w-2xl" data-testid="player-profile-page">
+      {/*
+        El pie extra de la banda (`pb-11`) es el hueco donde encaja la ficha: la
+        tarjeta sube 32px sobre el encabezado y ahí abajo no hay texto que tapar.
+      */}
+      <PageHeader
+        slug="perfil"
+        priority
+        icono={User}
+        className="pb-11 md:pb-12"
+        eyebrow={isOwn ? 'Tu ficha' : 'Ficha del jugador'}
+        titulo={profile.name}
+        bajada={bajada}
+        testId="player-profile-header"
+        meta={(
           <>
-            <div className={`grid grid-cols-2 ${statTiles.length > 3 ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mb-3`} data-testid="stat-tiles">
-              {statTiles.map((s, i) => (
-                <StatTile key={i} icon={s.icon} value={s.value} label={s.label} />
-              ))}
-            </div>
-            {!canViewPeerScores && (
-              <Card className="border-slate-100 mb-6 bg-slate-50">
-                <CardContent className="p-4 text-sm text-slate-600">
-                  Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.
-                  {isOwn ? ' En tu historial vas a seguir viendo tus autoevaluaciones.' : ''}
-                </CardContent>
-              </Card>
-            )}
-            {isOwn && metrics.total_matches === 0 && (
-              <Card className="border-dashed border-2 border-slate-200 mb-6 bg-slate-50/50">
-                <CardContent className="p-5 text-center">
-                  <p className="text-sm font-semibold text-slate-700">Todavía no jugaste ningún partido</p>
-                  <p className="text-sm text-slate-500 mt-1">Sumate a un partido para empezar a construir tu historial y tu rating.</p>
-                  <Link to="/partidos">
-                    <Button size="sm" className="mt-3 bg-turf hover:bg-turf-dark text-white rounded-full h-11 px-5 text-sm" data-testid="find-match-cta">
-                      Buscar partidos
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+            <span className={CHIP_SOBRE_FOTO}>{tipoJugador}</span>
+            {profile.age && <span className={CHIP_SOBRE_FOTO}>{profile.age} años</span>}
+            {metrics && (
+              <span className={CHIP_SOBRE_FOTO}>
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                {metrics.total_matches ?? 0} {metrics.total_matches === 1 ? 'partido' : 'partidos'}
+              </span>
             )}
           </>
         )}
+        acciones={isOwn ? (
+          editing ? (
+            <>
+              <Button
+                shape="pill"
+                onClick={handleSave}
+                className="h-11 bg-turf px-5 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+                data-testid="save-edit-btn"
+              >
+                <Save className="mr-1 h-4 w-4" /> Guardar
+              </Button>
+              <Button
+                shape="pill"
+                onClick={() => setEditing(false)}
+                aria-label="Cancelar edición"
+                data-testid="cancel-edit-btn"
+                className="glass-dark h-11 w-11 border border-white/25 bg-white/10 p-0 text-white hover:bg-white/20 focus-visible:ring-white focus-visible:ring-offset-transparent"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              shape="pill"
+              onClick={() => setEditing(true)}
+              data-testid="edit-profile-btn"
+              className="glass-dark h-11 border border-white/25 bg-white/10 px-5 text-white hover:bg-white/20 focus-visible:ring-white focus-visible:ring-offset-transparent"
+            >
+              <Edit3 className="mr-1 h-4 w-4" /> Editar
+            </Button>
+          )
+        ) : null}
+      />
 
-        {/* Positions */}
-        <Card className="border-slate-100 mb-6">
-          <CardHeader className="pb-2">
-            <CardTitle className="font-heading text-lg uppercase">Posiciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider">Principal</span>
-                <div className="mt-1">
-                  {profile.primary_position ? (
-                    <Badge className="bg-turf text-white">{posMap[profile.primary_position] || profile.primary_position}</Badge>
-                  ) : <span className="text-sm text-slate-400">Sin definir</span>}
-                </div>
-              </div>
-              {profile.secondary_positions?.length > 0 && (
-                <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider">Secundarias</span>
-                  <div className="mt-1 flex flex-wrap gap-2">{profile.secondary_positions.map(p => (
-                    <Badge key={p} variant="outline">{posMap[p] || p}</Badge>
-                  ))}</div>
-                </div>
-              )}
-              {profile.unwanted_position && (
-                <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider">No deseada</span>
-                  <div className="mt-1"><Badge variant="destructive">{posMap[profile.unwanted_position] || profile.unwanted_position}</Badge></div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* History Link */}
-        <Link to={`/jugadores/${playerId}/historial`}>
-          <Button variant="outline" className="w-full rounded-xl h-12" data-testid="view-history-btn">
-            <History className="w-4 h-4 mr-2" /> Ver Historial Completo
-          </Button>
-        </Link>
+      <div className="relative z-10 mx-1 -mt-8 md:mx-5">
+        <PlayerIdentityCard
+          profile={profile}
+          photoUrl={photoUrl}
+          posMap={posMap}
+          isOwn={isOwn}
+          uploadingPhoto={uploadingPhoto}
+          onPhotoChange={handlePhotoUpload}
+          onOpenLightbox={() => setPhotoLightboxOpen(true)}
+        />
       </div>
+
+      {/* Edición del perfil */}
+      {editing && (
+        <Reveal from="up" className="mt-6 block">
+          <Card className="rounded-3xl border-slate-100 shadow-lift">
+            <CardContent className="space-y-7 p-5">
+              <section>
+                <SeccionTitulo icono={IdCard} titulo="Tus datos" />
+                <div className="mt-3 space-y-4">
+                  <div>
+                    <Label htmlFor="edit-name">Nombre</Label>
+                    <Input id="edit-name" className="mt-1.5 h-12 bg-slate-50" data-testid="edit-name" {...register('name')} />
+                    {errors.name && (
+                      <p className="mt-1 text-xs text-destructive" data-testid="edit-name-error">{errors.name.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-birthdate">Fecha de nacimiento</Label>
+                    <Input id="edit-birthdate" type="date" className="mt-1.5 h-12 bg-slate-50" data-testid="edit-birthdate" {...register('birth_date')} />
+                    {errors.birth_date && (
+                      <p className="mt-1 text-xs text-destructive" data-testid="edit-birthdate-error">{errors.birth_date.message}</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <SeccionTitulo icono={Compass} titulo="Dónde jugás" />
+                <div className="mt-3 space-y-5">
+                  <div>
+                    <Label>Posición principal</Label>
+                    <PositionPicker
+                      className="mt-2"
+                      ariaLabel="Posición principal"
+                      opciones={positions}
+                      seleccion={editForm.primary_position}
+                      testIdPrefix="edit-primary-pos"
+                      onToggle={selectPrimaryPosition}
+                    />
+                  </div>
+                  <div>
+                    <Label>Posiciones secundarias</Label>
+                    <PositionPicker
+                      className="mt-2"
+                      ariaLabel="Posiciones secundarias"
+                      opciones={secondaryOptions}
+                      seleccion={editForm.secondary_positions || []}
+                      testIdPrefix="edit-secondary-pos"
+                      onToggle={toggleSecondaryPosition}
+                      tono="charcoal"
+                    />
+                    <p className="mt-2 text-xs text-slate-500">Elegí hasta 3 posiciones donde también te sentís cómodo jugando.</p>
+                  </div>
+                  <div>
+                    <Label>Posición que preferís evitar</Label>
+                    <PositionPicker
+                      className="mt-2"
+                      ariaLabel="Posición que preferís evitar"
+                      opciones={unwantedOptions}
+                      seleccion={editForm.unwanted_position}
+                      testIdPrefix="edit-unwanted-pos"
+                      onToggle={toggleUnwantedPosition}
+                      tono="danger"
+                      marca="cruz"
+                    />
+                    <p className="mt-2 text-xs text-slate-500">Opcional. El organizador va a evitar ubicarte ahí si es posible.</p>
+                  </div>
+                </div>
+              </section>
+            </CardContent>
+          </Card>
+        </Reveal>
+      )}
+
+      {/* Rating */}
+      {metrics && canViewPeerScores && (
+        <Reveal from="up" delay={60} className="mt-6 block">
+          <RatingPanel metrics={metrics} confidence={confidence} testId="rating-summary-card" />
+        </Reveal>
+      )}
+
+      {/* Métricas */}
+      {metrics && (
+        <>
+          <Reveal from="up" delay={90} className="mt-4 block">
+            <MetricTiles tiles={statTiles} testId="stat-tiles" />
+          </Reveal>
+
+          {!canViewPeerScores && (
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <p>
+                Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.
+                {isOwn ? ' En tu historial vas a seguir viendo tus autoevaluaciones.' : ''}
+              </p>
+            </div>
+          )}
+
+          {isOwn && metrics.total_matches === 0 && (
+            <Reveal from="up" delay={120} className="mt-4 block">
+              <EmptyState
+                variante={1}
+                icono={Trophy}
+                titulo="Todavía no jugaste ningún partido"
+                descripcion="Sumate a un partido para empezar a construir tu historial y tu rating."
+                accion={(
+                  <Link to="/partidos">
+                    <Button
+                      shape="pill"
+                      className="h-11 bg-turf px-6 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+                      data-testid="find-match-cta"
+                    >
+                      Buscar partidos
+                    </Button>
+                  </Link>
+                )}
+              />
+            </Reveal>
+          )}
+        </>
+      )}
+
+      {/* Historial */}
+      <Link to={`/jugadores/${playerId}/historial`} className="mt-6 block">
+        <Button
+          variant="outline"
+          shape="pill"
+          className="h-12 w-full border-2 border-slate-200 text-slate-700 hover:border-turf/40 hover:text-turf-accessible"
+          data-testid="view-history-btn"
+        >
+          <History className="mr-2 h-4 w-4" /> Ver Historial Completo
+        </Button>
+      </Link>
 
       <PhotoLightbox
         open={photoLightboxOpen}
@@ -488,5 +441,19 @@ export default function PlayerProfile({ isSelf }) {
         subtitle={profile.player_type === 'frecuente' ? 'Jugador Frecuente' : 'Invitado'}
       />
     </div>
+  );
+}
+
+function SeccionTitulo({ icono: Icono, titulo }) {
+  return (
+    <h2 className="flex items-center gap-2 font-heading text-lg font-bold uppercase tracking-tight text-slate-900">
+      <span
+        aria-hidden="true"
+        className="grid h-8 w-8 place-items-center rounded-xl bg-turf/10 text-turf-accessible"
+      >
+        <Icono className="h-4 w-4" />
+      </span>
+      {titulo}
+    </h2>
   );
 }

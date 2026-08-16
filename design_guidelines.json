@@ -165,13 +165,17 @@
       "VideoBackground": "src/components/media/VideoBackground.jsx - unico camino permitido para poner video de fondo. Ya resuelve poster primero, lazy por IntersectionObserver, pausa fuera de viewport, prefers-reduced-motion, ahorro de datos/2g, calidad 360 mobile / 720 desktop y fallback a poster si el archivo falla. Nunca uses un <video> crudo.",
       "VideoHero": "src/components/media/VideoHero.jsx - rota clips con fundido cruzado; solo reproduce el activo; no rota con movimiento reducido.",
       "Reveal": "src/components/common/Reveal.jsx - aparicion al entrar en viewport, se dispara una sola vez.",
-      "overlays": "Scrims calibrados para texto blanco: default | hero | card | turf | veil | none. Sobre video nunca pongas texto sin scrim: el futbol tiene mucho verde claro y cielo."
+      "overlays": "Scrims calibrados para texto blanco: default | hero | card | turf | veil | none. Sobre video nunca pongas texto sin scrim: el futbol tiene mucho verde claro y cielo.",
+      "PhotoBackdrop": "src/components/media/PhotoBackdrop.jsx - unico camino para poner una foto de fondo. Scrims calibrados: banda | panel | tarjeta | turf | vacio | velo | none.",
+      "PageHeader": "src/components/common/PageHeader.jsx - encabezado con foto para paginas interiores. Deliberadamente compacto (~150px mobile, ~190px desktop): es una app de uso diario desde el celular, una banda de media pantalla obliga a scrollear para llegar a lo que se vino a hacer.",
+      "EmptyState": "src/components/common/EmptyState.jsx - estado vacio con foto. El set FOTOS_VACIO son canchas sin nadie: un festejo multitudinario detras de un 'todavia no hay partidos' se contradice solo."
     },
     "performance_budget": {
       "max_playing_videos_per_screen": 2,
       "grid_cards": "En grillas y carruseles de muchas tarjetas usar clip.poster como imagen, no <video>.",
       "audio": "Jamas. Los videos van muted, sin controles y con aria-hidden.",
-      "calidad_unica": "360p en todos los dispositivos. No hay switch por viewport: solo se sirve una calidad."
+      "calidad_unica": "360p en todos los dispositivos. No hay switch por viewport: solo se sirve una calidad.",
+      "video_solo_en": "Landing, Dashboard y auth. Las 15 paginas interiores usan foto y no video: son de uso diario desde el celular y un video por pantalla es peso y bateria sin ganancia."
     },
     "tailwind_tokens": {
       "animations": "ken-burns, marquee, marquee-slow, float, glow-pulse, gradient-x, shimmer, pitch-sweep",
@@ -182,6 +186,16 @@
       "Toda animacion decorativa propia lleva motion-reduce:animate-none o motion-reduce:transition-none. index.css ademas frena globalmente con prefers-reduced-motion.",
       "Los puntos de navegacion de un carrusel son botones reales, con aria-label descriptivo y aria-current en el activo.",
       "Nunca dos superficies claras planas seguidas: alternar malla clara / oscuro / video."
-    ]
+    ],
+    "photo_catalog": {
+      "intent": "El criterio de seleccion no fue estetico sino de identificacion. Pedido textual del usuario: 'quiero que todo aquel que entre se sienta identificado de una u otra manera'. Por eso hay barro, potrero, cemento, los Andes de Jujuy, canchas de barrio sudamericanas, femenino y partidos de noche.",
+      "file": "src/constants/fotos.js",
+      "source": "Pexels - licencia gratuita, uso comercial, sin atribucion obligatoria.",
+      "hosting": "Self-hosted en frontend/public/fotos/<id>.jpg a 1280px (~13.7 MB, 53 fotos). Recomprimir con PIL solo dio 4%: Pexels ya las sirve optimizadas.",
+      "clubes_excluidos": "Bombonera, Monumental y Libertadores de America quedaron AFUERA a proposito. Existen con licencia libre, pero una cancha con escudo identificable hace que la mitad de los usuarios se sienta ajena, que es lo contrario del objetivo. Reemplazadas por potrero, cancha de barrio y cemento.",
+      "forma_no_es_decorativa": "Cada foto lleva `forma` calculada del archivo real: 'ancha' (ratio>=1.35, 24 fotos) sirve de banda de encabezado; 'cuadrada' (1.0-1.35, 7) sirve de tarjeta; 'alta' (<1.0, 22) sirve de panel lateral o tarjeta vertical. Una 'alta' estirada en una banda se recorta a una tira sin sentido, y PhotoBackdrop avisa por consola en desarrollo cuando pasa. OJO: las 4 fotos de los Andes de Jujuy son 'alta'.",
+      "encabezados_curados": "fotoDePagina(slug) devuelve el encabezado de cada pagina: 15 slugs, una foto por pagina y sin repetir, elegidas por lo que la pagina significa (cancha vacia al amanecer para crear-partido, aerea para equipos, lluvia para post-partido). Curado a mano y centralizado a proposito: si cada pantalla elige por su cuenta, varias terminan con la misma imagen."
+    },
+    "tailwind_gotchas": "El plugin tailwindcss-animate hace que `duration-*` setee animation-duration ADEMAS de transition-duration. Si un elemento lleva `animate-*` y `duration-*`, la clase de duracion le pisa la animacion (nos convirtio 22s de deriva en 0.7s de zoom brusco). Para la transicion en un elemento animado, usar [transition-duration:700ms]."
   }
 }

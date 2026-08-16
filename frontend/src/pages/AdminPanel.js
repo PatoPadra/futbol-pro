@@ -2,10 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Input } from '../components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -19,22 +16,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { Shield, Users, Trophy, BarChart3, UserCheck, UserCog, Search, Loader2, RefreshCw, Calendar, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Trophy, BarChart3, UserCheck, UserCog, Loader2, RefreshCw, Calendar, AlertTriangle, ChevronRight, Lock } from 'lucide-react';
 import { toast } from 'sonner';
-import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MODALITY_LABELS } from '@/constants/matches';
+import { MATCH_STATUS_ACCENT_BORDER, MODALITY_LABELS } from '@/constants/matches';
 import PageLoader from '@/components/common/PageLoader';
+import PageHeader from '@/components/common/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
+import PanelSection from '@/components/panels/PanelSection';
+import MetricTiles from '@/components/panels/MetricTiles';
+import PanelSearch from '@/components/panels/PanelSearch';
+import { EstadoChip, RolChip } from '@/components/panels/StatusChip';
 import { buildPhotoUrl } from '@/utils/photos';
 
 const ROLE_LABELS = {
   jugador: 'Jugador',
   organizador: 'Organizador',
   admin: 'Admin',
-};
-
-const ROLE_BADGE_CLASS = {
-  admin: 'bg-secondary text-secondary-foreground border-transparent',
-  organizador: 'bg-turf/10 text-turf-accessible border-turf/20',
-  jugador: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const initialsOf = (name, email) => {
@@ -124,15 +121,28 @@ export default function AdminPanel() {
   if (error && !stats && users.length === 0 && matches.length === 0) {
     return (
       <div className="page-container" data-testid="admin-panel">
-        <Card className="border-dashed border-slate-200 mt-8">
-          <CardContent className="p-10 text-center">
-            <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium mb-4">No pudimos cargar el panel de administración</p>
-            <Button onClick={load} variant="outline" className="rounded-full" data-testid="admin-retry">
-              <RefreshCw className="w-4 h-4 mr-1.5" /> Reintentar
+        <PageHeader
+          slug="admin"
+          eyebrow="Sistema"
+          titulo="Panel Admin"
+          bajada="Gestión general del sistema."
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={Shield}
+        />
+
+        <EmptyState
+          variante={0}
+          icono={Shield}
+          titulo="No pudimos cargar el panel"
+          descripcion="Se cayó alguna de las tres consultas de administración. Probá de nuevo; si sigue igual, revisá el estado del servidor."
+          className="mt-6"
+          accion={
+            <Button onClick={load} variant="outline" shape="pill" className="border-2 border-white/70 bg-white/10 px-6 text-white hover:bg-white/20 hover:text-white" data-testid="admin-retry">
+              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Reintentar
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       </div>
     );
   }
@@ -148,194 +158,230 @@ export default function AdminPanel() {
       ]
     : [];
 
-  const toneClasses = {
-    slate: 'bg-slate-100 text-slate-600',
-    orange: 'bg-orange/10 text-orange',
-    turf: 'bg-turf/10 text-turf-accessible',
-  };
-
   const isHighImpact = pendingChange && (pendingChange.newRole === 'admin' || pendingChange.user?.role === 'admin');
+
+  const tabTriggerClass =
+    'h-10 rounded-lg text-sm font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm';
 
   return (
     <div className="page-container" data-testid="admin-panel">
-      <div className="animate-slide-up">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-            <Shield className="w-5 h-5 text-secondary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase tracking-tight">Panel Admin</h1>
-            <p className="text-sm text-slate-500">Gestión general del sistema</p>
-          </div>
-        </div>
+      <div className="animate-slide-up motion-reduce:animate-none">
+        <PageHeader
+          slug="admin"
+          eyebrow="Sistema"
+          titulo="Panel Admin"
+          bajada="Gestión general del sistema: usuarios, roles y partidos."
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={Shield}
+        />
 
         {/* Stats */}
         {statCards.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-            {statCards.map((s) => (
-              <Card key={s.key} className="border-slate-100" data-testid={`admin-stat-${s.key}`}>
-                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${toneClasses[s.tone]}`}>
-                    <s.icon className="w-4 h-4" />
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">{s.value ?? 0}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">{s.label}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <MetricTiles
+            className="mt-6"
+            items={statCards.map((s) => ({ ...s, testId: `admin-stat-${s.key}` }))}
+          />
         )}
 
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="w-full grid grid-cols-2 h-12 bg-slate-100 rounded-xl">
-            <TabsTrigger value="users" className="rounded-lg font-semibold text-sm" data-testid="admin-tab-users">
+        <Tabs defaultValue="users" className="mt-6 space-y-5">
+          <TabsList className="grid h-12 w-full grid-cols-2 rounded-xl bg-slate-100 p-1">
+            <TabsTrigger value="users" className={tabTriggerClass} data-testid="admin-tab-users">
+              <Users className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Usuarios ({users.length})
             </TabsTrigger>
-            <TabsTrigger value="matches" className="rounded-lg font-semibold text-sm" data-testid="admin-tab-matches">
+            <TabsTrigger value="matches" className={tabTriggerClass} data-testid="admin-tab-matches">
+              <Trophy className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Partidos ({matches.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Buscar por nombre o email..."
-                className="h-12 bg-slate-50 border-slate-200 focus:border-turf focus:ring-2 focus:ring-turf/20 rounded-lg pl-10"
-                data-testid="admin-user-search"
-              />
-            </div>
-
-            {filteredUsers.length === 0 ? (
-              <Card className="border-dashed border-slate-200" data-testid="admin-users-empty">
-                <CardContent className="p-8 text-center">
-                  <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">
-                    {userSearch ? 'No encontramos usuarios con esa búsqueda' : 'Todavía no hay usuarios registrados'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {filteredUsers.map((u) => {
-                  const isSelf = currentUser?.user_id === u.id;
-                  const isChangingThis = submittingChange && pendingChange?.user?.id === u.id;
-                  return (
-                    <Card key={u.id} className="border-slate-100" data-testid={`admin-user-${u.id}`}>
-                      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <Avatar className="h-10 w-10 shrink-0">
-                            <AvatarImage src={buildPhotoUrl(u.profile?.photo_url) || undefined} />
-                            <AvatarFallback className="bg-slate-100 text-slate-600 text-xs font-bold">
-                              {initialsOf(u.profile?.name, u.email)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="font-medium text-slate-900 truncate">
-                              {u.profile?.name || 'Sin nombre'}
-                              {isSelf && <span className="text-xs text-slate-400 font-normal"> (vos)</span>}
-                            </p>
-                            <p className="text-xs text-slate-500 truncate">{u.email}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 justify-between sm:justify-end shrink-0">
-                          <Badge className={`text-xs border ${ROLE_BADGE_CLASS[u.role] || ROLE_BADGE_CLASS.jugador}`}>
-                            {ROLE_LABELS[u.role] || u.role}
-                          </Badge>
-
-                          {isSelf ? (
-                            <span
-                              className="text-xs text-slate-400 italic px-1 max-w-[9rem] text-right"
-                              data-testid={`admin-role-self-${u.id}`}
-                            >
-                              No podés cambiar tu propio rol
-                            </span>
-                          ) : (
-                            <Select
-                              value={u.role}
-                              onValueChange={(v) => requestRoleChange(u, v)}
-                              disabled={isChangingThis}
-                            >
-                              <SelectTrigger className="h-11 w-36 text-xs" data-testid={`admin-role-select-${u.id}`}>
-                                {isChangingThis ? (
-                                  <span className="flex items-center gap-1.5 text-slate-400">
-                                    <Loader2 className="w-3 h-3 animate-spin" /> Guardando...
-                                  </span>
-                                ) : (
-                                  <SelectValue />
-                                )}
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="jugador">Jugador</SelectItem>
-                                <SelectItem value="organizador">Organizador</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+            <PanelSection
+              icono={Users}
+              tono="charcoal"
+              titulo="Usuarios"
+              contador={`${filteredUsers.length} de ${users.length}`}
+              descripcion="El rol define a qué llega cada cuenta. Los cambios aplican de inmediato."
+              sinPadding
+            >
+              <div className="border-b border-slate-100 p-4 md:p-5">
+                <PanelSearch
+                  id="admin-user-search-input"
+                  label="Buscar usuario por nombre o email"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  onLimpiar={() => setUserSearch('')}
+                  placeholder="Buscar por nombre o email..."
+                  resultados={filteredUsers.length}
+                  sustantivo="usuarios"
+                  testId="admin-user-search"
+                />
               </div>
-            )}
+
+              {filteredUsers.length === 0 ? (
+                <div className="p-4 md:p-5" data-testid="admin-users-empty">
+                  <EmptyState
+                    variante={1}
+                    icono={Users}
+                    titulo={userSearch ? 'Sin resultados' : 'Todavía no hay usuarios'}
+                    descripcion={
+                      userSearch
+                        ? 'No encontramos usuarios con esa búsqueda. Probá con parte del nombre o del email.'
+                        : 'Todavía no hay usuarios registrados en el sistema.'
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  {/* Encabezado de columnas: solo desde md, donde la fila entra completa. */}
+                  <div className="hidden border-b border-slate-100 bg-white px-5 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 md:flex md:items-center md:gap-3">
+                    <span className="flex-1">Cuenta</span>
+                    <span className="w-28">Rol actual</span>
+                    <span className="w-36 text-right">Cambiar rol</span>
+                  </div>
+
+                  <ul className="divide-y divide-slate-100">
+                    {filteredUsers.map((u) => {
+                      const isSelf = currentUser?.user_id === u.id;
+                      const isChangingThis = submittingChange && pendingChange?.user?.id === u.id;
+                      return (
+                        <li
+                          key={u.id}
+                          data-testid={`admin-user-${u.id}`}
+                          className="flex flex-col gap-3 px-4 py-3 transition-colors even:bg-slate-50/60 hover:bg-turf/5 md:flex-row md:items-center md:px-5"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <Avatar className="h-10 w-10 shrink-0 ring-1 ring-slate-200">
+                              <AvatarImage src={buildPhotoUrl(u.profile?.photo_url) || undefined} />
+                              <AvatarFallback className="bg-slate-100 text-xs font-bold text-slate-600">
+                                {initialsOf(u.profile?.name, u.email)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-1.5 truncate font-semibold text-slate-900">
+                                {u.profile?.name || 'Sin nombre'}
+                                {isSelf && (
+                                  <span className="shrink-0 rounded-md bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                    Vos
+                                  </span>
+                                )}
+                              </p>
+                              <p className="truncate text-xs tabular-nums text-slate-500">{u.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 items-center justify-between gap-3 md:justify-end">
+                            <div className="md:w-28">
+                              <RolChip role={u.role} />
+                            </div>
+
+                            {isSelf ? (
+                              <span
+                                className="flex w-36 items-center justify-end gap-1.5 text-right text-[11px] leading-tight text-slate-500"
+                                data-testid={`admin-role-self-${u.id}`}
+                              >
+                                <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                No podés cambiar tu propio rol
+                              </span>
+                            ) : (
+                              <Select
+                                value={u.role}
+                                onValueChange={(v) => requestRoleChange(u, v)}
+                                disabled={isChangingThis}
+                              >
+                                <SelectTrigger
+                                  className="h-11 w-36 rounded-lg border-slate-200 bg-white text-xs"
+                                  data-testid={`admin-role-select-${u.id}`}
+                                >
+                                  {isChangingThis ? (
+                                    <span className="flex items-center gap-1.5 text-slate-500">
+                                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Guardando...
+                                    </span>
+                                  ) : (
+                                    <SelectValue />
+                                  )}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="jugador">Jugador</SelectItem>
+                                  <SelectItem value="organizador">Organizador</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </PanelSection>
           </TabsContent>
 
           <TabsContent value="matches" className="space-y-4">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                value={matchSearch}
-                onChange={(e) => setMatchSearch(e.target.value)}
-                placeholder="Buscar por título..."
-                className="h-12 bg-slate-50 border-slate-200 focus:border-turf focus:ring-2 focus:ring-turf/20 rounded-lg pl-10"
-                data-testid="admin-match-search"
-              />
-            </div>
+            <PanelSection
+              icono={Trophy}
+              tono="turf"
+              titulo="Partidos"
+              contador={`${filteredMatches.length} de ${matches.length}`}
+              descripcion="Todos los partidos del sistema. Entrá a uno para ver el detalle."
+              sinPadding
+            >
+              <div className="border-b border-slate-100 p-4 md:p-5">
+                <PanelSearch
+                  id="admin-match-search-input"
+                  label="Buscar partido por título"
+                  value={matchSearch}
+                  onChange={(e) => setMatchSearch(e.target.value)}
+                  onLimpiar={() => setMatchSearch('')}
+                  placeholder="Buscar por título..."
+                  resultados={filteredMatches.length}
+                  sustantivo="partidos"
+                  testId="admin-match-search"
+                />
+              </div>
 
-            {filteredMatches.length === 0 ? (
-              <Card className="border-dashed border-slate-200" data-testid="admin-matches-empty">
-                <CardContent className="p-8 text-center">
-                  <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">
-                    {matchSearch ? 'No encontramos partidos con esa búsqueda' : 'Todavía no hay partidos creados'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {filteredMatches.map((m) => (
-                  <Link
-                    to={`/partidos/${m.id}`}
-                    key={m.id}
-                    className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                    data-testid={`admin-match-${m.id}`}
-                  >
-                    <Card className="border-slate-100 hover:shadow-sm cursor-pointer transition-shadow">
-                      <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900 truncate">{m.title}</p>
-                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" /> {m.date}
+              {filteredMatches.length === 0 ? (
+                <div className="p-4 md:p-5" data-testid="admin-matches-empty">
+                  <EmptyState
+                    variante={2}
+                    icono={Trophy}
+                    titulo={matchSearch ? 'Sin resultados' : 'Todavía no hay partidos'}
+                    descripcion={
+                      matchSearch
+                        ? 'No encontramos partidos con esa búsqueda. Probá con parte del título.'
+                        : 'Todavía no hay partidos creados en el sistema.'
+                    }
+                  />
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {filteredMatches.map((m) => (
+                    <li key={m.id} className="even:bg-slate-50/60">
+                      <Link
+                        to={`/partidos/${m.id}`}
+                        className={`flex min-h-[56px] items-center gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-turf/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-turf md:px-5 ${MATCH_STATUS_ACCENT_BORDER[m.status] || 'border-l-slate-200'}`}
+                        data-testid={`admin-match-${m.id}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-900">{m.title}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                            <span className="flex items-center gap-1 tabular-nums">
+                              <Calendar className="h-3 w-3" aria-hidden="true" /> {m.date}
                             </span>
                             <span>{MODALITY_LABELS[m.modality] || `Futbol ${m.modality}`}</span>
                           </div>
                         </div>
-                        <Badge
-                          className={`text-xs font-semibold border shrink-0 ${MATCH_STATUS_BADGE_CLASS[m.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}
-                        >
-                          {MATCH_STATUS_LABELS[m.status] || m.status}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            )}
+
+                        <EstadoChip status={m.status} className="shrink-0" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PanelSection>
           </TabsContent>
         </Tabs>
       </div>
@@ -346,11 +392,16 @@ export default function AdminPanel() {
       >
         <AlertDialogContent className="rounded-2xl" data-testid="admin-role-confirm-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              {isHighImpact && <AlertTriangle className="w-5 h-5 text-orange shrink-0" />}
+            {isHighImpact && (
+              <div className="mb-1 flex items-center gap-2 rounded-xl border border-orange/25 bg-orange/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-orange-accessible">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Cambio sensible de permisos
+              </div>
+            )}
+            <AlertDialogTitle className="text-left font-heading text-xl uppercase tracking-tight">
               ¿Cambiar el rol de {pendingChange?.user?.profile?.name || pendingChange?.user?.email}?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-left leading-relaxed">
               {pendingChange?.newRole === 'admin'
                 ? 'Va a tener acceso total al sistema: gestión de usuarios, roles y estadísticas. Este cambio aplica de inmediato.'
                 : pendingChange?.user?.role === 'admin'
@@ -358,11 +409,20 @@ export default function AdminPanel() {
                 : `Va a pasar de ${ROLE_LABELS[pendingChange?.user?.role]} a ${ROLE_LABELS[pendingChange?.newRole]}. Este cambio aplica de inmediato.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {pendingChange && (
+            <div className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <RolChip role={pendingChange.user?.role} />
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <RolChip role={pendingChange.newRole} />
+            </div>
+          )}
+
           <AlertDialogFooter>
             <AlertDialogCancel
               data-testid="admin-role-cancel"
               disabled={submittingChange}
-              className="rounded-full font-bold uppercase tracking-wide"
+              className="h-11 rounded-full font-bold uppercase tracking-wide"
             >
               Cancelar
             </AlertDialogCancel>
@@ -372,10 +432,20 @@ export default function AdminPanel() {
                 confirmRoleChange();
               }}
               disabled={submittingChange}
-              className="rounded-full font-bold uppercase tracking-wide"
+              className={`h-11 rounded-full font-bold uppercase tracking-wide ${
+                isHighImpact
+                  ? 'bg-orange-accessible text-white hover:bg-orange-accessible/90'
+                  : 'bg-turf text-white hover:bg-turf-dark'
+              }`}
               data-testid="admin-role-confirm"
             >
-              {submittingChange ? 'Guardando...' : 'Confirmar cambio'}
+              {submittingChange ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Guardando...
+                </>
+              ) : (
+                'Confirmar cambio'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

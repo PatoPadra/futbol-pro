@@ -5,14 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
-import { cn } from '../lib/utils';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { badgeVariants } from '../components/ui/badge';
-import { Camera, Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/card';
+import { Camera, Loader2, AlertCircle, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import PageHeader from '@/components/common/PageHeader';
+import Reveal from '@/components/common/Reveal';
+import PositionPicker from '@/components/players/PositionPicker';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
@@ -26,6 +27,40 @@ const profileSchema = z.object({
   secondary_positions: z.array(z.string()).max(3).default([]),
   unwanted_position: z.string().default(''),
 });
+
+const INPUT_BASE =
+  'mt-1.5 h-12 bg-slate-50 focus-visible:ring-2 focus-visible:ring-turf/30';
+
+/**
+ * Encabezado de sección del onboarding.
+ *
+ * Lleva el número del paso adelante: no es un wizard (todo se completa en una
+ * sola pantalla y se guarda de una), pero numerar las tres partes convierte una
+ * pila de campos en algo que se ve terminable.
+ */
+function PasoSeccion({ paso, titulo, ayuda, children, testId }) {
+  return (
+    <Card className="rounded-3xl border-slate-100 shadow-lift" data-testid={testId}>
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-turf/10 font-heading text-lg font-bold leading-none text-turf-accessible"
+          >
+            {paso}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-xl font-bold uppercase leading-tight tracking-tight text-slate-900">
+              {titulo}
+            </h2>
+            {ayuda && <p className="mt-1 text-sm text-slate-600">{ayuda}</p>}
+          </div>
+        </div>
+        <div className="mt-5">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function CompleteProfile() {
   const { user, updateUser } = useAuth();
@@ -150,65 +185,73 @@ export default function CompleteProfile() {
   };
 
   return (
-    <div className="page-container max-w-2xl mx-auto" data-testid="complete-profile-page">
-      <div className="animate-slide-up">
-        <p className="text-xs font-semibold uppercase tracking-wider text-turf-accessible">Último paso antes de jugar</p>
-        <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase tracking-tight mt-1">
-          Completá tu perfil
-        </h1>
-        <p className="mt-2 text-slate-500">Necesitamos algunos datos para armar equipos equilibrados.</p>
+    <div className="page-container mx-auto max-w-2xl" data-testid="complete-profile-page">
+      <PageHeader
+        slug="completar-perfil"
+        priority
+        icono={Users}
+        eyebrow="Último paso antes de jugar"
+        titulo="Completá tu perfil"
+        bajada="Necesitamos algunos datos para armar equipos equilibrados. Son dos minutos y después ya estás adentro."
+        testId="complete-profile-header"
+      />
 
-        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-8 space-y-6" noValidate>
-          {/* Photo */}
-          <Card className="border-slate-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-heading text-lg uppercase">Foto de perfil</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-6">
-                <label
-                  className="cursor-pointer group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                  data-testid="photo-upload-area"
-                  tabIndex={0}
-                  role="button"
-                  aria-label="Subir foto de perfil"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openFilePicker();
-                    }
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoChange}
-                    data-testid="photo-upload-input"
-                  />
-                  <div className="w-24 h-24 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 group-hover:border-turf flex items-center justify-center overflow-hidden transition-colors">
-                    {photoPreview ? (
-                      <img src={photoPreview} alt="Vista previa de tu foto de perfil" className="w-full h-full object-cover" />
-                    ) : (
-                      <Camera className="w-8 h-8 text-slate-400 group-hover:text-turf-accessible transition-colors" />
-                    )}
-                  </div>
-                </label>
-                <div className="text-sm text-slate-500">
-                  <p className="font-medium text-slate-700">Subí tu foto</p>
-                  <p>Ayuda a que tus compañeros te reconozcan en la cancha.</p>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-6 space-y-5" noValidate>
+        {/* Foto */}
+        <Reveal from="up" className="block">
+          <PasoSeccion
+            paso="1"
+            titulo="Tu foto"
+            ayuda="Ayuda a que tus compañeros te reconozcan en la cancha. La podés cargar después."
+          >
+            <div className="flex items-center gap-5">
+              <label
+                className="group cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                data-testid="photo-upload-area"
+                tabIndex={0}
+                role="button"
+                aria-label="Subir foto de perfil"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openFilePicker();
+                  }
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                  data-testid="photo-upload-input"
+                />
+                <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition-colors group-hover:border-turf group-hover:bg-turf/5 motion-reduce:transition-none">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Vista previa de tu foto de perfil" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera className="h-8 w-8 text-slate-500 transition-colors group-hover:text-turf-accessible motion-reduce:transition-none" aria-hidden="true" />
+                  )}
                 </div>
+              </label>
+              <div className="text-sm text-slate-600">
+                <p className="font-semibold text-slate-900">
+                  {photoPreview ? 'Buena foto' : 'Subí tu foto'}
+                </p>
+                <p className="mt-0.5">
+                  {photoPreview
+                    ? 'Tocá la imagen si querés cambiarla.'
+                    : 'Tocá el cuadro y elegí una imagen de hasta 5 MB.'}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </PasoSeccion>
+        </Reveal>
 
-          {/* Basic Info */}
-          <Card className="border-slate-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-heading text-lg uppercase">Datos básicos</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        {/* Datos básicos */}
+        <Reveal from="up" delay={60} className="block">
+          <PasoSeccion paso="2" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad, nada más.">
+            <div className="space-y-4">
               <div>
                 <Label htmlFor="name">Nombre</Label>
                 <Input
@@ -217,7 +260,7 @@ export default function CompleteProfile() {
                   disabled={loading}
                   autoComplete="name"
                   aria-invalid={!!errors.name}
-                  className={`mt-1.5 h-12 bg-slate-50 focus-visible:ring-2 focus-visible:ring-turf/30 ${errors.name ? 'border-red-300' : ''}`}
+                  className={`${INPUT_BASE} ${errors.name ? 'border-red-300' : ''}`}
                   {...register('name')}
                 />
                 {errors.name && (
@@ -234,146 +277,108 @@ export default function CompleteProfile() {
                   autoComplete="bday"
                   max={todayISO()}
                   aria-invalid={!!errors.birth_date}
-                  className={`mt-1.5 h-12 bg-slate-50 focus-visible:ring-2 focus-visible:ring-turf/30 ${errors.birth_date ? 'border-red-300' : ''}`}
+                  className={`${INPUT_BASE} ${errors.birth_date ? 'border-red-300' : ''}`}
                   {...register('birth_date')}
                 />
                 {errors.birth_date && (
                   <p className="mt-1 text-xs text-red-600" data-testid="birthdate-error">{errors.birth_date.message}</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </PasoSeccion>
+        </Reveal>
 
-          {/* Positions */}
-          <Card className="border-slate-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-heading text-lg uppercase">Posiciones</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {positionsLoading ? (
-                <div className="flex items-center gap-2 text-sm text-slate-400 py-4" data-testid="positions-loading">
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  Cargando posiciones...
+        {/* Posiciones */}
+        <Reveal from="up" delay={120} className="block">
+          <PasoSeccion paso="3" titulo="Dónde jugás" ayuda="Es lo que usamos para repartir los equipos parejos.">
+            {positionsLoading ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-slate-600" data-testid="positions-loading">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Cargando posiciones...
+              </div>
+            ) : positionsError ? (
+              <div className="flex flex-col items-center gap-2 rounded-2xl bg-red-50 py-5 text-center" data-testid="positions-error">
+                <AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />
+                <p className="text-sm text-red-600">No pudimos cargar las posiciones.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  shape="pill"
+                  onClick={loadPositions}
+                  data-testid="positions-retry-btn"
+                  className="h-11 bg-white px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                >
+                  Reintentar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <Label className="text-sm font-semibold">Posición principal</Label>
+                  <PositionPicker
+                    className="mt-2"
+                    ariaLabel="Posición principal"
+                    opciones={positions}
+                    seleccion={primaryPosition}
+                    testIdPrefix="primary-pos"
+                    onToggle={selectPrimary}
+                    disabled={loading}
+                  />
+                  {errors.primary_position && (
+                    <p className="mt-2 text-xs text-red-600" data-testid="primary-position-error">{errors.primary_position.message}</p>
+                  )}
                 </div>
-              ) : positionsError ? (
-                <div className="flex flex-col items-center gap-2 py-4 text-center" data-testid="positions-error">
-                  <AlertCircle className="w-5 h-5 text-red-500" aria-hidden="true" />
-                  <p className="text-sm text-red-600">No pudimos cargar las posiciones.</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={loadPositions}
-                    data-testid="positions-retry-btn"
-                    className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                  >
-                    Reintentar
-                  </Button>
+
+                <div>
+                  <Label className="text-sm font-semibold">Posiciones secundarias (máx. 3)</Label>
+                  <p className="mt-1 text-xs text-slate-500">Donde también te la rebuscás. Opcional.</p>
+                  <PositionPicker
+                    className="mt-2"
+                    ariaLabel="Posiciones secundarias"
+                    opciones={positions.filter(p => p.id !== primaryPosition)}
+                    seleccion={secondaryPositions}
+                    testIdPrefix="secondary-pos"
+                    onToggle={toggleSecondary}
+                    disabled={loading}
+                    tono="charcoal"
+                  />
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <Label className="text-sm font-medium">Posición principal</Label>
-                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Posición principal">
-                      {positions.map(p => {
-                        const selected = primaryPosition === p.id;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            data-testid={`primary-pos-${p.id}`}
-                            aria-pressed={selected}
-                            disabled={loading}
-                            className={cn(
-                              badgeVariants({ variant: selected ? 'default' : 'outline' }),
-                              'min-h-11 cursor-pointer text-sm py-1.5 px-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
-                              selected
-                                ? 'bg-turf text-white hover:bg-turf-dark border-turf'
-                                : 'hover:border-turf hover:text-turf-accessible'
-                            )}
-                            onClick={() => selectPrimary(p.id)}
-                          >
-                            {selected && <Check className="w-3 h-3 mr-1" />}
-                            {p.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {errors.primary_position && (
-                      <p className="mt-1.5 text-xs text-red-600" data-testid="primary-position-error">{errors.primary_position.message}</p>
-                    )}
-                  </div>
 
-                  <div>
-                    <Label className="text-sm font-medium">Posiciones secundarias (máx. 3)</Label>
-                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Posiciones secundarias">
-                      {positions.filter(p => p.id !== primaryPosition).map(p => {
-                        const selected = secondaryPositions.includes(p.id);
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            data-testid={`secondary-pos-${p.id}`}
-                            aria-pressed={selected}
-                            disabled={loading}
-                            className={cn(
-                              badgeVariants({ variant: selected ? 'default' : 'outline' }),
-                              'min-h-11 cursor-pointer text-sm py-1.5 px-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
-                              selected
-                                ? 'bg-slate-800 text-white hover:bg-slate-700 border-slate-800'
-                                : 'hover:border-slate-400'
-                            )}
-                            onClick={() => toggleSecondary(p.id)}
-                          >
-                            {p.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div>
+                  <Label className="text-sm font-semibold">Posición no deseada (opcional)</Label>
+                  <p className="mt-1 text-xs text-slate-500">El organizador va a evitar ponerte ahí si puede.</p>
+                  <PositionPicker
+                    className="mt-2"
+                    ariaLabel="Posición no deseada"
+                    opciones={positions}
+                    seleccion={unwantedPosition}
+                    testIdPrefix="unwanted-pos"
+                    onToggle={toggleUnwanted}
+                    disabled={loading}
+                    tono="danger"
+                    marca="cruz"
+                  />
+                </div>
+              </div>
+            )}
+          </PasoSeccion>
+        </Reveal>
 
-                  <div>
-                    <Label className="text-sm font-medium">Posición no deseada (opcional)</Label>
-                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Posición no deseada">
-                      {positions.map(p => {
-                        const selected = unwantedPosition === p.id;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            data-testid={`unwanted-pos-${p.id}`}
-                            aria-pressed={selected}
-                            disabled={loading}
-                            className={cn(
-                              badgeVariants({ variant: selected ? 'destructive' : 'outline' }),
-                              'min-h-11 cursor-pointer text-sm py-1.5 px-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2',
-                              !selected && 'hover:border-red-300 hover:text-red-600'
-                            )}
-                            onClick={() => toggleUnwanted(p.id)}
-                          >
-                            {selected && <X className="w-3 h-3 mr-1" />}
-                            {p.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+        <Button
+          type="submit"
+          shape="pill"
+          data-testid="save-profile-btn"
+          disabled={loading || positionsLoading}
+          className="h-12 w-full bg-turf text-base text-white shadow-lift-turf hover:bg-turf-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+        >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {loading ? 'Guardando...' : 'Guardar y Continuar'}
+        </Button>
 
-          <Button
-            type="submit"
-            data-testid="save-profile-btn"
-            disabled={loading || positionsLoading}
-            className="w-full h-12 bg-turf hover:bg-turf-dark text-white rounded-xl font-bold uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
-            {loading ? 'Guardando...' : 'Guardar y Continuar'}
-          </Button>
-        </form>
-      </div>
+        <p className="pb-2 text-center text-xs text-slate-500">
+          Después podés cambiar todo esto desde tu perfil.
+        </p>
+      </form>
     </div>
   );
 }

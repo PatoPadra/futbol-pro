@@ -101,7 +101,7 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
 
         <div className="px-4 pb-6 space-y-4 overflow-y-auto">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" aria-hidden="true" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -110,18 +110,18 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
             data-testid="add-guest-search"
           />
         </div>
-        <p className="text-xs text-slate-400 -mt-2">Mostrando invitados de este grupo.</p>
+        <p className="text-xs text-slate-500 -mt-2">Mostrando invitados de este grupo.</p>
 
         <div className="max-h-64 overflow-y-auto -mx-1 px-1 space-y-2">
           {loadingMembers ? (
-            <div className="flex items-center justify-center py-8 text-slate-400" role="status">
+            <div className="flex items-center justify-center py-8 text-slate-500" role="status">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span className="sr-only">Cargando invitados...</span>
             </div>
           ) : loadError ? (
             <p className="text-sm text-red-600 text-center py-6">No pudimos cargar los miembros del grupo.</p>
           ) : eligibleGuests.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-6">
+            <p className="text-sm text-slate-500 text-center py-6">
               {members.length === 0
                 ? 'Este grupo todavía no tiene invitados.'
                 : 'No hay invitados disponibles para anotar (ya están todos en el partido o no coinciden con la búsqueda).'}
@@ -130,7 +130,7 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
             eligibleGuests.map((m) => (
               <div
                 key={m.player_id}
-                className="flex items-center gap-3 rounded-xl border border-slate-100 p-2.5"
+                className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-2.5 transition-colors hover:bg-slate-50/80 motion-reduce:transition-none"
                 data-testid={`add-guest-row-${m.player_id}`}
               >
                 <Avatar className="w-9 h-9 shrink-0">
@@ -141,14 +141,15 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">{m.player_name}</p>
-                  <p className="text-xs text-slate-400">{m.primary_position || 'Sin posición cargada'}</p>
+                  <p className="text-xs text-slate-500">{m.primary_position || 'Sin posición cargada'}</p>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   onClick={() => registerGuest(m.player_id)}
                   disabled={registeringId === m.player_id}
-                  className="rounded-full bg-turf hover:bg-turf-dark text-white shrink-0 min-w-20"
+                  shape="pill"
+                  className="h-11 min-w-20 shrink-0 bg-turf text-white hover:bg-turf-dark focus-visible:ring-turf"
                   data-testid={`add-guest-confirm-${m.player_id}`}
                 >
                   {registeringId === m.player_id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Anotar'}
@@ -178,7 +179,7 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
               <span className="hidden sm:inline ml-1.5">Crear y anotar</span>
             </Button>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Se crea con datos básicos; podés completar foto y posición después desde su perfil.
           </p>
         </form>

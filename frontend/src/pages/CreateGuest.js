@@ -6,13 +6,16 @@ import { z } from 'zod';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardContent } from '../components/ui/card';
 import { badgeVariants } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import { Slider } from '../components/ui/slider';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form';
-import { Check, UserPlus, Camera, Loader2 } from 'lucide-react';
+import { Check, UserPlus, Camera, Loader2, IdCard, Star } from 'lucide-react';
 import { toast } from 'sonner';
+
+import PageHeader from '../components/common/PageHeader';
+import SectionPanel from '../components/groups/SectionPanel';
+import GuestPreviewCard from '../components/groups/GuestPreviewCard';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -51,6 +54,8 @@ export default function CreateGuest() {
   const { control, handleSubmit, watch, setValue } = form;
   const selectedPosition = watch('primary_position');
   const selectedLevel = watch('estimated_level');
+  const nombreEscrito = watch('name');
+  const nombrePosicion = positions.find((p) => p.id === selectedPosition)?.name || '';
 
   useEffect(() => {
     api.get('/positions').then(res => setPositions(res.data)).catch(() => {});
@@ -127,174 +132,200 @@ export default function CreateGuest() {
   };
 
   return (
-    <div className="page-container max-w-lg mx-auto" data-testid="create-guest-page">
-      <div className="animate-slide-up">
-        <h1 className="font-heading text-3xl font-bold uppercase tracking-tight mb-2">Invitar Jugador</h1>
-        <p className="text-slate-500 mb-8">Creá un perfil para un invitado que no tiene cuenta.</p>
+    <div className="page-container mx-auto max-w-xl" data-testid="create-guest-page">
+      <div className="animate-slide-up space-y-6">
+        <PageHeader
+          slug="invitar"
+          eyebrow="Sumar a alguien"
+          titulo="Invitar jugador"
+          bajada="Creá la ficha de alguien que todavía no tiene cuenta en la app."
+          volverA="/dashboard"
+          volverLabel="Inicio"
+          icono={UserPlus}
+          testId="create-guest-header"
+        />
+
+        <GuestPreviewCard
+          nombre={nombreEscrito}
+          photoPreview={photoPreview}
+          posicion={nombrePosicion}
+          nivel={selectedLevel}
+          nivelLabel={levelLabel(selectedLevel)}
+        />
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-            <Card className="border-slate-100">
-              <CardContent className="p-5 space-y-4">
-                {/* Photo upload */}
-                <div className="flex items-center gap-5">
-                  <div className="relative shrink-0">
-                    <label className="cursor-pointer group block" data-testid="guest-photo-upload">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only peer"
-                        onChange={handlePhotoChange}
-                        data-testid="guest-photo-input"
-                      />
-                      <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 group-hover:border-turf peer-focus-visible:border-turf peer-focus-visible:ring-2 peer-focus-visible:ring-turf/40 peer-focus-visible:ring-offset-2 flex items-center justify-center overflow-hidden transition-colors">
-                        {photoPreview ? (
-                          <img src={photoPreview} alt="Vista previa de la foto del invitado" className="w-full h-full object-cover" />
-                        ) : (
-                          <Camera className="w-7 h-7 text-slate-400 group-hover:text-turf-accessible transition-colors" />
-                        )}
-                      </div>
-                    </label>
-                    {photoPreview && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (photoPreviewRef.current) URL.revokeObjectURL(photoPreviewRef.current);
-                          setPhoto(null);
-                          setPhotoPreview(null);
-                        }}
-                        className="absolute -top-3 -right-3 w-11 h-11 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 rounded-full"
-                        aria-label="Quitar foto"
-                        data-testid="guest-photo-remove"
-                      >
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-md pointer-events-none">
-                          <span className="text-xs leading-none">×</span>
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                  <div className="text-sm text-slate-500">
-                    <p className="font-medium text-slate-700">Foto (opcional)</p>
-                    <p>Subí una foto para que lo reconozcan. Máx. 5 MB.</p>
-                  </div>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+            <SectionPanel
+              icono={IdCard}
+              titulo="Quién es"
+              descripcion="Con el nombre alcanza. El email es opcional, pero sirve."
+              contentClassName="space-y-4"
+            >
+              {/* Photo upload */}
+              <div className="flex items-center gap-5">
+                <div className="relative shrink-0">
+                  <label className="cursor-pointer group block" data-testid="guest-photo-upload">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only peer"
+                      onChange={handlePhotoChange}
+                      data-testid="guest-photo-input"
+                    />
+                    <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 group-hover:border-turf peer-focus-visible:border-turf peer-focus-visible:ring-2 peer-focus-visible:ring-turf/40 peer-focus-visible:ring-offset-2 flex items-center justify-center overflow-hidden transition-colors">
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="Vista previa de la foto del invitado" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera className="w-7 h-7 text-slate-500 group-hover:text-turf-accessible transition-colors" />
+                      )}
+                    </div>
+                  </label>
+                  {photoPreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (photoPreviewRef.current) URL.revokeObjectURL(photoPreviewRef.current);
+                        setPhoto(null);
+                        setPhotoPreview(null);
+                      }}
+                      className="absolute -top-3 -right-3 w-11 h-11 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 rounded-full"
+                      aria-label="Quitar foto"
+                      data-testid="guest-photo-remove"
+                    >
+                      <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-md pointer-events-none">
+                        <span className="text-xs leading-none">×</span>
+                      </span>
+                    </button>
+                  )}
                 </div>
+                <div className="text-sm text-slate-600">
+                  <p className="font-semibold text-slate-800">Foto (opcional)</p>
+                  <p>Subí una foto para que lo reconozcan. Máx. 5 MB.</p>
+                </div>
+              </div>
 
-                <FormField
-                  control={control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Nombre del invitado <span className="text-orange">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          data-testid="guest-name-input"
-                          placeholder="Nombre del jugador"
-                          className="mt-1.5 h-12 bg-slate-50"
-                        />
-                      </FormControl>
-                      <FormMessage data-testid="guest-name-error" />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Nombre del invitado <span className="text-orange-accessible">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        data-testid="guest-name-input"
+                        placeholder="Nombre del jugador"
+                        className="mt-1.5 h-12 rounded-xl bg-slate-50"
+                      />
+                    </FormControl>
+                    <FormMessage data-testid="guest-name-error" />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email (opcional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="email"
-                          data-testid="guest-email-input"
-                          placeholder="email@invitado.com"
-                          className="mt-1.5 h-12 bg-slate-50"
-                        />
-                      </FormControl>
-                      <p className="text-xs text-slate-400">
-                        Si lo cargás, cuando se cree una cuenta con ese email va a recuperar automáticamente su historial de partidos.
-                      </p>
-                      <FormMessage data-testid="guest-email-error" />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email (opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="email"
+                        data-testid="guest-email-input"
+                        placeholder="email@invitado.com"
+                        className="mt-1.5 h-12 rounded-xl bg-slate-50"
+                      />
+                    </FormControl>
+                    <p className="text-xs leading-relaxed text-slate-600">
+                      Si lo cargás, cuando se cree una cuenta con ese email va a recuperar automáticamente su historial de partidos.
+                    </p>
+                    <FormMessage data-testid="guest-email-error" />
+                  </FormItem>
+                )}
+              />
+            </SectionPanel>
 
-                <p className="text-sm font-medium tracking-wide text-slate-400 uppercase pt-2">Perfil de juego</p>
-                <FormField
-                  control={control}
-                  name="primary_position"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Posición estimada (opcional)</FormLabel>
-                      <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Posición estimada">
-                        {positions.map(p => {
-                          const selected = selectedPosition === p.id;
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              data-testid={`guest-pos-${p.id}`}
-                              aria-pressed={selected}
-                              className={cn(
-                                badgeVariants({ variant: selected ? 'default' : 'outline' }),
-                                'min-h-11 cursor-pointer text-sm py-1.5 px-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
-                                selected ? 'bg-turf text-white border-turf' : 'hover:border-turf hover:text-turf-accessible'
-                              )}
-                              onClick={() => setValue('primary_position', selected ? '' : p.id, { shouldValidate: true })}
-                            >
-                              {selected && <Check className="w-3 h-3 mr-1" />}
-                              {p.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <FormMessage data-testid="guest-position-error" />
-                    </FormItem>
-                  )}
-                />
+            <SectionPanel
+              icono={Star}
+              titulo="Perfil de juego"
+              descripcion="Una estimación para que el armado de equipos arranque parejo. Después se ajusta sola."
+              contentClassName="space-y-5"
+            >
+              <FormField
+                control={control}
+                name="primary_position"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Posición estimada (opcional)</FormLabel>
+                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Posición estimada">
+                      {positions.map(p => {
+                        const selected = selectedPosition === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            data-testid={`guest-pos-${p.id}`}
+                            aria-pressed={selected}
+                            className={cn(
+                              badgeVariants({ variant: selected ? 'default' : 'outline' }),
+                              'min-h-11 cursor-pointer text-sm py-1.5 px-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
+                              selected ? 'bg-turf text-white border-turf' : 'border-slate-300 hover:border-turf hover:text-turf-accessible'
+                            )}
+                            onClick={() => setValue('primary_position', selected ? '' : p.id, { shouldValidate: true })}
+                          >
+                            {selected && <Check className="w-3 h-3 mr-1" />}
+                            {p.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <FormMessage data-testid="guest-position-error" />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={control}
-                  name="estimated_level"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Nivel estimado: {selectedLevel}{' '}
-                        <span className="text-slate-400 font-normal normal-case">· {levelLabel(selectedLevel)}</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Slider
-                          data-testid="guest-level-slider"
-                          min={1}
-                          max={10}
-                          step={0.5}
-                          value={[field.value]}
-                          onValueChange={v => field.onChange(v[0])}
-                          className="mt-3"
-                          aria-label="Nivel estimado del jugador"
-                        />
-                      </FormControl>
-                      <div className="flex justify-between text-xs text-slate-400 mt-1">
-                        <span>Principiante</span>
-                        <span>Experto</span>
-                      </div>
-                      <FormMessage data-testid="guest-level-error" />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+              <FormField
+                control={control}
+                name="estimated_level"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Nivel estimado:{' '}
+                      <span className="font-heading text-base tabular-nums">{selectedLevel}</span>{' '}
+                      <span className="font-normal normal-case text-slate-600">· {levelLabel(selectedLevel)}</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Slider
+                        data-testid="guest-level-slider"
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        value={[field.value]}
+                        onValueChange={v => field.onChange(v[0])}
+                        className="mt-3"
+                        aria-label="Nivel estimado del jugador"
+                      />
+                    </FormControl>
+                    <div className="mt-1 flex justify-between text-xs text-slate-600">
+                      <span>Principiante</span>
+                      <span>Experto</span>
+                    </div>
+                    <FormMessage data-testid="guest-level-error" />
+                  </FormItem>
+                )}
+              />
+            </SectionPanel>
 
             <Button
               type="submit"
               data-testid="create-guest-submit"
               disabled={loading}
               shape="pill"
-              className="w-full h-12 bg-turf hover:bg-turf-dark text-white"
+              className="h-12 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -303,7 +334,7 @@ export default function CreateGuest() {
               )}
               {step === 'creating' && 'Creando...'}
               {step === 'uploading' && 'Subiendo foto...'}
-              {step === 'idle' && 'Crear Invitado'}
+              {step === 'idle' && 'Crear invitado'}
             </Button>
           </form>
         </Form>
