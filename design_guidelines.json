@@ -147,5 +147,41 @@
     "contrast": "Ensure text contrast ratio of 4.5:1. Use 'text-slate-900' on light backgrounds, 'text-white' on primary/dark backgrounds. For turf-green text/icons specifically, use 'text-turf-accessible' (#007A33), not 'text-turf' (#00C853, which is only ~2.2:1 and fails AA for text) — see colors.palette.primary.usage.",
     "touch_targets": "Minimum 44x44px for all clickable elements.",
     "focus_states": "Visible focus rings (ring-2 ring-primary ring-offset-2) for keyboard navigation."
+  },
+  "motion_and_media": {
+    "intent": "La app arrancó demasiado blanca y estatica. La capa de medios existe para darle vida sin volverla lenta ni marear. Todo lo de aca es decorativo: nunca es la unica senal de un estado.",
+    "video_catalog": {
+      "source": "Mixkit (Envato) - licencia gratuita, uso comercial permitido, sin atribucion obligatoria. Guardamos el credito en cada entrada del catalogo igual.",
+      "file": "src/constants/media.js",
+      "url_pattern": "/videos/<id>-360.mp4 | <id>-poster.jpg",
+      "verified": "Los 19 ids del catalogo fueron verificados contra el CDN (HTTP 206 en 720p, 360p y poster) antes de entrar.",
+      "coverage": "9 profesional / 8 amateur; 9 masculino / 3 femenino / 5 mixto. Toda seleccion visible debe incluir femenino y mixto, no solo masculino.",
+      "hosting": "Self-hosted en frontend/public/videos/ (~12 MB, commiteado): 8 clips en 360p y los 19 posters. No dependemos del CDN de Mixkit en runtime.",
+      "origen": "Para regenerar o agregar un clip: https://assets.mixkit.co/videos/<id>/<id>-360.mp4 y <id>-thumb-720-0.jpg para el poster.",
+      "solo_poster": "11 de los 19 clips existen solo como poster: son los que ninguna pantalla reproduce. El campo tieneVideo del catalogo lo marca, y VideoBackground se queda en el poster en vez de pedir un 404.",
+      "calidad": "Una sola calidad (360p, 640x360) a proposito: los 720p llevaban el repo de 1.6 MB a ~60 MB y el video siempre va detras de un scrim oscuro y escalado. Para sumar 720p hay que bajar <id>-720.mp4 y reintroducir un selector por viewport en media.js y VideoBackground."
+    },
+    "components": {
+      "VideoBackground": "src/components/media/VideoBackground.jsx - unico camino permitido para poner video de fondo. Ya resuelve poster primero, lazy por IntersectionObserver, pausa fuera de viewport, prefers-reduced-motion, ahorro de datos/2g, calidad 360 mobile / 720 desktop y fallback a poster si el archivo falla. Nunca uses un <video> crudo.",
+      "VideoHero": "src/components/media/VideoHero.jsx - rota clips con fundido cruzado; solo reproduce el activo; no rota con movimiento reducido.",
+      "Reveal": "src/components/common/Reveal.jsx - aparicion al entrar en viewport, se dispara una sola vez.",
+      "overlays": "Scrims calibrados para texto blanco: default | hero | card | turf | veil | none. Sobre video nunca pongas texto sin scrim: el futbol tiene mucho verde claro y cielo."
+    },
+    "performance_budget": {
+      "max_playing_videos_per_screen": 2,
+      "grid_cards": "En grillas y carruseles de muchas tarjetas usar clip.poster como imagen, no <video>.",
+      "audio": "Jamas. Los videos van muted, sin controles y con aria-hidden.",
+      "calidad_unica": "360p en todos los dispositivos. No hay switch por viewport: solo se sirve una calidad."
+    },
+    "tailwind_tokens": {
+      "animations": "ken-burns, marquee, marquee-slow, float, glow-pulse, gradient-x, shimmer, pitch-sweep",
+      "backgrounds": "bg-mesh-turf (malla clara, reemplazo del blanco plano), bg-mesh-dark, bg-hero-turf, bg-pitch-stripes",
+      "css_utilities": ".glass, .glass-dark, .text-gradient-turf, .noise, .border-gradient-turf, .snap-row, .fade-edges-x, .shadow-lift, .shadow-lift-turf"
+    },
+    "accessibility_rules": [
+      "Toda animacion decorativa propia lleva motion-reduce:animate-none o motion-reduce:transition-none. index.css ademas frena globalmente con prefers-reduced-motion.",
+      "Los puntos de navegacion de un carrusel son botones reales, con aria-label descriptivo y aria-current en el activo.",
+      "Nunca dos superficies claras planas seguidas: alternar malla clara / oscuro / video."
+    ]
   }
 }

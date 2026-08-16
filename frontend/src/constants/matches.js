@@ -29,7 +29,7 @@ export const MATCH_STATUS_LABELS = {
 export const MATCH_STATUS_BADGE_CLASS = {
   abierto: 'bg-turf/10 text-turf-accessible border-turf/20',
   cerrado: 'bg-amber-50 text-amber-700 border-amber-200',
-  equipos_generados: 'bg-orange/10 text-orange border-orange/20',
+  equipos_generados: 'bg-orange/10 text-orange-accessible border-orange/20',
   equipos_confirmados: 'bg-secondary/10 text-secondary border-secondary/20',
   finalizado: 'bg-slate-100 text-slate-700 border-slate-200',
   completado: 'bg-slate-50 text-slate-500 border-slate-200',

@@ -90,3 +90,115 @@ html {
         display: contents !important;
     }
 }
+
+/* ==========================================================================
+   Capa visual: superficies, texturas y utilidades que usan Landing, Dashboard
+   y los fondos de video. Todo acá es decorativo — nada de esto debe ser la
+   única señal de un estado.
+   ========================================================================== */
+
+/* Vidrio. Dos variantes porque sobre fondo claro y sobre video oscuro el mismo
+   valor de opacidad da resultados muy distintos. */
+.glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+}
+.glass-dark {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(20px) saturate(130%);
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Texto con degradado. Lleva color de fallback: si el navegador no soporta
+   background-clip:text, queda texto verde legible en lugar de invisible. */
+.text-gradient-turf {
+    color: #007a33;
+}
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+    .text-gradient-turf {
+        background: linear-gradient(100deg, #00c853 0%, #69f0ae 45%, #00c853 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+}
+
+/* Grano finísimo sobre superficies oscuras: mata el aspecto de "degradado
+   plano de CSS" sin costo de imagen. */
+.noise::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Borde con degradado (truco de doble background: el relleno tapa el centro). */
+.border-gradient-turf {
+    border: 1px solid transparent;
+    background-image:
+        linear-gradient(#ffffff, #ffffff),
+        linear-gradient(120deg, #00c853, #ff6b00);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+/* Carrusel a scroll nativo: barra oculta y snap por tarjeta. Sirve de base
+   para las tiras horizontales que no necesitan Embla. */
+.snap-row {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
+}
+.snap-row::-webkit-scrollbar {
+    display: none;
+}
+.snap-row > * {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+}
+
+/* Máscara lateral para que las tiras horizontales se desvanezcan en los bordes
+   en lugar de cortarse en seco. */
+.fade-edges-x {
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        #000 40px,
+        #000 calc(100% - 40px),
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        #000 40px,
+        #000 calc(100% - 40px),
+        transparent 100%
+    );
+}
+
+/* shadow-lift y shadow-lift-turf viven en tailwind.config.js (boxShadow),
+   no acá: como clase plana no se les podían generar variantes como hover:. */
+
+/* Freno global: si el sistema pide menos movimiento, todo lo decorativo para.
+   Va al final para ganarle a las utilidades de animación de Tailwind. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    html {
+        scroll-behavior: auto;
+    }
+}

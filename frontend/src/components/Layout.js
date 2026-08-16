@@ -20,6 +20,10 @@ import { getDisplayName } from '../utils/user';
 import { isOrganizerRole } from '../utils/permissions';
 import { buildPhotoUrl, initialsFromName } from '../utils/photos';
 
+/** Foco visible para links y botones propios del shell (guía de accesibilidad). */
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
+
 export default function Layout({ children }) {
   const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
@@ -53,33 +57,42 @@ export default function Layout({ children }) {
   const displayName = getDisplayName(user);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="hidden md:flex sticky top-0 bg-white/85 backdrop-blur-md border-b border-slate-100 z-40 h-16 items-center px-6">
-        <Link to="/dashboard" className="flex items-center gap-2 mr-8" data-testid="nav-logo">
-          <div className="w-9 h-9 bg-turf rounded-xl flex items-center justify-center shadow-sm shadow-turf/20">
-            <Trophy className="w-5 h-5 text-white" />
+    // La malla va fija (bg-fixed) sobre el color de fondo: el contenido flota
+    // encima en lugar de apoyarse en blanco plano de borde a borde.
+    <div className="min-h-screen bg-background bg-mesh-turf">
+      <header className="glass sticky top-0 z-40 hidden h-16 items-center px-6 shadow-sm md:flex">
+        {/* Hairline de acento: hace de separador y mete el color de marca. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-turf/70 via-orange/40 to-transparent"
+        />
+
+        <Link to="/dashboard" className={`mr-8 flex items-center gap-2 rounded-xl ${FOCUS_RING}`} data-testid="nav-logo">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-hero-turf shadow-sm shadow-turf/30 ring-1 ring-white/40">
+            <Trophy className="h-5 w-5 text-white" />
           </div>
           <div>
-            <span className="font-heading text-xl font-bold uppercase tracking-tight text-slate-900 block leading-none">
+            <span className="block font-heading text-xl font-bold uppercase leading-none tracking-tight text-slate-900">
               App Futbol
             </span>
-            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Organizá mejor cada fecha</span>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Organizá mejor cada fecha</span>
           </div>
         </Link>
 
-        <nav className="flex items-center gap-1 flex-1">
+        <nav className="flex flex-1 items-center gap-1">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
               data-testid={`nav-${item.label.toLowerCase()}`}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              aria-current={isActive(item.path) ? 'page' : undefined}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors motion-reduce:transition-none ${FOCUS_RING} ${
                 isActive(item.path)
-                  ? 'bg-turf/10 text-turf-accessible'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-turf/15 text-turf-accessible shadow-sm ring-1 ring-turf/25'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
               }`}
             >
-              <item.icon className="w-4 h-4" />
+              <item.icon className="h-4 w-4" />
               {item.label}
             </Link>
           ))}
@@ -92,23 +105,23 @@ export default function Layout({ children }) {
                 data-testid="create-group-btn"
                 variant="outline"
                 onClick={() => navigate('/grupos/crear')}
-                className="rounded-full px-5 h-9 text-sm font-bold uppercase tracking-wider"
+                className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
               >
-                <Users className="w-4 h-4 mr-1" /> Crear grupo
+                <Users className="mr-1 h-4 w-4" /> Crear grupo
               </Button>
               <Button
                 data-testid="create-match-btn"
                 onClick={() => navigate('/partidos/crear')}
-                className="bg-turf hover:bg-turf-dark text-white rounded-full px-5 h-9 text-sm font-bold uppercase tracking-wider"
+                className="h-9 rounded-full bg-turf px-5 text-sm font-bold uppercase tracking-wider text-white shadow-sm shadow-turf/30 hover:bg-turf-dark"
               >
-                <Plus className="w-4 h-4 mr-1" /> Crear partido
+                <Plus className="mr-1 h-4 w-4" /> Crear partido
               </Button>
             </>
           )}
-          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 pl-1.5 pr-3 py-1.5 text-sm text-slate-600">
-            <Avatar className="w-6 h-6">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/70 py-1.5 pl-1.5 pr-3 text-sm text-slate-600">
+            <Avatar className="h-6 w-6">
               <AvatarImage src={buildPhotoUrl(user?.profile?.photo_url) || undefined} />
-              <AvatarFallback className="bg-turf/10 text-turf-accessible text-[10px] font-bold">
+              <AvatarFallback className="bg-turf/10 text-[10px] font-bold text-turf-accessible">
                 {initialsFromName(displayName)}
               </AvatarFallback>
             </Avatar>
@@ -120,37 +133,44 @@ export default function Layout({ children }) {
             onClick={handleLogout}
             data-testid="logout-btn"
             aria-label="Cerrar sesión"
-            className="text-slate-500 hover:text-red-600 rounded-full"
+            className="rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
-      <header className="md:hidden sticky top-0 bg-white/90 backdrop-blur-lg border-b border-slate-200 z-40 h-14 flex items-center justify-between px-4">
-        <Link to="/dashboard" className="flex items-center gap-2" data-testid="mobile-nav-logo">
-          <div className="w-8 h-8 bg-turf rounded-xl flex items-center justify-center shadow-sm shadow-turf/20">
-            <Trophy className="w-4 h-4 text-white" />
+      <header className="glass sticky top-0 z-40 flex h-14 items-center justify-between px-4 shadow-sm md:hidden">
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-turf/70 via-orange/40 to-transparent"
+        />
+
+        <Link to="/dashboard" className={`flex items-center gap-2 rounded-xl ${FOCUS_RING}`} data-testid="mobile-nav-logo">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-hero-turf shadow-sm shadow-turf/30 ring-1 ring-white/40">
+            <Trophy className="h-4 w-4 text-white" />
           </div>
           <div>
-            <span className="font-heading text-lg font-bold uppercase tracking-tight block leading-none">App Futbol</span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Fecha lista</span>
+            <span className="block font-heading text-lg font-bold uppercase leading-none tracking-tight">App Futbol</span>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Fecha lista</span>
           </div>
         </Link>
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="p-2 text-slate-600"
+          className={`flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-white/70 ${FOCUS_RING}`}
+          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+          aria-expanded={menuOpen}
           data-testid="mobile-menu-toggle"
         >
-          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </header>
 
       {menuOpen && (
-        <div className="md:hidden fixed inset-x-0 top-14 bg-white/95 backdrop-blur-lg border-b border-slate-200 z-30 p-4 animate-slide-up">
-          <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3 mb-3">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Sesión activa</p>
-            <p className="font-medium text-slate-900 mt-1">{displayName}</p>
+        <div className="glass animate-slide-up fixed inset-x-0 top-14 z-30 rounded-b-3xl p-4 shadow-lift motion-reduce:animate-none md:hidden">
+          <div className="mb-3 rounded-2xl border border-slate-200/70 bg-white/70 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Sesión activa</p>
+            <p className="mt-1 font-medium text-slate-900">{displayName}</p>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -158,34 +178,34 @@ export default function Layout({ children }) {
               <>
                 <button
                   onClick={() => { navigate('/grupos/crear'); setMenuOpen(false); }}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 text-sm hover:bg-slate-50"
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-slate-700 hover:bg-white/70 ${FOCUS_RING}`}
                   data-testid="mobile-create-group"
                 >
-                  <Users className="w-4 h-4" /> Crear grupo
+                  <Users className="h-4 w-4" /> Crear grupo
                 </button>
                 <button
                   onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-turf-accessible font-semibold text-sm bg-turf/5"
+                  className={`flex min-h-11 items-center gap-3 rounded-xl bg-turf/10 px-3 text-sm font-semibold text-turf-accessible ring-1 ring-turf/20 ${FOCUS_RING}`}
                   data-testid="mobile-create-match"
                 >
-                  <Plus className="w-4 h-4" /> Crear partido
+                  <Plus className="h-4 w-4" /> Crear partido
                 </button>
               </>
             )}
             <button
               onClick={() => { navigate('/invitar-jugador'); setMenuOpen(false); }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 text-sm hover:bg-slate-50"
+              className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-slate-700 hover:bg-white/70 ${FOCUS_RING}`}
               data-testid="mobile-invite-guest"
             >
-              <Users className="w-4 h-4" /> Invitar jugador
+              <Users className="h-4 w-4" /> Invitar jugador
             </button>
-            <hr className="my-2" />
+            <hr className="my-2 border-slate-200/70" />
             <button
               onClick={() => { handleLogout(); setMenuOpen(false); }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-600 text-sm"
+              className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-red-600 hover:bg-red-50 ${FOCUS_RING}`}
               data-testid="mobile-logout"
             >
-              <LogOut className="w-4 h-4" /> Cerrar sesión
+              <LogOut className="h-4 w-4" /> Cerrar sesión
             </button>
           </div>
         </div>
@@ -194,22 +214,42 @@ export default function Layout({ children }) {
       <main className="pb-20 md:pb-8">{children}</main>
 
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 h-16 flex items-center justify-around z-50 pb-safe"
+        className="glass pb-safe fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-slate-200/80 md:hidden"
         data-testid="mobile-bottom-nav"
       >
-        {navItems.slice(0, 5).map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            data-testid={`mobile-nav-${item.label.toLowerCase()}`}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
-              isActive(item.path) ? 'text-turf-accessible' : 'text-slate-400'
-            }`}
-          >
-            <item.icon className="w-5 h-5" />
-            <span className="text-[10px] font-medium">{item.label}</span>
-          </Link>
-        ))}
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-turf/60 to-transparent"
+        />
+
+        {navItems.slice(0, 5).map((item) => {
+          const active = isActive(item.path);
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              data-testid={`mobile-nav-${item.label.toLowerCase()}`}
+              aria-current={active ? 'page' : undefined}
+              className={`relative flex min-h-[44px] min-w-[56px] flex-col items-center justify-center gap-1 rounded-xl px-2 transition-colors motion-reduce:transition-none ${FOCUS_RING} ${
+                active ? 'text-turf-accessible' : 'text-slate-500'
+              }`}
+            >
+              {/* Indicador del activo: barra arriba + píldora detrás del ícono.
+                  El color no es la única señal. */}
+              {active && (
+                <span aria-hidden="true" className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-turf" />
+              )}
+              <span
+                className={`flex h-7 w-11 items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${
+                  active ? 'bg-turf/15' : ''
+                }`}
+              >
+                <item.icon className="h-5 w-5" />
+              </span>
+              <span className="text-[10px] font-semibold leading-none">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

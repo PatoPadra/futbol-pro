@@ -3,48 +3,37 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
-import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Calendar, MapPin, Users, Trophy, ArrowRight, Clock, Plus, Star, Target, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarClock, History, RefreshCw } from 'lucide-react';
 
-import { MATCH_STATUS_BADGE_CLASS, MATCH_STATUS_LABELS, MATCH_STATUS_ACCENT_BORDER, MODALITY_LABELS } from '@/constants/matches';
+import Reveal from '@/components/common/Reveal';
+import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
+import EmptyMatchesCard from '@/components/dashboard/EmptyMatchesCard';
+import MatchCard from '@/components/dashboard/MatchCard';
+import RecentMatchRow from '@/components/dashboard/RecentMatchRow';
+import StatTiles from '@/components/dashboard/StatTiles';
+import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
+import { PRIMARY_CTA } from '@/components/dashboard/tokens';
 
-const PRIMARY_CTA = 'bg-turf hover:bg-turf-dark text-white focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
-const CARD_LINK_FOCUS = 'block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
+/**
+ * En mobile la tira de próximos partidos es un carrusel con snap (se arrastra con
+ * el dedo); en desktop la misma lista se acomoda como grilla. Un solo DOM: si
+ * duplicáramos el bloque por breakpoint, cada `match-card-{id}` aparecería dos
+ * veces.
+ */
+const MATCH_RAIL =
+  '-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 pt-1 ' +
+  '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ' +
+  'md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-3';
+
+const SECTION_LINK =
+  'flex items-center gap-1 rounded-md px-1 py-1 -mx-1 text-sm font-semibold text-turf-accessible hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2';
 
 function todayAndTomorrow() {
   const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(today.getDate() + 1);
   return { today: today.toLocaleDateString('en-CA'), tomorrow: tomorrow.toLocaleDateString('en-CA') };
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="page-container" data-testid="dashboard-skeleton">
-      <div className="animate-pulse">
-        <div className="flex items-center justify-between mb-8">
-          <div className="space-y-2">
-            <div className="h-9 w-56 bg-slate-200 rounded-lg" />
-            <div className="h-4 w-40 bg-slate-100 rounded" />
-          </div>
-          <div className="hidden md:block h-11 w-44 bg-slate-200 rounded-full" />
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-[72px] bg-slate-100 rounded-xl border border-slate-100" />
-          ))}
-        </div>
-        <div className="h-6 w-48 bg-slate-200 rounded mb-4" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-44 bg-slate-100 rounded-xl border border-slate-100" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function Dashboard() {
@@ -94,14 +83,14 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="page-container" data-testid="dashboard-error">
-        <div className="flex flex-col items-center justify-center text-center py-20">
-          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
-            <AlertCircle className="w-7 h-7 text-red-500" />
+        <div className="glass flex flex-col items-center justify-center rounded-3xl px-6 py-20 text-center shadow-sm">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+            <AlertCircle className="h-7 w-7 text-red-500" aria-hidden="true" />
           </div>
-          <h2 className="font-heading text-2xl font-bold uppercase tracking-tight text-slate-900 mb-2">
+          <h2 className="mb-2 font-heading text-2xl font-bold uppercase tracking-tight text-slate-900">
             No pudimos cargar tu panel
           </h2>
-          <p className="text-slate-500 mb-6 max-w-sm">
+          <p className="mb-6 max-w-sm text-slate-500">
             Revisá tu conexión a internet e intentá de nuevo.
           </p>
           <Button
@@ -110,183 +99,90 @@ export default function Dashboard() {
             shape="pill"
             className={`${PRIMARY_CTA} h-11 px-8`}
           >
-            <RefreshCw className="w-4 h-4 mr-2" /> Reintentar
+            <RefreshCw className="mr-2 h-4 w-4" /> Reintentar
           </Button>
         </div>
       </div>
     );
   }
 
+  const canCreateMatch = user?.role === 'organizador' || user?.role === 'admin';
+  const goToCreateMatch = () => navigate('/partidos/crear');
+  const { today, tomorrow } = todayAndTomorrow();
+
   return (
     <div className="page-container" data-testid="dashboard-page">
-      <div className="animate-slide-up">
-        {/* Welcome */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="font-heading text-4xl md:text-5xl font-bold uppercase tracking-tight">
-              Hola, {user?.profile?.name || user?.name || 'Jugador'}
-            </h1>
-            <p className="mt-1 text-slate-500">
-              {upcomingMatches.length > 0
-                ? `Tenés ${upcomingMatches.length} partido${upcomingMatches.length > 1 ? 's' : ''} próximo${upcomingMatches.length > 1 ? 's' : ''}`
-                : 'No hay partidos próximos. ¡Buen momento para organizar uno!'}
-            </p>
+      <WelcomeBanner
+        name={user?.profile?.name || user?.name || 'Jugador'}
+        upcomingCount={upcomingMatches.length}
+        canCreate={canCreateMatch}
+        onCreateMatch={goToCreateMatch}
+      />
+
+      {metrics && (
+        <Reveal from="up" delay={60} className="mb-8 block">
+          <StatTiles metrics={metrics} />
+        </Reveal>
+      )}
+
+      <Reveal as="section" from="up" delay={90} className="mb-8 block">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-turf/10 text-turf-accessible">
+              <CalendarClock className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <h2 className="font-heading text-xl font-bold uppercase tracking-tight md:text-2xl">
+              Próximos Partidos
+            </h2>
+            {upcomingMatches.length > 0 && (
+              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white">
+                {upcomingMatches.length}
+              </span>
+            )}
           </div>
-          {(user?.role === 'organizador' || user?.role === 'admin') && (
-            <>
-              <Button
-                data-testid="dashboard-create-match-mobile"
-                onClick={() => navigate('/partidos/crear')}
-                shape="pill"
-                size="icon"
-                aria-label="Crear partido"
-                className={`md:hidden h-11 w-11 ${PRIMARY_CTA}`}
-              >
-                <Plus className="w-5 h-5" />
-              </Button>
-              <Button
-                data-testid="dashboard-create-match"
-                onClick={() => navigate('/partidos/crear')}
-                shape="pill"
-                className={`hidden md:flex h-11 px-6 ${PRIMARY_CTA}`}
-              >
-                <Plus className="w-4 h-4 mr-1.5" /> Crear Partido
-              </Button>
-            </>
-          )}
+          <Link to="/partidos" className={SECTION_LINK} data-testid="see-all-matches">
+            Ver todos <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
         </div>
 
-        {/* Stats Cards */}
-        {metrics && (
+        {upcomingMatches.length === 0 ? (
+          <EmptyMatchesCard canCreate={canCreateMatch} onCreateMatch={goToCreateMatch} />
+        ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              {[
-                { label: 'Partidos', value: metrics.total_matches ?? 0, icon: Trophy },
-                ...(metrics.can_view_peer_scores ? [{ label: 'Rating', value: metrics.recent_rating?.toFixed(1) || '-', icon: Star }] : []),
-                { label: 'Goles', value: metrics.total_goals ?? 0, icon: Target },
-                { label: 'Asistencias', value: metrics.total_assists ?? 0, icon: Users },
-              ].map((s, i) => (
-                <Card key={i} className="border-slate-100" data-testid={`dashboard-stat-${s.label.toLowerCase()}`}>
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-turf/10 flex items-center justify-center shrink-0">
-                      <s.icon className="w-5 h-5 text-turf-accessible" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-2xl font-bold text-slate-900">{s.value}</p>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider truncate">{s.label}</p>
-                    </div>
-                  </CardContent>
-                </Card>
+            <div className={MATCH_RAIL}>
+              {upcomingMatches.slice(0, 6).map(m => (
+                <div key={m.id} className="w-[84%] shrink-0 snap-start sm:w-[56%] md:w-auto">
+                  <MatchCard
+                    match={m}
+                    dayTag={m.date === today ? 'Hoy' : m.date === tomorrow ? 'Mañana' : null}
+                  />
+                </div>
               ))}
             </div>
-            <p className="text-xs text-slate-500 mb-8">
-              {!metrics.can_view_peer_scores && 'Los puntajes internos quedan visibles solo para organizadores y admins.'}
-            </p>
+            {upcomingMatches.length > 1 && (
+              <p className="mt-1 text-xs text-slate-500 md:hidden">Deslizá para ver los demás</p>
+            )}
           </>
         )}
+      </Reveal>
 
-        {/* Upcoming Matches */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-heading text-xl md:text-2xl font-bold uppercase tracking-tight">Próximos Partidos</h2>
-            <Link
-              to="/partidos"
-              className="text-sm text-turf-accessible font-semibold flex items-center gap-1 hover:underline rounded-md px-1 py-1 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-              data-testid="see-all-matches"
-            >
-              Ver todos <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+      {recentMatches.length > 0 && (
+        <Reveal as="section" from="up" delay={60} className="block">
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <History className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <h2 className="font-heading text-xl font-bold uppercase tracking-tight md:text-2xl">
+              Partidos Recientes
+            </h2>
           </div>
-          {upcomingMatches.length === 0 ? (
-            <Card className="border-slate-100 border-dashed">
-              <CardContent className="p-8 text-center">
-                <Trophy className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500">No hay partidos próximos</p>
-                {(user?.role === 'organizador' || user?.role === 'admin') && (
-                  <Button
-                    onClick={() => navigate('/partidos/crear')}
-                    shape="pill"
-                    className={`mt-4 h-11 px-8 ${PRIMARY_CTA}`}
-                    data-testid="empty-create-match"
-                  >
-                    Crear Partido
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(() => {
-                const { today, tomorrow } = todayAndTomorrow();
-                return upcomingMatches.slice(0, 6).map(m => {
-                const spotsLeft = m.max_players - m.titular_count;
-                const isFull = spotsLeft <= 0;
-                const dayTag = m.date === today ? 'Hoy' : m.date === tomorrow ? 'Mañana' : null;
-                return (
-                  <Link to={`/partidos/${m.id}`} key={m.id} data-testid={`match-card-${m.id}`} className={CARD_LINK_FOCUS}>
-                    <Card className="border-slate-100 hover:shadow-lg transition-all duration-200 hover:-translate-y-1 active:scale-[0.98] cursor-pointer h-full">
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between mb-3 gap-2">
-                          <Badge className={`text-xs font-semibold border ${MATCH_STATUS_BADGE_CLASS[m.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                            {MATCH_STATUS_LABELS[m.status] || m.status}
-                          </Badge>
-                          <div className="flex items-center gap-1.5">
-                            {dayTag && <Badge variant="orange" className="text-xs font-bold" data-testid={`match-day-tag-${m.id}`}>{dayTag}</Badge>}
-                            <Badge variant="outline" className="text-xs">{MODALITY_LABELS[m.modality]}</Badge>
-                          </div>
-                        </div>
-                        <h3 className="font-heading text-lg font-bold uppercase tracking-tight text-slate-900 mb-3">{m.title}</h3>
-                        <div className="space-y-1.5 text-sm text-slate-500">
-                          <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 shrink-0" /> {m.date}</div>
-                          <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 shrink-0" /> {m.time}</div>
-                          <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{m.location}</span></div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Users className="w-3.5 h-3.5 shrink-0" />
-                            <span className={isFull ? 'font-semibold text-slate-700' : ''}>{m.titular_count}/{m.max_players} titulares</span>
-                            {isFull ? (
-                              <Badge className="text-[10px] px-1.5 py-0 bg-slate-900 text-white border-0">Completo</Badge>
-                            ) : (
-                              <span className="text-slate-400">· {spotsLeft} {spotsLeft === 1 ? 'lugar libre' : 'lugares libres'}</span>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-                });
-              })()}
-            </div>
-          )}
-        </section>
-
-        {/* Recent Matches */}
-        {recentMatches.length > 0 && (
-          <section>
-            <h2 className="font-heading text-xl md:text-2xl font-bold uppercase tracking-tight mb-4">Partidos Recientes</h2>
-            <div className="space-y-3">
-              {recentMatches.map(m => (
-                <Link to={`/partidos/${m.id}`} key={m.id} data-testid={`recent-match-${m.id}`} className={CARD_LINK_FOCUS}>
-                  <Card className={`border-slate-100 border-l-4 ${MATCH_STATUS_ACCENT_BORDER[m.status] || 'border-l-slate-200'} hover:shadow-md transition-all duration-200 active:scale-[0.98] cursor-pointer`}>
-                    <CardContent className="p-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                          <Trophy className="w-5 h-5 text-slate-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900 truncate">{m.title}</p>
-                          <p className="text-xs text-slate-500">{m.date} - {MODALITY_LABELS[m.modality]}</p>
-                        </div>
-                      </div>
-                      <Badge className={`text-xs border shrink-0 ${MATCH_STATUS_BADGE_CLASS[m.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{MATCH_STATUS_LABELS[m.status] || m.status}</Badge>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
+          <div className="glass space-y-2.5 rounded-3xl p-2.5 shadow-lift md:p-3">
+            {recentMatches.map(m => (
+              <RecentMatchRow key={m.id} match={m} />
+            ))}
+          </div>
+        </Reveal>
+      )}
     </div>
   );
 }

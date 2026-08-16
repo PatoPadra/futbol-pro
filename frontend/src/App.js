@@ -95,7 +95,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
-        <Toaster position="top-center" richColors />
+        <Toaster position="top-center" richColors containerAriaLabel="Notificaciones" />
       </AuthProvider>
     </BrowserRouter>
   );
