@@ -91,12 +91,14 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
-        // Deriva lenta sobre el video/imagen de fondo: le saca la sensación de
-        // foto congelada sin que se note un movimiento explícito.
+        // Deriva lenta y en UNA sola dirección sobre el video/imagen de fondo.
+        // Antes iba 1.05 -> 1.14 -> 1.05 en loop infinito, que no es un Ken
+        // Burns sino un latido: se veía como un zoom que entra y sale, y molesta
+        // muchísimo. Va con `forwards` y una sola iteración: llega al final y se
+        // queda ahí. Sin vuelta al origen no hay oscilación posible.
         "ken-burns": {
-          "0%": { transform: "scale(1.05) translate3d(0, 0, 0)" },
-          "50%": { transform: "scale(1.14) translate3d(-1.5%, -1%, 0)" },
-          "100%": { transform: "scale(1.05) translate3d(0, 0, 0)" },
+          from: { transform: "scale(1.03) translate3d(0, 0, 0)" },
+          to: { transform: "scale(1.09) translate3d(-1%, -0.7%, 0)" },
         },
         // Cinta de logos/textos que corre en loop. El 50% es a propósito: el
         // contenido va duplicado, así el salto no se ve.
@@ -108,9 +110,11 @@ module.exports = {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-8px)" },
         },
+        // Sólo opacidad: antes también escalaba 1 -> 1.06 -> 1, que sumaba una
+        // segunda oscilación de zoom en las manchas de luz decorativas.
         "glow-pulse": {
-          "0%, 100%": { opacity: "0.45", transform: "scale(1)" },
-          "50%": { opacity: "0.75", transform: "scale(1.06)" },
+          "0%, 100%": { opacity: "0.45" },
+          "50%": { opacity: "0.72" },
         },
         "gradient-x": {
           "0%, 100%": { backgroundPosition: "0% 50%" },
@@ -142,7 +146,7 @@ module.exports = {
         },
       },
       animation: {
-        "ken-burns": "ken-burns 22s ease-in-out infinite",
+        "ken-burns": "ken-burns 28s ease-out forwards",
         marquee: "marquee 32s linear infinite",
         "marquee-slow": "marquee 55s linear infinite",
         float: "float 5s ease-in-out infinite",

@@ -98,7 +98,7 @@ export default function VideoBackground({
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         className={cn(
-          'absolute inset-0 h-full w-full object-cover transition-opacity duration-700',
+          'absolute inset-0 h-full w-full object-cover transition-opacity [transition-duration:700ms]',
           canPlay ? 'opacity-0' : 'opacity-100',
           mediaClassName,
         )}
@@ -121,7 +121,7 @@ export default function VideoBackground({
           onCanPlay={() => setCanPlay(true)}
           onError={() => setFailed(true)}
           className={cn(
-            'absolute inset-0 h-full w-full object-cover transition-opacity duration-700 motion-reduce:hidden',
+            'absolute inset-0 h-full w-full object-cover transition-opacity [transition-duration:700ms] motion-reduce:hidden',
             canPlay ? 'opacity-100' : 'opacity-0',
             mediaClassName,
           )}
