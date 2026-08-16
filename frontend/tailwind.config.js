@@ -124,9 +124,13 @@ module.exports = {
           from: { backgroundPosition: "-200% 0" },
           to: { backgroundPosition: "200% 0" },
         },
+        // El barrido ocupa sólo el primer tercio del ciclo y después se queda
+        // quieto fuera de cuadro. Sin esa pausa es un estrobo continuo: antes
+        // cruzaba cada 2.5s sin respiro y quedaba inquieto.
         "pitch-sweep": {
-          from: { transform: "translateX(-100%)" },
-          to: { transform: "translateX(200%)" },
+          "0%": { transform: "translateX(-100%)" },
+          "32%": { transform: "translateX(200%)" },
+          "100%": { transform: "translateX(200%)" },
         },
         "accordion-down": {
           from: { height: "0" },
@@ -153,7 +157,7 @@ module.exports = {
         "glow-pulse": "glow-pulse 4.5s ease-in-out infinite",
         "gradient-x": "gradient-x 8s ease infinite",
         shimmer: "shimmer 2.2s linear infinite",
-        "pitch-sweep": "pitch-sweep 2.5s ease-in-out infinite",
+        "pitch-sweep": "pitch-sweep 11s ease-in-out infinite",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "slide-up": "slide-up 0.4s ease-out",
