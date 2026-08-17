@@ -46,7 +46,7 @@ export default function SeedRatingsPanel({
     >
       {rateableMembers.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-          <Star className="mx-auto mb-2 h-6 w-6 text-slate-500" aria-hidden="true" />
+          <Star className="mx-auto mb-2 h-6 w-6 text-slate-600" aria-hidden="true" />
           <p className="text-sm text-slate-600">
             No hay compañeros elegibles para puntuar todavía.
           </p>

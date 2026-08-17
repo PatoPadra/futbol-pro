@@ -81,7 +81,7 @@ function DatoTile({ icono: Icono, etiqueta, children, testId }) {
         <Icono className="h-4 w-4" />
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{etiqueta}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">{etiqueta}</p>
         <div className="font-semibold text-slate-900">{children}</div>
       </div>
     </div>
@@ -220,12 +220,12 @@ export default function MatchDetail() {
       <div className="page-container" data-testid="match-not-found">
         <div className="flex flex-col items-center justify-center text-center py-20">
           <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-            <Users className="w-7 h-7 text-slate-500" aria-hidden="true" />
+            <Users className="w-7 h-7 text-slate-600" aria-hidden="true" />
           </div>
           <h2 className="font-heading text-2xl font-bold uppercase tracking-tight text-slate-900 mb-2">
             Partido no encontrado
           </h2>
-          <p className="text-slate-500 mb-6 max-w-sm">
+          <p className="text-slate-600 mb-6 max-w-sm">
             Puede que haya sido borrado o que el enlace esté mal escrito.
           </p>
           <Link to="/partidos" className="rounded-full focus-visible:outline-none">
@@ -248,7 +248,7 @@ export default function MatchDetail() {
           <h2 className="font-heading text-2xl font-bold uppercase tracking-tight text-slate-900 mb-2">
             No pudimos cargar el partido
           </h2>
-          <p className="text-slate-500 mb-6 max-w-sm">
+          <p className="text-slate-600 mb-6 max-w-sm">
             Revisá tu conexión a internet e intentá de nuevo.
           </p>
           <Button
@@ -279,7 +279,7 @@ export default function MatchDetail() {
           label: 'Inscripción cerrada',
           icon: XCircle,
           disabled: true,
-          className: 'bg-slate-200 text-slate-500 pointer-events-none',
+          className: 'bg-slate-200 text-slate-600 pointer-events-none',
           testId: 'registration-closed-notice',
           description: 'El plazo de inscripción venció. Esperá a que el organizador cierre el partido o abra uno nuevo.',
         };
@@ -526,7 +526,7 @@ export default function MatchDetail() {
                     )}
                   </span>
                   {suplentes.length > 0 && (
-                    <span className="block text-xs font-normal text-slate-500">
+                    <span className="block text-xs font-normal text-slate-600">
                       +{suplentes.length} suplente{suplentes.length === 1 ? '' : 's'}
                     </span>
                   )}
@@ -575,7 +575,7 @@ export default function MatchDetail() {
                       <LayoutGrid className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Equipos</p>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">Equipos</p>
                       <p className="mt-0.5 font-semibold text-slate-900">
                         {match.status === 'equipos_confirmados' ? 'Los equipos ya están confirmados' : 'Los equipos ya fueron generados'}
                       </p>
@@ -657,7 +657,7 @@ export default function MatchDetail() {
             >
               {suplentes.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-600">
                     Todavía no hay suplentes. Cuando se llene el cupo, los que se anoten van a esperar acá.
                   </p>
                 </div>
@@ -755,7 +755,7 @@ export default function MatchDetail() {
                 )}
 
                 {!canDelete && ['cancelado', 'finalizado', 'completado'].includes(match.status) && (
-                  <p className="text-sm text-slate-500 text-center py-2">No hay más acciones disponibles para este partido.</p>
+                  <p className="text-sm text-slate-600 text-center py-2">No hay más acciones disponibles para este partido.</p>
                 )}
               </Panel>
             </div>

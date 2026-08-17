@@ -71,7 +71,7 @@ function SeccionTitulo({ icono: Icono, titulo, ayuda }) {
         </span>
         {titulo}
       </h2>
-      {ayuda && <p className="mt-1.5 text-xs text-slate-500">{ayuda}</p>}
+      {ayuda && <p className="mt-1.5 text-xs text-slate-600">{ayuda}</p>}
     </div>
   );
 }
@@ -176,7 +176,7 @@ export default function PlayerHistory() {
           </Reveal>
           {!historyMeta.can_view_peer_scores && (
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
               <p>Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.</p>
             </div>
           )}
@@ -276,7 +276,7 @@ export default function PlayerHistory() {
         <Card className="mt-8 rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60" data-testid="rating-evolution-empty">
           <CardContent className="p-6 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
-              <TrendingUp className="h-5 w-5 text-slate-500" aria-hidden="true" />
+              <TrendingUp className="h-5 w-5 text-slate-600" aria-hidden="true" />
             </div>
             <p className="text-sm font-semibold text-slate-700">Todavía no tenés partidos calificados</p>
             <p className="mt-1 text-sm text-slate-600">

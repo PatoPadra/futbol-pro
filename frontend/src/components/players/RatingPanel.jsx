@@ -92,7 +92,7 @@ function RatingCelda({ tone, valor, etiqueta, detalle }) {
       <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">
         {etiqueta}
       </p>
-      <p className="text-[11px] text-slate-500">{detalle}</p>
+      <p className="text-[11px] text-slate-600">{detalle}</p>
     </div>
   );
 }

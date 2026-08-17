@@ -58,7 +58,7 @@ export default function RegistrationCard({
           </Avatar>
           <span
             aria-hidden="true"
-            className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors group-hover:border-turf group-hover:text-turf-accessible motion-reduce:transition-none"
+            className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors group-hover:border-turf group-hover:text-turf-accessible motion-reduce:transition-none"
           >
             <ZoomIn className="h-3 w-3" />
           </span>
@@ -93,7 +93,7 @@ export default function RegistrationCard({
             {registration.primary_position ? (
               <PositionBadge positionId={registration.primary_position} />
             ) : (
-              <p className="text-xs text-slate-500">Sin posición cargada</p>
+              <p className="text-xs text-slate-600">Sin posición cargada</p>
             )}
           </div>
         </div>

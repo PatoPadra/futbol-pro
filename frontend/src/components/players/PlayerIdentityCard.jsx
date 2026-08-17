@@ -94,7 +94,7 @@ export default function PlayerIdentityCard({
 
           <dl className="mt-3 space-y-3">
             <div>
-              <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+              <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
                 Principal
               </dt>
               <dd className="mt-1.5">
@@ -105,14 +105,14 @@ export default function PlayerIdentityCard({
                     tono="turf"
                   />
                 ) : (
-                  <span className="text-sm text-slate-500">Sin definir</span>
+                  <span className="text-sm text-slate-600">Sin definir</span>
                 )}
               </dd>
             </div>
 
             {secundarias.length > 0 && (
               <div>
-                <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
                   También juega de
                 </dt>
                 <dd className="mt-1.5 flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export default function PlayerIdentityCard({
 
             {profile.unwanted_position && (
               <div>
-                <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
                   Prefiere evitar
                 </dt>
                 <dd className="mt-1.5">

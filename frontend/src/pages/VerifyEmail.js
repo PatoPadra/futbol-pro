@@ -153,7 +153,7 @@ export default function VerifyEmail() {
                   {statusConfig.icon}
                 </div>
 
-                <p className="font-heading text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                <p className="font-heading text-[11px] font-bold uppercase tracking-[0.2em] text-slate-600">
                   {statusConfig.eyebrow}
                 </p>
 
@@ -183,7 +183,7 @@ export default function VerifyEmail() {
                       <Label htmlFor="resend-email" className="text-sm font-semibold text-slate-800">
                         ¿Necesitás un nuevo link?
                       </Label>
-                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
                         Poné tu email y te mandamos otro. Los links vencen, así que usá el último.
                       </p>
                       <Input
@@ -196,7 +196,7 @@ export default function VerifyEmail() {
                         onChange={(e) => setResendEmail(e.target.value)}
                         disabled={resending}
                         data-testid="resend-email-input"
-                        className="mt-2 h-12 rounded-xl border-slate-200 bg-white placeholder:text-slate-500 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30"
+                        className="mt-2 h-12 rounded-xl border-slate-200 bg-white placeholder:text-slate-600 focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30"
                         required
                       />
                     </div>
@@ -239,7 +239,7 @@ export default function VerifyEmail() {
             </div>
           </div>
 
-          <p className="mt-4 text-center text-xs leading-relaxed text-slate-500">
+          <p className="mt-4 text-center text-xs leading-relaxed text-slate-600">
             Si el link no funciona, copialo completo del email: a veces se corta en dos líneas.
           </p>
         </div>

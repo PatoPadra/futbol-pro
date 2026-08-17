@@ -33,7 +33,7 @@ export default function StatTriad({ goals = 0, assists = 0, saves = 0, className
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1',
               activo
                 ? 'border-turf/25 bg-turf/10 text-turf-accessible'
-                : 'border-slate-200 bg-slate-50 text-slate-500',
+                : 'border-slate-200 bg-slate-50 text-slate-600',
             )}
           >
             <Icono className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

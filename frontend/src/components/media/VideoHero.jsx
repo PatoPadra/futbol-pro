@@ -62,17 +62,24 @@ export default function VideoHero({
               clip={clip}
               active={i === index}
               priority={i === 0}
-              overlay={i === index ? overlay : 'none'}
+              // Sin scrim propio: lo pone VideoHero una sola vez, mas abajo.
+              // Con scrim en las dos capas la opacidad se multiplicaba y el
+              // video quedaba casi negro al pie.
+              overlay="none"
               className="h-full w-full"
-              mediaClassName="scale-105 animate-ken-burns motion-reduce:animate-none motion-reduce:scale-100"
+              mediaClassName="scale-105 brightness-110 saturate-105 animate-ken-burns motion-reduce:animate-none motion-reduce:scale-100"
             />
           </div>
         );
       })}
 
-      {/* El scrim va acá arriba también: durante el fundido los dos clips están
-          a media opacidad y el de abajo pierde el suyo. */}
-      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-slate-950/30" />
+      {/* El unico scrim del hero. Va aca y no en cada VideoBackground porque
+          durante el fundido hay dos clips montados: si cada uno trajera el suyo,
+          las dos capas se multiplicarian.
+          Valores: 0.72 abajo (donde va el titulo, y da 8.9:1 para texto blanco
+          incluso sobre una toma clara), y bien liviano arriba para que se vea
+          el video. */}
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/45 to-slate-950/25" />
 
       <div className="relative z-10 h-full">{children}</div>
 

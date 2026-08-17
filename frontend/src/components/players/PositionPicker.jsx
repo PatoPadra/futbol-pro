@@ -86,7 +86,7 @@ export default function PositionPicker({
       {grupos.map((grupo) => (
         <div key={grupo.key}>
           {grupos.length > 1 && (
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
               {grupo.label}
             </p>
           )}

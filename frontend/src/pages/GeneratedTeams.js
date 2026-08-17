@@ -291,7 +291,7 @@ export default function GeneratedTeams() {
                 Valor {typeof a.player_score === 'number' ? a.player_score.toFixed(2) : '—'}
               </span>
               {a.player_age ? (
-                <span className="text-[11px] text-slate-500 tabular-nums">{a.player_age} años</span>
+                <span className="text-[11px] text-slate-600 tabular-nums">{a.player_age} años</span>
               ) : null}
             </div>
           )}
@@ -301,7 +301,7 @@ export default function GeneratedTeams() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-11 w-11 min-h-11 min-w-11 p-0 shrink-0 text-slate-500 hover:text-turf-accessible hover:bg-turf/10 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            className="h-11 w-11 min-h-11 min-w-11 p-0 shrink-0 text-slate-600 hover:text-turf-accessible hover:bg-turf/10 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
             onClick={() => handleSwapPlayer(a.player_id)}
             data-testid={`swap-player-${a.player_id}`}
             title={`Mover a Equipo ${destTeam}`}
@@ -324,7 +324,7 @@ export default function GeneratedTeams() {
         ['Edad media', summary.average_age ?? '—'],
       ].map(([label, valor]) => (
         <div key={label} className="rounded-2xl bg-slate-50 px-3 py-2">
-          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</dt>
+          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-600">{label}</dt>
           <dd className="font-heading text-xl font-bold text-slate-900 tabular-nums">{valor}</dd>
         </div>
       ))}
@@ -418,7 +418,7 @@ export default function GeneratedTeams() {
 
         {isOrganizer && (
           <div className="rounded-3xl border border-slate-200 bg-mesh-turf bg-white p-4 shadow-lift">
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">
               {editMode ? 'Estás ajustando los equipos' : 'Organizás este partido'}
             </p>
             <div className="flex flex-wrap gap-3">

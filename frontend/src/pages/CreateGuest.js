@@ -176,7 +176,7 @@ export default function CreateGuest() {
                       {photoPreview ? (
                         <img src={photoPreview} alt="Vista previa de la foto del invitado" className="w-full h-full object-cover" />
                       ) : (
-                        <Camera className="w-7 h-7 text-slate-500 group-hover:text-turf-accessible transition-colors" />
+                        <Camera className="w-7 h-7 text-slate-600 group-hover:text-turf-accessible transition-colors" />
                       )}
                     </div>
                   </label>

@@ -457,7 +457,7 @@ export default function PostMatch() {
                         data-testid="self-eval-slider"
                         aria-label="Tu puntuación de autoevaluación"
                       />
-                      <div className="mt-1.5 flex justify-between text-[10px] font-semibold text-slate-500" aria-hidden="true">
+                      <div className="mt-1.5 flex justify-between text-[10px] font-semibold text-slate-600" aria-hidden="true">
                         <span>1</span>
                         <span>10</span>
                       </div>
@@ -474,7 +474,7 @@ export default function PostMatch() {
                     data-testid="self-eval-notes"
                     value={selfEval.notes}
                     onChange={(event) => setSelfEval((prev) => ({ ...prev, notes: event.target.value }))}
-                    className="mt-1.5 h-28 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm placeholder:text-slate-500 focus:border-turf focus:ring-2 focus:ring-turf/20"
+                    className="mt-1.5 h-28 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm placeholder:text-slate-600 focus:border-turf focus:ring-2 focus:ring-turf/20"
                     placeholder="¿Cómo sentís que jugaste hoy?"
                   />
                 </div>
@@ -545,7 +545,7 @@ export default function PostMatch() {
                               {initialsFromName(player.player_name)}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors group-hover:text-turf-accessible">
+                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors group-hover:text-turf-accessible">
                             <ZoomIn className="h-3 w-3" aria-hidden="true" />
                           </span>
                         </button>

@@ -63,12 +63,12 @@ export default function Panel({
               <h2 className="flex flex-wrap items-baseline gap-2 font-heading text-base font-bold uppercase tracking-tight text-slate-900 sm:text-lg">
                 {titulo}
                 {contador != null && (
-                  <span className="font-heading text-sm font-bold tabular-nums text-slate-500">
+                  <span className="font-heading text-sm font-bold tabular-nums text-slate-600">
                     {contador}
                   </span>
                 )}
               </h2>
-              {bajada && <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{bajada}</p>}
+              {bajada && <p className="mt-0.5 text-xs leading-relaxed text-slate-600">{bajada}</p>}
             </div>
           </div>
           {acciones && <div className="flex shrink-0 flex-wrap items-center gap-2">{acciones}</div>}

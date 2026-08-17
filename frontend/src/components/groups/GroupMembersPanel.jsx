@@ -56,7 +56,7 @@ export default function GroupMembersPanel({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_190px]">
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600"
             aria-hidden="true"
           />
           <Input
@@ -94,7 +94,7 @@ export default function GroupMembersPanel({
           <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-orange/45 bg-orange/10 px-2.5 py-1 font-semibold text-orange-accessible">
             <UserPlus className="h-3 w-3" aria-hidden="true" /> {totalInvitados} invitados
           </span>
-          <span className="text-slate-500">
+          <span className="text-slate-600">
             El borde punteado marca a los invitados.
           </span>
         </div>

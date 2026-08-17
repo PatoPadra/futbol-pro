@@ -76,7 +76,7 @@ export default function MatchesList() {
           <h2 className="mb-2 font-heading text-2xl font-bold uppercase tracking-tight text-slate-900">
             No pudimos cargar los partidos
           </h2>
-          <p className="mb-6 max-w-sm text-slate-500">
+          <p className="mb-6 max-w-sm text-slate-600">
             Revisá tu conexión a internet e intentá de nuevo.
           </p>
           <Button

@@ -100,7 +100,7 @@ export default function StatTiles({ metrics }) {
       </div>
 
       {!metrics.can_view_peer_scores && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-slate-600">
           Los puntajes internos quedan visibles solo para organizadores y admins.
         </p>
       )}

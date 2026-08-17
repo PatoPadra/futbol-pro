@@ -60,7 +60,12 @@ export default function PhotoBackdrop({
           decoding="async"
           fetchPriority={priority ? 'high' : undefined}
           onError={() => setFalló(true)}
-          className={cn('absolute inset-0 h-full w-full object-cover', mediaClassName)}
+          className={cn(
+            // brightness/saturate: las fotos de cancha suelen venir apagadas
+            // y detras del scrim se apagan mas todavia.
+            'absolute inset-0 h-full w-full object-cover brightness-110 saturate-105',
+            mediaClassName,
+          )}
           style={{ objectPosition: posicion }}
         />
       )}
@@ -80,17 +85,17 @@ export default function PhotoBackdrop({
  */
 const SCRIMS = {
   /** Banda de encabezado de pagina: oscuro abajo a la izquierda, donde va el titulo. */
-  banda: 'bg-gradient-to-tr from-slate-950/90 via-slate-950/70 to-slate-950/45',
+  banda: 'bg-gradient-to-tr from-slate-950/80 via-slate-950/55 to-slate-950/30',
   /** Panel lateral alto (columna de una pantalla partida). */
-  panel: 'bg-gradient-to-t from-slate-950/90 via-slate-950/55 to-slate-950/40',
+  panel: 'bg-gradient-to-t from-slate-950/80 via-slate-950/45 to-slate-950/30',
   /** Tarjeta: solo el pie oscuro, para que se vea la foto. */
-  tarjeta: 'bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent',
+  tarjeta: 'bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent',
   /** Verde de marca, para bloques que quieren leerse como "nuestros". */
-  turf: 'bg-gradient-to-br from-turf-dark/90 via-slate-950/80 to-slate-950/90',
+  turf: 'bg-gradient-to-br from-turf-dark/80 via-slate-950/65 to-slate-950/80',
   /** Estado vacio: bien apagado, la foto acompania y no compite. */
-  vacio: 'bg-slate-950/80',
+  vacio: 'bg-slate-950/70',
   /** Velo plano, para poner tarjetas claras encima. */
-  velo: 'bg-slate-950/75',
+  velo: 'bg-slate-950/65',
   none: '',
 };
 

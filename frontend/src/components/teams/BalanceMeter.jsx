@@ -34,7 +34,7 @@ export default function BalanceMeter({ pct = 0, valorA, valorB, className, testI
           <Scale className={cn('h-5 w-5', t.texto)} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Balance del reparto</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">Balance del reparto</p>
           <p className="text-sm text-slate-600">{t.etiqueta}</p>
         </div>
         <p className={cn('font-heading text-4xl font-bold leading-none tabular-nums', t.texto)}>

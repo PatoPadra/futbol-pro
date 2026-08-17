@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { getDisplayName } from '../utils/user';
 import { isOrganizerRole } from '../utils/permissions';
 import { buildPhotoUrl, initialsFromName } from '../utils/photos';
+import PageBackdrop from './media/PageBackdrop';
 
 /** Foco visible para links y botones propios del shell (guía de accesibilidad). */
 const FOCUS_RING =
@@ -57,9 +58,11 @@ export default function Layout({ children }) {
   const displayName = getDisplayName(user);
 
   return (
-    // La malla va fija (bg-fixed) sobre el color de fondo: el contenido flota
-    // encima en lugar de apoyarse en blanco plano de borde a borde.
-    <div className="min-h-screen bg-background bg-mesh-turf">
+    <div className="min-h-screen">
+      {/* El fondo de la app: la foto de la pagina, desenfocada detras de un velo
+          claro. El contenedor no lleva fondo propio a proposito — un bg opaco
+          aca taparia el backdrop, que va en -z-10. */}
+      <PageBackdrop pathname={location.pathname} />
       <header className="glass sticky top-0 z-40 hidden h-16 items-center px-6 shadow-sm md:flex">
         {/* Hairline de acento: hace de separador y mete el color de marca. */}
         <span

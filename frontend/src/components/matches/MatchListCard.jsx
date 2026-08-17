@@ -57,29 +57,29 @@ export default function MatchListCard({ match }) {
           </h3>
 
           {match.group_name && (
-            <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
               {match.group_name}
             </p>
           )}
 
-          <div className="mt-3 grid grid-cols-1 gap-1.5 text-sm text-slate-500">
+          <div className="mt-3 grid grid-cols-1 gap-1.5 text-sm text-slate-600">
             <div className="flex items-center gap-2">
-              <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
               {match.date}
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
               {match.time}
             </div>
             <div className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
               <span className="truncate">{match.location}</span>
             </div>
           </div>
 
           <div className="mt-4 border-t border-slate-100 pt-3">
             <div className="flex items-center gap-2 text-sm">
-              <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+              <Users className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
               <span className={isFull ? 'font-semibold text-slate-900' : 'text-slate-600'}>
                 {match.titular_count}/{match.max_players} titulares
               </span>
@@ -88,7 +88,7 @@ export default function MatchListCard({ match }) {
                   Completo
                 </Badge>
               ) : (
-                <span className="ml-auto text-xs text-slate-500">
+                <span className="ml-auto text-xs text-slate-600">
                   {spotsLeft} {spotsLeft === 1 ? 'lugar libre' : 'lugares libres'}
                 </span>
               )}

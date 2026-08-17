@@ -129,7 +129,7 @@ function FilaPartido({ h, posMap, canViewPeerScores }) {
                 className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-inset ring-slate-200"
                 title={`${c.valor} ${c.label}`}
               >
-                <c.icon className="h-3 w-3 text-slate-500" aria-hidden="true" />
+                <c.icon className="h-3 w-3 text-slate-600" aria-hidden="true" />
                 <span className="tabular-nums">{c.valor}</span>
                 <span className="sr-only">{c.label}</span>
               </span>
@@ -141,7 +141,7 @@ function FilaPartido({ h, posMap, canViewPeerScores }) {
           {canViewPeerScores && h.avg_rating && <RatingBadge value={h.avg_rating} size="lg" />}
           {auto && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                 Auto
               </span>
               <span className="tabular-nums">{h.self_evaluation.score}</span>
@@ -150,7 +150,7 @@ function FilaPartido({ h, posMap, canViewPeerScores }) {
           <ChevronRight
             aria-hidden="true"
             className={cn(
-              'h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none',
+              'h-4 w-4 shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none',
             )}
           />
         </div>

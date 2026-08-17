@@ -230,7 +230,7 @@ export default function CompleteProfile() {
                   {photoPreview ? (
                     <img src={photoPreview} alt="Vista previa de tu foto de perfil" className="h-full w-full object-cover" />
                   ) : (
-                    <Camera className="h-8 w-8 text-slate-500 transition-colors group-hover:text-turf-accessible motion-reduce:transition-none" aria-hidden="true" />
+                    <Camera className="h-8 w-8 text-slate-600 transition-colors group-hover:text-turf-accessible motion-reduce:transition-none" aria-hidden="true" />
                   )}
                 </div>
               </label>
@@ -331,7 +331,7 @@ export default function CompleteProfile() {
 
                 <div>
                   <Label className="text-sm font-semibold">Posiciones secundarias (máx. 3)</Label>
-                  <p className="mt-1 text-xs text-slate-500">Donde también te la rebuscás. Opcional.</p>
+                  <p className="mt-1 text-xs text-slate-600">Donde también te la rebuscás. Opcional.</p>
                   <PositionPicker
                     className="mt-2"
                     ariaLabel="Posiciones secundarias"
@@ -346,7 +346,7 @@ export default function CompleteProfile() {
 
                 <div>
                   <Label className="text-sm font-semibold">Posición no deseada (opcional)</Label>
-                  <p className="mt-1 text-xs text-slate-500">El organizador va a evitar ponerte ahí si puede.</p>
+                  <p className="mt-1 text-xs text-slate-600">El organizador va a evitar ponerte ahí si puede.</p>
                   <PositionPicker
                     className="mt-2"
                     ariaLabel="Posición no deseada"
@@ -375,7 +375,7 @@ export default function CompleteProfile() {
           {loading ? 'Guardando...' : 'Guardar y Continuar'}
         </Button>
 
-        <p className="pb-2 text-center text-xs text-slate-500">
+        <p className="pb-2 text-center text-xs text-slate-600">
           Después podés cambiar todo esto desde tu perfil.
         </p>
       </form>

@@ -235,7 +235,7 @@ export default function AdminPanel() {
               ) : (
                 <div className="overflow-x-auto">
                   {/* Encabezado de columnas: solo desde md, donde la fila entra completa. */}
-                  <div className="hidden border-b border-slate-100 bg-white px-5 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 md:flex md:items-center md:gap-3">
+                  <div className="hidden border-b border-slate-100 bg-white px-5 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 md:flex md:items-center md:gap-3">
                     <span className="flex-1">Cuenta</span>
                     <span className="w-28">Rol actual</span>
                     <span className="w-36 text-right">Cambiar rol</span>
@@ -267,7 +267,7 @@ export default function AdminPanel() {
                                   </span>
                                 )}
                               </p>
-                              <p className="truncate text-xs tabular-nums text-slate-500">{u.email}</p>
+                              <p className="truncate text-xs tabular-nums text-slate-600">{u.email}</p>
                             </div>
                           </div>
 
@@ -278,7 +278,7 @@ export default function AdminPanel() {
 
                             {isSelf ? (
                               <span
-                                className="flex w-36 items-center justify-end gap-1.5 text-right text-[11px] leading-tight text-slate-500"
+                                className="flex w-36 items-center justify-end gap-1.5 text-right text-[11px] leading-tight text-slate-600"
                                 data-testid={`admin-role-self-${u.id}`}
                               >
                                 <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -295,7 +295,7 @@ export default function AdminPanel() {
                                   data-testid={`admin-role-select-${u.id}`}
                                 >
                                   {isChangingThis ? (
-                                    <span className="flex items-center gap-1.5 text-slate-500">
+                                    <span className="flex items-center gap-1.5 text-slate-600">
                                       <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Guardando...
                                     </span>
                                   ) : (
@@ -366,7 +366,7 @@ export default function AdminPanel() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-slate-900">{m.title}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
                             <span className="flex items-center gap-1 tabular-nums">
                               <Calendar className="h-3 w-3" aria-hidden="true" /> {m.date}
                             </span>
@@ -375,7 +375,7 @@ export default function AdminPanel() {
                         </div>
 
                         <EstadoChip status={m.status} className="shrink-0" />
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
                       </Link>
                     </li>
                   ))}
@@ -413,7 +413,7 @@ export default function AdminPanel() {
           {pendingChange && (
             <div className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <RolChip role={pendingChange.user?.role} />
-              <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
               <RolChip role={pendingChange.newRole} />
             </div>
           )}

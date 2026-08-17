@@ -57,7 +57,7 @@ export default function CounterTiles({
               )}
             </div>
 
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">
               {it.label}
             </p>
           </div>

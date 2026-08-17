@@ -36,7 +36,7 @@ export default function PhotoLightbox({
               className="w-full max-h-[75vh] object-contain bg-slate-900/5"
             />
           ) : (
-            <div className="min-h-[360px] flex flex-col items-center justify-center gap-4 text-slate-500">
+            <div className="min-h-[360px] flex flex-col items-center justify-center gap-4 text-slate-600">
               <Avatar className="w-28 h-28">
                 <AvatarImage src={undefined} />
                 <AvatarFallback className="bg-turf/10 text-turf-accessible text-2xl font-bold">

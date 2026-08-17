@@ -336,7 +336,7 @@ export default function CreateMatch() {
                       </span>
                       <div className="min-w-0">
                         <FormLabel className="font-semibold">Partido recurrente</FormLabel>
-                        <p className="text-xs text-slate-500">Se repite semanalmente</p>
+                        <p className="text-xs text-slate-600">Se repite semanalmente</p>
                       </div>
                     </div>
                     <FormControl>
@@ -413,7 +413,7 @@ export default function CreateMatch() {
                 {loading ? 'Creando...' : 'Crear partido'}
               </Button>
               {!loadingGroups && groups.length === 0 && (
-                <p className="mt-2 text-center text-xs text-slate-500">
+                <p className="mt-2 text-center text-xs text-slate-600">
                   Necesitás ser organizador de al menos un grupo para crear partidos.
                 </p>
               )}

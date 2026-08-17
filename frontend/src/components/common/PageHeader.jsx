@@ -68,7 +68,10 @@ export default function PageHeader({
       className={cn('rounded-3xl shadow-lift', className)}
       data-testid={testId}
     >
-      <div className="flex min-h-[150px] flex-col justify-end gap-3 p-5 md:min-h-[190px] md:p-7">
+      {/* Mas alto que antes (era 150/190): con la banda chica la foto se leia
+          como un detalle y la pantalla seguia siendo blanca. Sigue siendo una
+          banda y no un hero de landing — esto se usa todos los dias. */}
+      <div className="flex min-h-[200px] flex-col justify-end gap-3 p-5 md:min-h-[280px] md:p-8">
         {volverA && (
           <Link
             to={volverA}

@@ -33,8 +33,8 @@ export default function RecentMatchRow({ match }) {
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-slate-900">{match.title}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-            <Calendar className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-600">
+            <Calendar className="h-3 w-3 shrink-0 text-slate-600" aria-hidden="true" />
             {match.date} - {MODALITY_LABELS[match.modality]}
           </p>
         </div>

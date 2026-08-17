@@ -40,7 +40,7 @@ export default function PanelSearch({
       <div className="relative">
         <Search
           aria-hidden="true"
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600"
         />
         <Input
           id={id}
@@ -50,7 +50,7 @@ export default function PanelSearch({
           placeholder={placeholder}
           data-testid={testId}
           className={cn(
-            'h-12 rounded-xl border-slate-200 bg-slate-50 pl-10 text-sm placeholder:text-slate-500',
+            'h-12 rounded-xl border-slate-200 bg-slate-50 pl-10 text-sm placeholder:text-slate-600',
             'focus:border-turf focus-visible:ring-2 focus-visible:ring-turf/30',
             onLimpiar && filtrando && 'pr-12',
           )}
@@ -59,7 +59,7 @@ export default function PanelSearch({
           <button
             type="button"
             onClick={onLimpiar}
-            className="absolute right-1.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            className="absolute right-1.5 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">Limpiar la búsqueda</span>
@@ -68,7 +68,7 @@ export default function PanelSearch({
       </div>
 
       {resultados != null && (
-        <p aria-live="polite" className="px-1 text-xs text-slate-500">
+        <p aria-live="polite" className="px-1 text-xs text-slate-600">
           {filtrando ? (
             <>
               <span className="font-semibold tabular-nums text-slate-700">{resultados}</span>{' '}

@@ -90,7 +90,7 @@ export default function Dashboard() {
           <h2 className="mb-2 font-heading text-2xl font-bold uppercase tracking-tight text-slate-900">
             No pudimos cargar tu panel
           </h2>
-          <p className="mb-6 max-w-sm text-slate-500">
+          <p className="mb-6 max-w-sm text-slate-600">
             Revisá tu conexión a internet e intentá de nuevo.
           </p>
           <Button
@@ -160,7 +160,7 @@ export default function Dashboard() {
               ))}
             </div>
             {upcomingMatches.length > 1 && (
-              <p className="mt-1 text-xs text-slate-500 md:hidden">Deslizá para ver los demás</p>
+              <p className="mt-1 text-xs text-slate-600 md:hidden">Deslizá para ver los demás</p>
             )}
           </>
         )}

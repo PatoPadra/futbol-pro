@@ -246,7 +246,7 @@ export default function OrganizerPanel() {
                               {group.name}
                             </h3>
 
-                            <p className="mt-0.5 text-xs tabular-nums text-slate-500">
+                            <p className="mt-0.5 text-xs tabular-nums text-slate-600">
                               {group.members_count} miembros
                             </p>
 
@@ -286,7 +286,7 @@ export default function OrganizerPanel() {
                               )}
                             </div>
 
-                            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                            <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
                               {manageable
                                 ? 'Podés administrar este grupo'
                                 : 'Podés entrar al grupo y cargar puntajes iniciales'}
@@ -294,7 +294,7 @@ export default function OrganizerPanel() {
                           </div>
 
                           <ChevronRight
-                            className="mt-1 h-4 w-4 shrink-0 text-slate-500"
+                            className="mt-1 h-4 w-4 shrink-0 text-slate-600"
                             aria-hidden="true"
                           />
                         </Link>
@@ -358,29 +358,29 @@ export default function OrganizerPanel() {
                           </h3>
 
                           {match.group_name && (
-                            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
                               Grupo: {match.group_name}
                             </p>
                           )}
 
                           <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600">
                             <div className="flex items-center gap-1.5">
-                              <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                               <dt className="sr-only">Fecha</dt>
                               <dd className="tabular-nums">{match.date}</dd>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                               <dt className="sr-only">Hora</dt>
                               <dd className="tabular-nums">{match.time}</dd>
                             </div>
                             <div className="flex min-w-0 items-center gap-1.5">
-                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                               <dt className="sr-only">Lugar</dt>
                               <dd className="truncate">{match.location}</dd>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                              <Users className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
                               <dt className="sr-only">Anotados</dt>
                               <dd className="font-semibold tabular-nums text-slate-800">
                                 {match.titular_count}/{match.max_players}
@@ -439,18 +439,18 @@ export default function OrganizerPanel() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-slate-900">{match.title}</p>
-                          <p className="text-xs tabular-nums text-slate-500">
+                          <p className="text-xs tabular-nums text-slate-600">
                             {match.date} · {MODALITY_LABELS[match.modality] || `Futbol ${match.modality}`}
                           </p>
                           {match.group_name && (
-                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                            <p className="mt-0.5 truncate text-[11px] text-slate-600">
                               Grupo: {match.group_name}
                             </p>
                           )}
                         </div>
 
                         <EstadoChip status={match.status} className="shrink-0" />
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
                       </Link>
                     </li>
                   ))}
@@ -525,7 +525,7 @@ export default function OrganizerPanel() {
 
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-900">{player.name}</p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-600">
                               {player.primary_position || 'Sin posición'} ·{' '}
                               <span className="tabular-nums">{player.matches_played}</span> partidos
                             </p>
@@ -543,14 +543,14 @@ export default function OrganizerPanel() {
                             {player.player_type === 'invitado' ? 'Invitado' : 'Frecuente'}
                           </MetaChip>
 
-                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
                         </Link>
                       </li>
                     ))}
                   </ul>
 
                   {filteredPlayers.length > visiblePlayers.length && (
-                    <p className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-center text-xs text-slate-500 md:px-5">
+                    <p className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-center text-xs text-slate-600 md:px-5">
                       Mostrando <span className="font-semibold tabular-nums text-slate-700">{visiblePlayers.length}</span> de{' '}
                       <span className="font-semibold tabular-nums text-slate-700">{filteredPlayers.length}</span> jugadores.
                       Refiná tu búsqueda para ver más.

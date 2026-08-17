@@ -49,7 +49,7 @@ export default function PeerRatingCard({
               {initialsFromName(player.player_name)}
             </AvatarFallback>
           </Avatar>
-          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors group-hover:text-turf-accessible">
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors group-hover:text-turf-accessible">
             <ZoomIn className="h-3 w-3" aria-hidden="true" />
           </span>
         </button>
@@ -101,7 +101,7 @@ export default function PeerRatingCard({
             data-testid={`rating-slider-${id}`}
             aria-label={`Puntuación para ${player.player_name}`}
           />
-          <div className="mt-1.5 flex justify-between text-[10px] font-semibold text-slate-500" aria-hidden="true">
+          <div className="mt-1.5 flex justify-between text-[10px] font-semibold text-slate-600" aria-hidden="true">
             <span>1</span>
             <span>10</span>
           </div>

@@ -64,7 +64,7 @@ export default function LinkGuestDialog({ open, onOpenChange, groupId, targetMem
 
         <div className="px-4 pb-6 space-y-2 overflow-y-auto">
           {eligibleGuests.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">
+            <p className="text-sm text-slate-600 text-center py-8">
               Este grupo no tiene invitados disponibles para vincular.
             </p>
           ) : (
@@ -82,7 +82,7 @@ export default function LinkGuestDialog({ open, onOpenChange, groupId, targetMem
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900 truncate">{guest.player_name}</p>
-                  <p className="text-xs text-slate-500">{guest.primary_position || 'Sin posición cargada'}</p>
+                  <p className="text-xs text-slate-600">{guest.primary_position || 'Sin posición cargada'}</p>
                 </div>
                 <Button
                   type="button"

@@ -65,13 +65,13 @@ export default function PanelSection({
             <h2 className="flex items-baseline gap-2 font-heading text-lg font-bold uppercase leading-none tracking-tight text-slate-900">
               <span className="truncate">{titulo}</span>
               {contador != null && (
-                <span className="shrink-0 font-body text-xs font-semibold tabular-nums text-slate-500">
+                <span className="shrink-0 font-body text-xs font-semibold tabular-nums text-slate-600">
                   {contador}
                 </span>
               )}
             </h2>
             {descripcion && (
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">{descripcion}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">{descripcion}</p>
             )}
           </div>
 

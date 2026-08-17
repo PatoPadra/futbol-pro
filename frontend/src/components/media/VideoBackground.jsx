@@ -144,15 +144,15 @@ export default function VideoBackground({
  * título se pierde.
  */
 const OVERLAYS = {
-  default: 'bg-slate-950/55',
+  default: 'bg-slate-950/45',
   // Para heroes: oscuro abajo (donde va el texto), más limpio arriba.
-  hero: 'bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-slate-950/35',
+  hero: 'bg-gradient-to-t from-slate-950/75 via-slate-950/45 to-slate-950/25',
   // Para tarjetas de carrusel: sólo el pie oscuro.
-  card: 'bg-gradient-to-t from-slate-950/90 via-slate-950/25 to-transparent',
+  card: 'bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent',
   // Verde de marca, para secciones que quieren leerse como "nuestras".
-  turf: 'bg-gradient-to-br from-turf-dark/85 via-slate-950/75 to-slate-950/85',
+  turf: 'bg-gradient-to-br from-turf-dark/75 via-slate-950/60 to-slate-950/75',
   // Apenas un velo, para fondos detrás de tarjetas claras.
-  veil: 'bg-slate-950/70',
+  veil: 'bg-slate-950/60',
   none: '',
 };
 

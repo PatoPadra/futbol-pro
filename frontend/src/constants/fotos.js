@@ -181,3 +181,38 @@ export const DESTACADAS_ALTAS = pickFotos({ ids: [36414021, 36414019, 36414020, 
  * detras de un 'todavia no hay partidos' se contradice solo.
  */
 export const FOTOS_VACIO = pickFotos({ ids: [31564496, 16826135, 32812738, 13422994, 32962876, 9410605] });
+
+/**
+ * Ruta -> slug de encabezado. Sirve para que el shell pueda poner la foto de la
+ * pagina como fondo de toda la pantalla sin que cada pagina tenga que avisar.
+ *
+ * El orden importa: van de mas especifica a menos, porque `/partidos/:id` y
+ * `/partidos/:id/equipos` comparten prefijo y gana la primera que matchea.
+ */
+const RUTAS = [
+  [/^\/partidos\/[^/]+\/equipos/, 'equipos'],
+  [/^\/partidos\/[^/]+\/post-partido/, 'post-partido'],
+  [/^\/partidos\/[^/]+\/estadisticas/, 'estadisticas'],
+  [/^\/partidos\/crear/, 'crear-partido'],
+  [/^\/partidos\/[^/]+/, 'partido'],
+  [/^\/partidos/, 'partidos'],
+  [/^\/jugadores\/[^/]+\/historial/, 'historial'],
+  [/^\/jugadores\/[^/]+/, 'perfil'],
+  [/^\/mi-perfil/, 'perfil'],
+  [/^\/grupos\/crear/, 'crear-grupo'],
+  [/^\/grupos\/[^/]+/, 'grupo'],
+  [/^\/invitar-jugador/, 'invitar'],
+  [/^\/completar-perfil/, 'completar-perfil'],
+  [/^\/organizador/, 'organizador'],
+  [/^\/admin/, 'admin'],
+  [/^\/verificar-email/, 'verificar'],
+];
+
+/**
+ * Foto que le corresponde al fondo de una ruta. El dashboard cae al default
+ * porque no tiene slug propio: su protagonista es el video del banner.
+ */
+export function fotoDeRuta(pathname) {
+  const entrada = RUTAS.find(([re]) => re.test(pathname || ''));
+  return entrada ? fotoDePagina(entrada[1]) : getFoto(17291206);
+}

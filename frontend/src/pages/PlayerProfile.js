@@ -350,7 +350,7 @@ export default function PlayerProfile({ isSelf }) {
                       onToggle={toggleSecondaryPosition}
                       tono="charcoal"
                     />
-                    <p className="mt-2 text-xs text-slate-500">Elegí hasta 3 posiciones donde también te sentís cómodo jugando.</p>
+                    <p className="mt-2 text-xs text-slate-600">Elegí hasta 3 posiciones donde también te sentís cómodo jugando.</p>
                   </div>
                   <div>
                     <Label>Posición que preferís evitar</Label>
@@ -364,7 +364,7 @@ export default function PlayerProfile({ isSelf }) {
                       tono="danger"
                       marca="cruz"
                     />
-                    <p className="mt-2 text-xs text-slate-500">Opcional. El organizador va a evitar ubicarte ahí si es posible.</p>
+                    <p className="mt-2 text-xs text-slate-600">Opcional. El organizador va a evitar ubicarte ahí si es posible.</p>
                   </div>
                 </div>
               </section>
@@ -389,7 +389,7 @@ export default function PlayerProfile({ isSelf }) {
 
           {!canViewPeerScores && (
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
               <p>
                 Los puntajes internos y ratings derivados quedan visibles solo para organizadores y admins.
                 {isOwn ? ' En tu historial vas a seguir viendo tus autoevaluaciones.' : ''}
