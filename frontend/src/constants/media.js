@@ -10,7 +10,7 @@
  * poster en lugar de romper la pantalla — ver VideoBackground.
  *
  * SELF-HOSTED: los archivos viven en `frontend/public/videos/` como
- * `<id>-360.mp4` y `<id>-poster.jpg` (~12 MB en total). No dependemos del CDN
+ * `<id>-720.mp4`, `<id>-360.mp4` y `<id>-poster.jpg`. No dependemos del CDN
  * de Mixkit en runtime. Para regenerarlos o agregar un clip nuevo, el patrón de
  * origen es `https://assets.mixkit.co/videos/<id>/<id>-720.mp4` (y
  * `<id>-thumb-720-0.jpg` para el poster).
@@ -24,14 +24,18 @@
 const MEDIA_BASE = process.env.REACT_APP_MEDIA_BASE || '/videos';
 
 /**
- * URL del mp4. Servimos una sola calidad (360p, 640x360) a propósito: el repo
- * pasaba de 1.6 MB a ~60 MB con los 720p, y el video siempre va detrás de un
- * scrim oscuro y escalado, donde la diferencia se nota poco. Si algún día
- * querés 720p, bajá `<id>-720.mp4` al mismo directorio y volvé a meter un
- * selector de calidad por viewport acá y en VideoBackground.
+ * URL del mp4 para una calidad ('720' | '360').
+ *
+ * Estan las dos a proposito: en un hero a pantalla completa el 360p (640x360)
+ * se escala 2x o mas en cualquier monitor y se ve blando, pero mandarle 720p a
+ * un celular son ~6 MB para tapar una pantalla de 375px. VideoBackground elige
+ * segun el viewport.
+ *
+ * 720p es el techo: Mixkit tiene 1080p y 4K, pero el 1080 de un clip de 23s
+ * pesa 76 MB — mas de 400 MB para los ocho, impracticable en un repo.
  */
-function videoUrl(id) {
-  return `${MEDIA_BASE}/${id}-360.mp4`;
+function videoUrl(id, quality) {
+  return `${MEDIA_BASE}/${id}-${quality}.mp4`;
 }
 
 /** Devuelve la URL del frame de poster (lo que se ve antes de que cargue el video). */
@@ -103,7 +107,8 @@ export const CLIPS = RAW_CLIPS.map((c) => ({
   ...c,
   key: String(c.id),
   tieneVideo: IDS_CON_VIDEO.has(c.id),
-  src: videoUrl(c.id),
+  src720: videoUrl(c.id, '720'),
+  src360: videoUrl(c.id, '360'),
   poster: posterUrl(c.id),
   credito: 'Mixkit — licencia gratuita',
 }));
@@ -135,7 +140,18 @@ export function pickClips({ nivel, genero, ids } = {}) {
  *     que ve alguien que entra, y el pedido de cubrir los tres es explícito.
  *  3. Acción centrada, para que el scrim y el título no la tapen.
  */
-export const HERO_CLIPS = pickClips({ ids: [41372, 43499, 42537, 44602, 42531, 767] });
+// El orden es por PESO, no estetico: el hero monta el clip activo y precarga el
+// siguiente, asi que los dos primeros definen la carga inicial de la landing.
+// Antes abria con 41372 (7.8 MB, el mas pesado del set) y el primer paint eran
+// 11 MB. Asi arranca en 7.6 MB y encima la rotacion de genero queda perfecta:
+// masculino, mixto, femenino, masculino, mixto, femenino.
+//   43499  3.2 MB  masculino profesional
+//   44602  4.4 MB  mixto
+//   42537  5.7 MB  femenino
+//   767    2.8 MB  masculino amateur
+//   41372  7.8 MB  mixto
+//   42531  6.3 MB  femenino
+export const HERO_CLIPS = pickClips({ ids: [43499, 44602, 42537, 767, 41372, 42531] });
 
 /**
  * Mezcla para el carrusel "así se ve": una de cada cosa, en orden intercalado

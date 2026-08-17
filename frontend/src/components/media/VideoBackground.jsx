@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { usePrefersReducedMotion, useSavesData } from '@/hooks/use-media-preferences';
+import {
+  usePrefersReducedMotion,
+  useSavesData,
+  useVideoQuality,
+} from '@/hooks/use-media-preferences';
 
 /**
  * Video de fondo decorativo.
@@ -31,6 +35,7 @@ export default function VideoBackground({
   const videoRef = useRef(null);
   const reducedMotion = usePrefersReducedMotion();
   const savesData = useSavesData();
+  const quality = useVideoQuality();
 
   const [inView, setInView] = useState(priority);
   const [canPlay, setCanPlay] = useState(false);
@@ -76,11 +81,11 @@ export default function VideoBackground({
     }
   }, [active, inView, shouldLoad, canPlay]);
 
-  // Al cambiar de clip reseteamos el estado de reproducción; si no, el poster
-  // del clip nuevo queda oculto detrás de un video que todavía no cargó.
+  // Al cambiar de clip o de calidad reseteamos el estado: si no, el poster
+  // queda oculto detrás de un video que todavía no cargó.
   useEffect(() => {
     setCanPlay(false);
-  }, [clip?.key]);
+  }, [clip?.key, quality]);
 
   if (!clip) return <div className={cn('relative overflow-hidden', className)}>{children}</div>;
 
@@ -108,8 +113,8 @@ export default function VideoBackground({
       {shouldLoad && (
         <video
           ref={videoRef}
-          key={clip.key}
-          src={clip.src}
+          key={`${clip.key}-${quality}`}
+          src={quality === '360' ? clip.src360 : clip.src720}
           poster={clip.poster}
           muted
           loop

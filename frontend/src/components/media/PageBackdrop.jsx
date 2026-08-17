@@ -46,8 +46,14 @@ export default function PageBackdrop({ pathname }) {
       <img
         src={foto.src}
         alt=""
-        // El scale-110 tapa los bordes translucidos que deja el blur.
-        className="h-full w-full scale-110 object-cover blur-[7px] saturate-[0.85]"
+        // Blur de 2px, no de 7. Medido: el blur NO protege el contraste del
+        // texto en este catalogo — las fotos mas oscuras tienen regiones negras
+        // grandes y ni 60px de blur aclaran el centro de una mancha negra
+        // (lum_min se queda en 0 con cualquier valor). El contraste lo gobierna
+        // solo el velo, asi que los 7px arruinaban la imagen sin dar nada a
+        // cambio: no se llegaba a entender que era la foto.
+        // El scale-105 tapa los bordes translucidos que deja el blur.
+        className="h-full w-full scale-105 object-cover blur-[2px] saturate-[0.9]"
         style={{ objectPosition: '50% 40%' }}
         // Es lo mas grande de la pantalla y lo menos importante: siempre lazy,
         // asi no compite con el encabezado, que si es el LCP.

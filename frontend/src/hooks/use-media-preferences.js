@@ -49,3 +49,24 @@ function readConnection() {
   if (conn.saveData) return true;
   return conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g';
 }
+
+/**
+ * Calidad de video segun el ancho de pantalla. En un celular el 720p es tirar
+ * ~6 MB a la basura: el video va detras de un scrim y en una pantalla de 375px.
+ * En desktop, en cambio, el 360p se escala 2x o mas y se ve blando.
+ */
+export function useVideoQuality() {
+  const [quality, setQuality] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? '360' : '720',
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = (e) => setQuality(e.matches ? '720' : '360');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  return quality;
+}

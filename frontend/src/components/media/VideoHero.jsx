@@ -20,6 +20,8 @@ export default function VideoHero({
 }) {
   const reducedMotion = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
+  // Arranca en false para que el primer paint baje un solo video.
+  const [precargarSiguiente, setPrecargarSiguiente] = useState(false);
   const total = clips?.length || 0;
 
   const go = useCallback(
@@ -36,14 +38,28 @@ export default function VideoHero({
     return () => clearInterval(t);
   }, [reducedMotion, total, interval]);
 
+  // Un tercio del intervalo de espera antes de precargar el siguiente: suficiente
+  // para que el clip activo ya se haya bajado, y sobra tiempo para el fundido.
+  // Con movimiento reducido no hay rotacion, asi que no hay nada que precargar.
+  useEffect(() => {
+    if (reducedMotion || total < 2) return undefined;
+    const t = setTimeout(() => setPrecargarSiguiente(true), Math.round(interval / 3));
+    return () => clearTimeout(t);
+  }, [reducedMotion, total, interval]);
+
   if (!total) return <div className={className}>{children}</div>;
 
   // Sólo montamos video para el clip visible y el siguiente. Montar los seis
   // (todos son `absolute inset-0`, así que los seis intersecan el viewport y
   // resuelven su IntersectionObserver a true) disparaba seis descargas de mp4
-  // al entrar a la página: en 4G es la diferencia entre pedir ~2 MB y ~12 MB.
-  // El siguiente se precarga para que el fundido no entre en negro.
-  const nextIndex = total > 1 ? (index + 1) % total : -1;
+  // al entrar a la página.
+  //
+  // Y el siguiente se monta con retraso, no de entrada: precargarlo junto con el
+  // activo duplicaba la carga inicial (7.6 MB en vez de 3.2 en desktop). Con
+  // `precargarSiguiente` en false al principio, el primer paint pide un solo
+  // clip y el segundo entra despues, mucho antes de que haga falta para el
+  // fundido.
+  const nextIndex = total > 1 && precargarSiguiente ? (index + 1) % total : -1;
 
   return (
     <div className={cn('relative isolate overflow-hidden', className)} data-testid="video-hero">
