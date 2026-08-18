@@ -209,10 +209,49 @@ const RUTAS = [
 ];
 
 /**
- * Foto que le corresponde al fondo de una ruta. El dashboard cae al default
- * porque no tiene slug propio: su protagonista es el video del banner.
+ * Foto de FONDO de cada pagina, y es a proposito distinta de la del encabezado.
+ *
+ * Al principio el fondo repetia la foto de la banda, con la idea de que se leyera
+ * como su eco desenfocado. Visto en la app no funciona: se lee como la misma
+ * imagen puesta dos veces. Asi que cada pagina tiene dos fotos, emparejadas por
+ * tema pero nunca iguales.
+ *
+ * Se prefieren formas `ancha` y `cuadrada`: el fondo va a pantalla completa y
+ * una vertical se recorta a la banda del medio en desktop. Las 8 anchas y 7
+ * cuadradas libres alcanzan justo para las 15 paginas.
+ *
+ * El pareo esta pensado, no es al azar:
+ *   crear-partido  -> cancha vacia vista con drone (esta por llenarse)
+ *   equipos        -> aerea de altura (la mirada tactica, como el dibujo)
+ *   post-partido   -> entrenamiento en barro (misma familia que la lluvia)
+ *   perfil         -> otra jugadora, mismo tema que el encabezado
+ *   invitar        -> chicos abajo de un puente, blanco y negro como su banda
+ *   admin          -> Bogota en blanco y negro: calmo, el panel no tiene que gritar
+ */
+const FONDOS = {
+  partidos: 15293580,          // adolescentes en un parque de Medellin
+  partido: 8838868,            // cancha de cemento azul, aerea
+  'crear-partido': 9410605,    // cancha vacia en Buenos Aires, drone
+  equipos: 36414022,           // canchas en el desierto de altura de Jujuy, aerea
+  'post-partido': 12828798,    // equipo entrenando en cancha de barro
+  estadisticas: 32761357,      // cancha iluminada de noche desde arriba
+  perfil: 32366610,            // partido femenino en Chile
+  historial: 15335175,         // chicos jugando con montanias nevadas de fondo
+  'completar-perfil': 32879589, // chicos jugando en un barrio de Rio
+  grupo: 15914785,             // dos jugadoras en un partido
+  'crear-grupo': 36914533,     // adolescentes en una cancha urbana
+  invitar: 38416333,           // chicos abajo de un puente, blanco y negro
+  organizador: 17044943,       // cancha en Nuevo Chimbote, Peru, contra la montania
+  admin: 13596311,             // chico en una cancha rodeada de casas, Bogota, b&n
+  verificar: 38197493,         // dos adolescentes jugando en Buenos Aires
+};
+
+/**
+ * Foto de fondo de una ruta. El dashboard no esta en RUTAS porque su
+ * protagonista es el video del banner; le damos igual un fondo propio y calmo.
  */
 export function fotoDeRuta(pathname) {
   const entrada = RUTAS.find(([re]) => re.test(pathname || ''));
-  return entrada ? fotoDePagina(entrada[1]) : getFoto(17291206);
+  if (!entrada) return getFoto(25526177); // siluetas jugando al atardecer
+  return getFoto(FONDOS[entrada[1]]) || fotoDePagina(entrada[1]);
 }

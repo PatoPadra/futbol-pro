@@ -10,9 +10,16 @@ import { fotoDeRuta } from '@/constants/fotos';
  * fotos vivian solo en la banda de 190px del encabezado. Resultado: paneles
  * blancos sobre fondo blanco y la sensacion de que la app no tenia imagenes.
  *
- * Ahora la foto curada de cada pagina ocupa la pantalla completa, desenfocada
- * detras de un velo claro. La version nitida sigue arriba en la banda: se lee
- * como que el fondo es el eco de esa foto, no como la misma imagen dos veces.
+ * Cada pagina tiene DOS fotos: la de la banda del encabezado y esta, de fondo,
+ * que ocupa la pantalla completa detras de un velo claro. Son distintas a
+ * proposito — el mapa FONDOS de fotos.js las empareja por tema pero nunca
+ * repite. Al principio el fondo reusaba la foto de la banda pensando que se
+ * leeria como su eco; visto en la app se lee como la misma imagen puesta dos
+ * veces, y no sirve.
+ *
+ * Sin desenfoque: se probo con 7px y despues 2px, y en los dos casos la foto no
+ * se llegaba a entender. El blur ademas no aporta NADA al contraste en este
+ * catalogo (ver abajo), asi que era costo puro.
  *
  * EL VELO NO ES DECORATIVO: 80% es el maximo de foto que entra sin romper el
  * texto. Medido sobre 8 fotos del catalogo, componiendo el velo sobre los
@@ -46,14 +53,13 @@ export default function PageBackdrop({ pathname }) {
       <img
         src={foto.src}
         alt=""
-        // Blur de 2px, no de 7. Medido: el blur NO protege el contraste del
-        // texto en este catalogo — las fotos mas oscuras tienen regiones negras
-        // grandes y ni 60px de blur aclaran el centro de una mancha negra
-        // (lum_min se queda en 0 con cualquier valor). El contraste lo gobierna
-        // solo el velo, asi que los 7px arruinaban la imagen sin dar nada a
-        // cambio: no se llegaba a entender que era la foto.
-        // El scale-105 tapa los bordes translucidos que deja el blur.
-        className="h-full w-full scale-105 object-cover blur-[2px] saturate-[0.9]"
+        // Sin blur. Medido: el desenfoque NO protege el contraste del texto en
+        // este catalogo — las fotos mas oscuras tienen regiones negras grandes y
+        // ni 60px de blur aclaran el centro de una mancha negra (la luminancia
+        // minima se queda en 0 con cualquier valor). El contraste lo gobierna
+        // solo el velo. O sea que el blur costaba nitidez y no devolvia nada.
+        // Tampoco hace falta el scale para tapar bordes, porque no hay blur.
+        className="h-full w-full object-cover saturate-[0.9]"
         style={{ objectPosition: '50% 40%' }}
         // Es lo mas grande de la pantalla y lo menos importante: siempre lazy,
         // asi no compite con el encabezado, que si es el LCP.
