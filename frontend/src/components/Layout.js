@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Home,
   LogOut,
+  Medal,
   Menu,
   Plus,
   Shield,
@@ -41,6 +42,9 @@ export default function Layout({ children }) {
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Inicio' },
     { path: '/partidos', icon: Trophy, label: 'Partidos' },
+    // Torneos va acá y no atrás de "Organizar": lo mira todo el mundo que juega
+    // uno, no sólo quien lo administra.
+    { path: '/torneos', icon: Medal, label: 'Torneos' },
     { path: '/mi-perfil', icon: UserCircle, label: 'Perfil' },
   ];
 
@@ -111,6 +115,14 @@ export default function Layout({ children }) {
                 className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
               >
                 <Users className="mr-1 h-4 w-4" /> Crear grupo
+              </Button>
+              <Button
+                data-testid="create-tournament-nav-btn"
+                variant="outline"
+                onClick={() => navigate('/torneos/crear')}
+                className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
+              >
+                <Medal className="mr-1 h-4 w-4" /> Crear torneo
               </Button>
               <Button
                 data-testid="create-match-btn"
@@ -187,6 +199,13 @@ export default function Layout({ children }) {
                   <Users className="h-4 w-4" /> Crear grupo
                 </button>
                 <button
+                  onClick={() => { navigate('/torneos/crear'); setMenuOpen(false); }}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-slate-700 hover:bg-white/70 ${FOCUS_RING}`}
+                  data-testid="mobile-create-tournament"
+                >
+                  <Medal className="h-4 w-4" /> Crear torneo
+                </button>
+                <button
                   onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
                   className={`flex min-h-11 items-center gap-3 rounded-xl bg-turf/10 px-3 text-sm font-semibold text-turf-accessible ring-1 ring-turf/20 ${FOCUS_RING}`}
                   data-testid="mobile-create-match"
@@ -225,7 +244,11 @@ export default function Layout({ children }) {
           className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-turf/60 to-transparent"
         />
 
-        {navItems.slice(0, 5).map((item) => {
+        {/* El corte era 5 porque un admin llegaba justo a 5 ítems. Al sumar
+            "Torneos" pasó a 6 y el que se caía era "Admin", que además no está
+            en el menú hamburguesa: dejaba /admin sin ninguna entrada visible en
+            celular. Se corta en 6, que es el máximo que arma este array. */}
+        {navItems.slice(0, 6).map((item) => {
           const active = isActive(item.path);
           return (
             <Link

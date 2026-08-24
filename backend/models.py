@@ -2,6 +2,10 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+# El género es un Literal y no un str suelto para que un valor inventado sea un
+# 422 del framework y no un dato basura guardado en Mongo.
+Gender = Literal["masculino", "femenino", "otro", "prefiero_no_decir"]
+
 
 class EmailNormalizedModel(BaseModel):
     """Baja el email a minúscula en la capa de modelo.
@@ -29,6 +33,7 @@ class EmailNormalizedModel(BaseModel):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     birth_date: Optional[str] = None
+    gender: Optional[Gender] = None
     primary_position: Optional[str] = None
     secondary_positions: List[str] = Field(default_factory=list)
     unwanted_position: Optional[str] = None
@@ -42,6 +47,7 @@ class ProfileResponse(BaseModel):
     photo_url: Optional[str] = None
     birth_date: Optional[str] = None
     age: Optional[int] = None
+    gender: Optional[Gender] = None
     player_type: str
     primary_position: Optional[str] = None
     secondary_positions: List[str] = Field(default_factory=list)
@@ -56,6 +62,7 @@ class ProfileResponse(BaseModel):
 class CreateGuestRequest(EmailNormalizedModel):
     name: str
     email: Optional[EmailStr] = None
+    gender: Optional[Gender] = None
     primary_position: Optional[str] = None
     estimated_level: float = 5.0
 
@@ -113,6 +120,7 @@ class RegistrationResponse(BaseModel):
     player_id: str
     player_name: str
     player_photo: Optional[str] = None
+    player_gender: Optional[Gender] = None
     primary_position: Optional[str] = None
     status: str
     registration_type: Optional[Literal["organizador", "frecuente", "invitado"]] = None
@@ -128,6 +136,7 @@ class TeamAssignmentModel(BaseModel):
     player_photo: Optional[str] = None
     player_score: Optional[float] = None
     player_age: Optional[int] = None
+    player_gender: Optional[Gender] = None
     team: str
     position: str
     is_manual: bool = False
@@ -224,6 +233,7 @@ class AddGroupMemberRequest(EmailNormalizedModel):
     player_id: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    gender: Optional[Gender] = None
     username: Optional[str] = None
     member_role: Literal["organizador", "frecuente", "invitado"] = "frecuente"
 
@@ -239,6 +249,7 @@ class GroupMemberResponse(BaseModel):
     player_name: Optional[str] = None
     player_email: Optional[str] = None
     player_type: Optional[str] = None
+    gender: Optional[Gender] = None
     primary_position: Optional[str] = None
     photo_url: Optional[str] = None
 
@@ -280,3 +291,86 @@ class VerifyEmailResponse(BaseModel):
 
 class ResendVerificationRequest(EmailNormalizedModel):
     email: EmailStr
+
+
+# Torneos
+#
+# Un torneo agrupa GRUPOS existentes: cada grupo entra como un equipo y los
+# partidos del torneo son grupo contra grupo. Por eso acá no hay jugadores —
+# el plantel de cada equipo es la lista de miembros de su grupo.
+class CreateTournamentRequest(BaseModel):
+    name: str
+    format: Literal["liga", "zonas_eliminatoria", "eliminacion"]
+    group_ids: List[str] = Field(default_factory=list)
+    # Sólo se miran en formato "zonas_eliminatoria".
+    zones_count: int = 2
+    qualifiers_per_zone: int = 2
+
+
+class AddTournamentTeamRequest(BaseModel):
+    group_id: str
+
+
+class SetFixtureResultRequest(BaseModel):
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+
+
+class TournamentTeamResponse(BaseModel):
+    id: str
+    tournament_id: str
+    group_id: str
+    name: str
+    zone: Optional[str] = None
+    seed: int = 0
+    members_count: int = 0
+    created_at: str
+
+
+class TournamentFixtureResponse(BaseModel):
+    id: str
+    tournament_id: str
+    stage: str
+    stage_label: str
+    zone: Optional[str] = None
+    round: int
+    order: int
+    home_team_id: Optional[str] = None
+    away_team_id: Optional[str] = None
+    home_team_name: Optional[str] = None
+    away_team_name: Optional[str] = None
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    status: str
+    winner_team_id: Optional[str] = None
+    created_at: str
+
+
+class TournamentStandingRow(BaseModel):
+    team_id: str
+    name: str
+    zone: Optional[str] = None
+    played: int = 0
+    won: int = 0
+    drawn: int = 0
+    lost: int = 0
+    goals_for: int = 0
+    goals_against: int = 0
+    goal_diff: int = 0
+    points: int = 0
+
+
+class TournamentResponse(BaseModel):
+    id: str
+    name: str
+    format: str
+    format_label: str
+    status: str
+    zones_count: int = 2
+    qualifiers_per_zone: int = 2
+    created_by: str
+    created_at: str
+    teams_count: int = 0
+    can_manage: bool = False
+    champion_team_id: Optional[str] = None
+    champion_name: Optional[str] = None

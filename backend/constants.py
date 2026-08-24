@@ -1,3 +1,23 @@
+# Género del jugador.
+#
+# Es un dato del perfil y ADEMÁS entra en el armado de equipos: el balanceador
+# reparte cada género en partes iguales entre los dos equipos, así un partido
+# mixto no termina con todas las mujeres de un lado.
+#
+# "prefiero_no_decir" existe para que el campo se pueda completar sin obligar a
+# nadie a declarar nada. A los efectos del balanceo cae en la misma bolsa que
+# quien todavía no lo cargó (ver GENDER_UNKNOWN en team_balancer).
+GENDERS = [
+    {"id": "masculino", "name": "Masculino"},
+    {"id": "femenino", "name": "Femenino"},
+    {"id": "otro", "name": "Otro"},
+    {"id": "prefiero_no_decir", "name": "Prefiero no decir"},
+]
+
+GENDER_IDS = [g["id"] for g in GENDERS]
+GENDER_MAP = {g["id"]: g for g in GENDERS}
+
+
 POSITIONS = [
     {"id": "GK", "name": "Arquero", "zone": "defense"},
     {"id": "RB", "name": "Lateral derecho", "zone": "defense"},
@@ -134,3 +154,51 @@ MATCH_STATUSES = [
     "finalizado",
     "completado",
 ]
+
+
+# Torneos: un torneo agrupa GRUPOS existentes, cada grupo juega como un equipo.
+TOURNAMENT_FORMATS = [
+    {
+        "id": "liga",
+        "name": "Liga",
+        "description": "Todos contra todos, una rueda. Gana el de más puntos.",
+    },
+    {
+        "id": "zonas_eliminatoria",
+        "name": "Zonas + eliminatoria",
+        "description": "Fase de grupos por zonas y después llaves de eliminación directa.",
+    },
+    {
+        "id": "eliminacion",
+        "name": "Eliminación directa",
+        "description": "Llaves tipo copa: el que pierde queda afuera.",
+    },
+]
+
+TOURNAMENT_FORMAT_IDS = [f["id"] for f in TOURNAMENT_FORMATS]
+TOURNAMENT_FORMAT_MAP = {f["id"]: f for f in TOURNAMENT_FORMATS}
+
+TOURNAMENT_STATUSES = ["borrador", "fase_grupos", "eliminatoria", "finalizado"]
+
+# Puntaje de la tabla. Están acá y no hardcodeados en el cálculo para que se vea
+# de una que son una convención y no una ley del fútbol.
+POINTS_WIN = 3
+POINTS_DRAW = 1
+POINTS_LOSS = 0
+
+# Nombre de cada ronda de llaves según cuántos equipos entren a esa ronda.
+KNOCKOUT_ROUND_NAMES = {
+    2: "final",
+    4: "semifinal",
+    8: "cuartos",
+    16: "octavos",
+    32: "dieciseisavos",
+}
+
+KNOCKOUT_ROUND_LABELS = {
+    "final": "Final",
+    "semifinal": "Semifinal",
+    "cuartos": "Cuartos de final",
+    "octavos": "Octavos de final",
+    "dieciseisavos": "Dieciseisavos de final",
+}

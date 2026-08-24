@@ -23,6 +23,9 @@ const MatchDetail = lazy(() => import('@/pages/MatchDetail'));
 const CreateGuest = lazy(() => import('@/pages/CreateGuest'));
 const CreateGroup = lazy(() => import('@/pages/CreateGroup'));
 const GroupDetail = lazy(() => import('@/pages/GroupDetail'));
+const TournamentsList = lazy(() => import('@/pages/TournamentsList'));
+const CreateTournament = lazy(() => import('@/pages/CreateTournament'));
+const TournamentDetail = lazy(() => import('@/pages/TournamentDetail'));
 const GeneratedTeams = lazy(() => import('@/pages/GeneratedTeams'));
 const PostMatch = lazy(() => import('@/pages/PostMatch'));
 const StatsConfirmation = lazy(() => import('@/pages/StatsConfirmation'));
@@ -80,6 +83,9 @@ function AppRoutes() {
       <Route path="/invitar-jugador" element={<ProtectedPage><CreateGuest /></ProtectedPage>} />
       <Route path="/grupos/crear" element={<ProtectedPage><CreateGroup /></ProtectedPage>} />
       <Route path="/grupos/:id" element={<ProtectedPage><GroupDetail /></ProtectedPage>} />
+      <Route path="/torneos" element={<ProtectedPage><TournamentsList /></ProtectedPage>} />
+      <Route path="/torneos/crear" element={<ProtectedPage><CreateTournament /></ProtectedPage>} />
+      <Route path="/torneos/:id" element={<ProtectedPage><TournamentDetail /></ProtectedPage>} />
       <Route path="/jugadores/:id" element={<ProtectedPage><PlayerProfile /></ProtectedPage>} />
       <Route path="/jugadores/:id/historial" element={<ProtectedPage><PlayerHistory /></ProtectedPage>} />
       <Route path="/mi-perfil" element={<ProtectedPage><PlayerProfile isSelf /></ProtectedPage>} />

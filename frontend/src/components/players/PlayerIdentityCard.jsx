@@ -1,6 +1,8 @@
 import React from 'react';
 import { Camera, Compass } from 'lucide-react';
 
+import { labelDeFicha } from '@/constants/generos';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { initialsFromName } from '@/utils/photos';
@@ -93,6 +95,17 @@ export default function PlayerIdentityCard({
           </h2>
 
           <dl className="mt-3 space-y-3">
+            {labelDeFicha(profile.gender) && (
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Género
+                </dt>
+                <dd className="mt-1.5 text-sm font-semibold text-slate-900" data-testid="identity-gender">
+                  {labelDeFicha(profile.gender)}
+                </dd>
+              </div>
+            )}
+
             <div>
               <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
                 Principal

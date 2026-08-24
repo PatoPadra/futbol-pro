@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import PageHeader from '../components/common/PageHeader';
 import SectionPanel from '../components/groups/SectionPanel';
 import GuestPreviewCard from '../components/groups/GuestPreviewCard';
+import GenderPicker from '../components/players/GenderPicker';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -33,6 +34,7 @@ const guestSchema = z.object({
     .min(2, 'El nombre debe tener al menos 2 caracteres')
     .max(60, 'El nombre es demasiado largo'),
   email: z.string().trim().email('Ingresá un email válido').optional().or(z.literal('')),
+  gender: z.string().optional(),
   primary_position: z.string().optional(),
   estimated_level: z.number().min(1).max(10),
 });
@@ -48,10 +50,11 @@ export default function CreateGuest() {
 
   const form = useForm({
     resolver: zodResolver(guestSchema),
-    defaultValues: { name: '', email: '', primary_position: '', estimated_level: 5 },
+    defaultValues: { name: '', email: '', gender: '', primary_position: '', estimated_level: 5 },
   });
 
   const { control, handleSubmit, watch, setValue } = form;
+  const selectedGender = watch('gender');
   const selectedPosition = watch('primary_position');
   const selectedLevel = watch('estimated_level');
   const nombreEscrito = watch('name');
@@ -97,6 +100,8 @@ export default function CreateGuest() {
       const res = await api.post('/players/guest', {
         ...data,
         email: data.email || null,
+        // null y no '': el backend valida el género contra una lista cerrada.
+        gender: data.gender || null,
         primary_position: data.primary_position || null,
       });
       guestId = res.data.id;
@@ -255,6 +260,25 @@ export default function CreateGuest() {
               descripcion="Una estimación para que el armado de equipos arranque parejo. Después se ajusta sola."
               contentClassName="space-y-5"
             >
+              <FormField
+                control={control}
+                name="gender"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Género (opcional)</FormLabel>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Si el partido es mixto, lo usamos para repartir los equipos parejos.
+                    </p>
+                    <GenderPicker
+                      className="mt-2"
+                      testIdPrefix="guest-gender"
+                      value={selectedGender}
+                      onChange={(id) => setValue('gender', id, { shouldValidate: true })}
+                    />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={control}
                 name="primary_position"

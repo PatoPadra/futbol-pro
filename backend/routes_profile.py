@@ -48,6 +48,13 @@ async def update_profile(data: ProfileUpdate, user=Depends(get_current_user)):
         update_data["name"] = data.name
     if data.birth_date is not None:
         update_data["birth_date"] = data.birth_date
+    # El género se distingue del resto: acá `None` no significa "no lo mandes",
+    # significa "borralo". Los otros campos son str y usan '' para vaciarse, pero
+    # género es un Literal cerrado y '' no es un valor válido. Por eso se mira si
+    # la clave vino en el JSON (model_fields_set) en vez de si el valor es None:
+    # así se puede setear Y volver atrás, y omitir la clave sigue sin tocar nada.
+    if "gender" in data.model_fields_set:
+        update_data["gender"] = data.gender
     if data.primary_position is not None:
         update_data["primary_position"] = data.primary_position
     if data.secondary_positions is not None:

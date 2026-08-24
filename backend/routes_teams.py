@@ -10,7 +10,7 @@ from models import ManualAdjustRequest, TeamGenerationResponse
 from rating_calculator import get_player_score_for_balance
 from services.matches import ensure_match_manager, get_match_or_404
 from services.permissions import ensure_group_member
-from team_balancer import generate_teams
+from team_balancer import _bolsa_de_genero, generate_teams
 
 router = APIRouter(prefix="/api/matches", tags=["teams"])
 
@@ -49,6 +49,7 @@ async def _enrich_assignments(assignments: list[dict]):
             "player_name": profile.get("name", assignment.get("player_name")),
             "player_photo": profile.get("photo_url", assignment.get("player_photo")),
             "player_primary_position": profile.get("primary_position"),
+            "player_gender": profile.get("gender", assignment.get("player_gender")),
             "player_score": round(float(player_score), 2),
             "player_age": _calculate_age(profile.get("birth_date")),
         })
@@ -65,12 +66,27 @@ def _build_team_summary(assignments: list[dict], team_label: str):
     ages = [player.get("player_age") for player in team_players if player.get("player_age") is not None]
     avg_age = round(sum(ages) / len(ages), 1) if ages else None
 
+    # El reparto por género se recalcula desde las asignaciones y no se lee del
+    # gender_split que guardó el balanceador: después de un ajuste manual el
+    # guardado quedaría mintiendo, y esto es justamente lo que el organizador
+    # mira para ver si el mixto quedó parejo.
+    # Se usa la MISMA función que el balanceador para decidir la bolsa, en vez de
+    # un `or "sin_declarar"`. Ese `or` sólo atrapa None y '': "prefiero_no_decir"
+    # es un string con contenido, así que se escapaba a una bolsa propia y el
+    # resumen mostraba dos filas donde el balanceador había visto una sola. Un
+    # mixto repartido correctamente 2 y 2 podía leerse como si estuviera torcido.
+    gender_counts = {}
+    for player in team_players:
+        clave = _bolsa_de_genero({"gender": player.get("player_gender")})
+        gender_counts[clave] = gender_counts.get(clave, 0) + 1
+
     return {
         "team": team_label,
         "count": count,
         "total_value": total_value,
         "average_value": avg_value,
         "average_age": avg_age,
+        "gender_counts": gender_counts,
     }
 
 
@@ -95,6 +111,10 @@ async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
         "status": "borrador",
         "assignments": result["assignments"],
         "balance_score": result["balance_score"],
+        # Cómo quedó repartido cada género en el momento de generar. Lo que se
+        # muestra en pantalla se recalcula (ver _build_team_summary); esto queda
+        # para poder auditar el balanceo sin volver a correrlo.
+        "gender_split": result.get("gender_split", {}),
         "created_at": now,
     }
 

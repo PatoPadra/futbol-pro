@@ -471,6 +471,7 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
                     player_id=reg["player_id"],
                     player_name=profile["name"],
                     player_photo=profile.get("photo_url"),
+                    player_gender=profile.get("gender"),
                     primary_position=profile.get("primary_position"),
                     status=reg["status"],
                     registration_type=infer_registration_type(match, registration=reg, membership=membership, profile=profile),

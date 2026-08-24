@@ -164,6 +164,21 @@ const ENCABEZADOS = {
   'admin': 32101183,
   // Pibes contra un mural porteno: la bienvenida
   'verificar': 1392732,
+
+  // --- torneos ---
+  // Las tres de abajo rompen la regla de "todas anchas" y hay una razon: al
+  // sumar la familia de torneos el catalogo ya no tenia formas 'ancha' ni
+  // 'cuadrada' libres (las 15 paginas anteriores se llevaron todas). Antes que
+  // repetir una foto ya usada en otra pantalla, se usan verticales fuertes: la
+  // banda las recorta al centro, que en estas tres aguanta bien porque la
+  // accion esta en el medio del cuadro. Si algun dia entran fotos anchas nuevas
+  // al catalogo, estas tres son las primeras candidatas a cambiar.
+  // Pibes jugando sobre adoquines: muchos equipos, mucha gente
+  'torneos': 14059349,
+  // El festejo del final: un torneo termina con alguien levantando algo
+  'torneo': 33613894,
+  // La hinchada: un torneo es lo que junta gente a mirar
+  'crear-torneo': 24205283,
 };
 
 /** Foto de encabezado de una pagina. Devuelve undefined si el slug no existe. */
@@ -199,6 +214,9 @@ const RUTAS = [
   [/^\/jugadores\/[^/]+\/historial/, 'historial'],
   [/^\/jugadores\/[^/]+/, 'perfil'],
   [/^\/mi-perfil/, 'perfil'],
+  [/^\/torneos\/crear/, 'crear-torneo'],
+  [/^\/torneos\/[^/]+/, 'torneo'],
+  [/^\/torneos/, 'torneos'],
   [/^\/grupos\/crear/, 'crear-grupo'],
   [/^\/grupos\/[^/]+/, 'grupo'],
   [/^\/invitar-jugador/, 'invitar'],

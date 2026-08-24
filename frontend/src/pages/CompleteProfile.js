@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/common/PageHeader';
 import Reveal from '@/components/common/Reveal';
 import PositionPicker from '@/components/players/PositionPicker';
+import GenderPicker from '@/components/players/GenderPicker';
+import { GENERO_IDS } from '@/constants/generos';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
@@ -23,6 +25,10 @@ const profileSchema = z.object({
     .string()
     .min(1, 'Ingresá tu fecha de nacimiento')
     .refine((v) => v <= todayISO(), 'La fecha de nacimiento no puede ser futura'),
+  // Se pide en el alta y no queda opcional porque el balanceador lo usa para
+  // repartir los mixtos. "Prefiero no decir" es la salida para quien no lo
+  // quiera declarar, así que pedirlo no obliga a nadie a nada.
+  gender: z.enum(GENERO_IDS, { errorMap: () => ({ message: 'Elegí una opción' }) }),
   primary_position: z.string().min(1, 'Seleccioná tu posición principal'),
   secondary_positions: z.array(z.string()).max(3).default([]),
   unwanted_position: z.string().default(''),
@@ -84,12 +90,14 @@ export default function CompleteProfile() {
     defaultValues: {
       name: user?.name || '',
       birth_date: '',
+      gender: '',
       primary_position: '',
       secondary_positions: [],
       unwanted_position: '',
     },
   });
 
+  const gender = watch('gender');
   const primaryPosition = watch('primary_position');
   const secondaryPositions = watch('secondary_positions') || [];
   const unwantedPosition = watch('unwanted_position');
@@ -250,7 +258,7 @@ export default function CompleteProfile() {
 
         {/* Datos básicos */}
         <Reveal from="up" delay={60} className="block">
-          <PasoSeccion paso="2" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad, nada más.">
+          <PasoSeccion paso="2" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad. El género lo usamos para repartir parejo los partidos mixtos.">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="name">Nombre</Label>
@@ -282,6 +290,21 @@ export default function CompleteProfile() {
                 />
                 {errors.birth_date && (
                   <p className="mt-1 text-xs text-red-600" data-testid="birthdate-error">{errors.birth_date.message}</p>
+                )}
+              </div>
+              <div>
+                <Label>Género</Label>
+                <p className="mt-1 text-xs text-slate-600">
+                  Cuando el partido es mixto, lo usamos para que los dos equipos queden parejos.
+                </p>
+                <GenderPicker
+                  className="mt-2"
+                  value={gender}
+                  onChange={(id) => setValue('gender', id, { shouldValidate: true })}
+                  disabled={loading}
+                />
+                {errors.gender && (
+                  <p className="mt-1 text-xs text-red-600" data-testid="gender-error">{errors.gender.message}</p>
                 )}
               </div>
             </div>

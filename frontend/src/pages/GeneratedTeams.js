@@ -19,6 +19,7 @@ import EmptyState from '@/components/common/EmptyState';
 import Reveal from '@/components/common/Reveal';
 import TeamPanel from '@/components/teams/TeamPanel';
 import BalanceMeter from '@/components/teams/BalanceMeter';
+import GenderSplit from '@/components/teams/GenderSplit';
 import SectionHeading from '@/components/teams/SectionHeading';
 import { identidadDeEquipo } from '@/components/teams/teamIdentity';
 
@@ -516,6 +517,10 @@ export default function GeneratedTeams() {
               </div>
             </div>
           </section>
+        )}
+
+        {(teamSummaryA || teamSummaryB) && (
+          <GenderSplit resumenA={teamSummaryA} resumenB={teamSummaryB} />
         )}
 
         {canSeeSummaries && (teamSummaryA || teamSummaryB) && (

@@ -17,6 +17,7 @@ from routes_post_match import router as post_match_router
 from routes_players import router as players_router
 from routes_admin import router as admin_router
 from routes_groups import router as groups_router
+from routes_tournaments import router as tournaments_router
 
 app = FastAPI(title="App Fútbol API")
 
@@ -36,6 +37,7 @@ app.include_router(post_match_router)
 app.include_router(players_router)
 app.include_router(admin_router)
 app.include_router(groups_router)
+app.include_router(tournaments_router)
 
 @app.get("/api")
 async def root():
@@ -45,6 +47,18 @@ async def root():
 async def get_positions():
     from constants import POSITIONS
     return POSITIONS
+
+@app.get("/api/genders")
+async def get_genders():
+    from constants import GENDERS
+    return GENDERS
+
+
+@app.get("/api/tournament-formats")
+async def get_tournament_formats():
+    from constants import TOURNAMENT_FORMATS
+    return TOURNAMENT_FORMATS
+
 
 @app.get("/api/formations")
 async def get_formations():

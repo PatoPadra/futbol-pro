@@ -84,6 +84,22 @@ INDEX_SPEC = {
         {"keys": [("key", ASCENDING), ("created_at", ASCENDING)]},
         {"keys": [("created_at", ASCENDING)], "expireAfterSeconds": 3600},
     ],
+    # Torneos. Un torneo agrupa grupos: casi todas las lecturas arrancan por
+    # tournament_id, y la de "en qué torneos juega este grupo" por group_id.
+    "tournaments": [
+        {"keys": [("id", ASCENDING)]},
+        {"keys": [("created_by", ASCENDING)]},
+    ],
+    "tournament_teams": [
+        {"keys": [("id", ASCENDING)]},
+        {"keys": [("tournament_id", ASCENDING), ("seed", ASCENDING)]},
+        {"keys": [("group_id", ASCENDING)]},
+    ],
+    "tournament_fixtures": [
+        {"keys": [("id", ASCENDING)]},
+        {"keys": [("tournament_id", ASCENDING), ("round", ASCENDING), ("order", ASCENDING)]},
+        {"keys": [("tournament_id", ASCENDING), ("status", ASCENDING)]},
+    ],
     "group_seed_ratings": [
         {"keys": [("group_id", ASCENDING), ("rater_id", ASCENDING)]},
         {"keys": [("rated_player_id", ASCENDING)]},

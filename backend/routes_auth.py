@@ -173,6 +173,7 @@ async def register(data: RegisterRequest, request: Request):
         "email": data.email,
         "photo_url": matched_guest.get("photo_url") if matched_guest else None,
         "birth_date": matched_guest.get("birth_date") if matched_guest else None,
+        "gender": matched_guest.get("gender") if matched_guest else None,
         "player_type": "frecuente",
         "primary_position": matched_guest.get("primary_position") if matched_guest else None,
         "secondary_positions": (matched_guest.get("secondary_positions") or []) if matched_guest else [],

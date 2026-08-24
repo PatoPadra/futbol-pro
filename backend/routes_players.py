@@ -180,6 +180,7 @@ async def create_guest(data: CreateGuestRequest, user=Depends(get_current_user))
         "email": str(data.email).lower() if data.email else None,
         "photo_url": None,
         "birth_date": None,
+        "gender": data.gender,
         "player_type": "invitado",
         "primary_position": data.primary_position,
         "secondary_positions": [],

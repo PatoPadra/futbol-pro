@@ -23,6 +23,8 @@ import MetricTiles from '@/components/players/MetricTiles';
 import RatingPanel from '@/components/players/RatingPanel';
 import PositionPicker from '@/components/players/PositionPicker';
 import PlayerIdentityCard from '@/components/players/PlayerIdentityCard';
+import GenderPicker from '@/components/players/GenderPicker';
+import { labelDeFicha } from '@/constants/generos';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -33,6 +35,9 @@ const CHIP_SOBRE_FOTO =
 const profileFormSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),
   birth_date: z.string().optional().or(z.literal('')),
+  // Opcional acá aunque el onboarding lo pida: en la edición se tiene que poder
+  // borrar lo que se cargó, y un required lo dejaría trabado para siempre.
+  gender: z.string().optional().or(z.literal('')),
   primary_position: z.string().optional().or(z.literal('')),
   secondary_positions: z.array(z.string()).optional(),
   unwanted_position: z.string().optional().or(z.literal('')),
@@ -76,6 +81,7 @@ export default function PlayerProfile({ isSelf }) {
     defaultValues: {
       name: '',
       birth_date: '',
+      gender: '',
       primary_position: '',
       secondary_positions: [],
       unwanted_position: '',
@@ -98,6 +104,7 @@ export default function PlayerProfile({ isSelf }) {
         reset({
           name: profileRes.data.name,
           birth_date: profileRes.data.birth_date || '',
+          gender: profileRes.data.gender || '',
           primary_position: profileRes.data.primary_position || '',
           secondary_positions: profileRes.data.secondary_positions || [],
           unwanted_position: profileRes.data.unwanted_position || '',
@@ -111,7 +118,9 @@ export default function PlayerProfile({ isSelf }) {
 
   const handleSave = handleSubmit(async (values) => {
     try {
-      await api.put('/profile', values);
+      // `gender` viaja como null y no como '': el backend lo valida contra una
+      // lista cerrada de valores y '' no está en ella. null es "sin declarar".
+      await api.put('/profile', { ...values, gender: values.gender || null });
       toast.success('Perfil actualizado');
       setEditing(false);
       const res = isOwn ? await api.get('/profile') : await api.get(`/players/${playerId}`);
@@ -246,6 +255,11 @@ export default function PlayerProfile({ isSelf }) {
           <>
             <span className={CHIP_SOBRE_FOTO}>{tipoJugador}</span>
             {profile.age && <span className={CHIP_SOBRE_FOTO}>{profile.age} años</span>}
+            {labelDeFicha(profile.gender) && (
+              <span className={CHIP_SOBRE_FOTO} data-testid="profile-gender-chip">
+                {labelDeFicha(profile.gender)}
+              </span>
+            )}
             {metrics && (
               <span className={CHIP_SOBRE_FOTO}>
                 <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
@@ -321,6 +335,18 @@ export default function PlayerProfile({ isSelf }) {
                     {errors.birth_date && (
                       <p className="mt-1 text-xs text-destructive" data-testid="edit-birthdate-error">{errors.birth_date.message}</p>
                     )}
+                  </div>
+                  <div>
+                    <Label>Género</Label>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Se usa para repartir parejo los equipos en los partidos mixtos.
+                    </p>
+                    <GenderPicker
+                      className="mt-2"
+                      testIdPrefix="edit-gender"
+                      value={editForm.gender || ''}
+                      onChange={(id) => setValue('gender', id, { shouldDirty: true })}
+                    />
                   </div>
                 </div>
               </section>
