@@ -12,12 +12,13 @@ necesita Mongo): reciben una lista de jugadores ya armada.
 import pytest
 
 from team_balancer import (
+    _balance_con_formacion,
     _balance_small_format,
     _bolsa_de_genero,
     _bolsas_por_genero,
     _try_formation,
 )
-from constants import FORMATIONS
+from constants import FORMATIONS, coords_de, formaciones_de
 
 
 def jugador(indice, score, gender=None, primary="ST"):
@@ -182,3 +183,75 @@ class TestOnceContraOnce:
         players = [jugador(i, 5, "masculino") for i in range(22)]
         res = _try_formation(players, FORMATIONS["4-4-2"], "4-4-2", "m1")
         assert all("player_gender" in a for a in res["assignments"])
+
+
+class TestFormacionesDeFormatoChico:
+    """
+    Los formatos que no son 11 también se arman por formación.
+
+    Antes el balanceador miraba `if modality == 11` y todo lo demás caía en el
+    reparto sin puestos: por eso un F5 o un F7 no tenían cancha para dibujar.
+    """
+
+    @pytest.mark.parametrize("modalidad", [5, 6, 7, 8, 9, 10, 11])
+    def test_con_el_plantel_completo_sale_una_formacion(self, modalidad):
+        players = [jugador(i, 5 + (i % 5)) for i in range(modalidad * 2)]
+        formaciones = formaciones_de(modalidad)
+
+        res = _balance_con_formacion(players, "m1", formaciones)
+
+        assert res["formation_a"] in formaciones
+        assert len(res["assignments"]) == modalidad * 2
+
+    @pytest.mark.parametrize("modalidad", [5, 6, 7, 8, 9, 10])
+    def test_cada_equipo_tiene_un_arquero_y_nada_mas(self, modalidad):
+        players = [jugador(i, 5, primary="GK" if i < 2 else "ST") for i in range(modalidad * 2)]
+        res = _balance_con_formacion(players, "m1", formaciones_de(modalidad))
+
+        for equipo in ("A", "B"):
+            arqueros = [
+                a for a in res["assignments"]
+                if a["team"] == equipo and a["position"] == "GK"
+            ]
+            assert len(arqueros) == 1, f"{modalidad}: equipo {equipo} tiene {len(arqueros)}"
+
+    @pytest.mark.parametrize("modalidad", [5, 6, 7, 8, 9, 10])
+    def test_los_puestos_coinciden_con_las_coordenadas_de_la_cancha(self, modalidad):
+        """Si no coinciden, la cancha dibuja huecos o se come jugadores."""
+        players = [jugador(i, 5) for i in range(modalidad * 2)]
+        res = _balance_con_formacion(players, "m1", formaciones_de(modalidad))
+
+        coords = coords_de(modalidad, res["formation_a"])
+        for equipo in ("A", "B"):
+            puestos = sorted(
+                a["position"] for a in res["assignments"] if a["team"] == equipo
+            )
+            assert puestos == sorted(c["pos"] for c in coords)
+
+    @pytest.mark.parametrize("modalidad", [5, 7, 9])
+    def test_el_genero_se_sigue_repartiendo(self, modalidad):
+        """La formación no puede pisar el reparto de los mixtos."""
+        total = modalidad * 2
+        players = [
+            jugador(i, 5, "femenino" if i < total // 2 else "masculino")
+            for i in range(total)
+        ]
+        res = _balance_con_formacion(players, "m1", formaciones_de(modalidad))
+
+        conteo = conteo_por_equipo(res["assignments"], "femenino")
+        assert abs(conteo["A"] - conteo["B"]) <= 1
+
+    def test_sin_gente_suficiente_se_reparte_sin_puestos(self):
+        """Faltan jugadores para llenar la formación: equipos igual, cancha no."""
+        players = [jugador(i, 5) for i in range(8)]  # un F5 necesita 10
+        res = _balance_small_format(players, "m1", 5)
+
+        assert res["formation_a"] is None
+        assert len(res["assignments"]) == 8
+
+    def test_toda_modalidad_aceptada_tiene_formaciones(self):
+        """Si MODALITY_CAPACITY acepta una modalidad, tiene que poder dibujarse."""
+        from constants import MODALITY_CAPACITY
+
+        sin_formacion = [m for m in MODALITY_CAPACITY if not formaciones_de(m)]
+        assert sin_formacion == []

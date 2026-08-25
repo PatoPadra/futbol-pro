@@ -144,6 +144,119 @@ FORMATION_COORDS = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# Formaciones de los formatos que no son 11
+# ---------------------------------------------------------------------------
+#
+# La app siempre aceptó modalidades de 5 a 10 (ver MODALITY_CAPACITY), pero las
+# formaciones y la cancha existían SOLO para 11. O sea que el dibujo de la
+# cancha, que es la pantalla más linda de la app, estaba reservado justo para el
+# formato que menos se juega: un F5 mostraba nada más las listas de planteles.
+#
+# Acá se definen por LÍNEAS y no como una lista plana de puestos. El nombre de
+# una formación ES su estructura de líneas, así que derivando una de la otra no
+# pueden divergir: no existe la posibilidad de que "2-3-1" tenga cuatro
+# defensores porque alguien editó la lista y no el nombre.
+#
+# El arquero no se escribe: lo lleva toda formación y repetirlo siete veces sólo
+# da lugar a que en alguna falte.
+_LINEAS_POR_MODALIDAD = {
+    5: {
+        "1-2-1": [["CB"], ["RM", "LM"], ["ST"]],
+        "2-1-1": [["CB", "CB"], ["CDM"], ["ST"]],
+        "1-1-2": [["CB"], ["CDM"], ["RW", "LW"]],
+    },
+    6: {
+        "2-2-1": [["CB", "CB"], ["RM", "LM"], ["ST"]],
+        "1-3-1": [["CB"], ["RM", "CAM", "LM"], ["ST"]],
+        "2-1-2": [["CB", "CB"], ["CDM"], ["RW", "LW"]],
+    },
+    7: {
+        "2-3-1": [["CB", "CB"], ["RM", "CAM", "LM"], ["ST"]],
+        "3-2-1": [["RB", "CB", "LB"], ["CDM", "CAM"], ["ST"]],
+        "2-2-2": [["CB", "CB"], ["RM", "LM"], ["ST", "ST"]],
+    },
+    8: {
+        "3-3-1": [["RB", "CB", "LB"], ["RM", "CDM", "LM"], ["ST"]],
+        "3-2-2": [["RB", "CB", "LB"], ["CDM", "CAM"], ["RW", "LW"]],
+        "2-3-2": [["CB", "CB"], ["RM", "CDM", "LM"], ["ST", "ST"]],
+    },
+    9: {
+        "3-3-2": [["RB", "CB", "LB"], ["RM", "CDM", "LM"], ["ST", "ST"]],
+        "4-3-1": [["RB", "CB", "CB", "LB"], ["RM", "CDM", "LM"], ["ST"]],
+        "3-4-1": [["RB", "CB", "LB"], ["RM", "CDM", "CAM", "LM"], ["ST"]],
+    },
+    10: {
+        "4-3-2": [["RB", "CB", "CB", "LB"], ["RM", "CDM", "LM"], ["ST", "ST"]],
+        "3-4-2": [["RB", "CB", "LB"], ["RM", "CDM", "CAM", "LM"], ["ST", "ST"]],
+        "4-4-1": [["RB", "CB", "CB", "LB"], ["RM", "CDM", "CDM", "LM"], ["ST"]],
+    },
+}
+
+# Profundidad de cada línea según cuántas haya, en % desde arriba de una cancha
+# vertical. El arquero va fijo en 92, igual que en las formaciones de 11.
+_Y_POR_CANTIDAD_DE_LINEAS = {
+    2: [70, 32],
+    3: [75, 50, 25],
+    4: [78, 58, 38, 20],
+}
+
+# Reparto horizontal de una línea según cuántos jugadores tenga. Los extremos no
+# llegan a 0 ni a 100 a propósito: la ficha del jugador se dibuja centrada en su
+# coordenada y contra el borde quedaría cortada.
+_X_POR_CANTIDAD = {
+    1: [50],
+    2: [33, 67],
+    3: [20, 50, 80],
+    4: [15, 38, 62, 85],
+    5: [10, 30, 50, 70, 90],
+}
+
+GOALKEEPER_COORD = {"pos": "GK", "x": 50, "y": 92}
+
+
+def _coords_de_lineas(lineas: list) -> list:
+    """Coordenadas de una formación a partir de sus líneas. El arquero va primero."""
+    profundidades = _Y_POR_CANTIDAD_DE_LINEAS[len(lineas)]
+    coords = [dict(GOALKEEPER_COORD)]
+    for linea, y in zip(lineas, profundidades):
+        for pos, x in zip(linea, _X_POR_CANTIDAD[len(linea)]):
+            coords.append({"pos": pos, "x": x, "y": y})
+    return coords
+
+
+def _puestos_de_lineas(lineas: list) -> list:
+    return ["GK"] + [pos for linea in lineas for pos in linea]
+
+
+# Las de 11 NO se generan: son las de arriba, ajustadas a mano una por una.
+# Regenerarlas movería de lugar a los jugadores en partidos que ya existen, sin
+# ningún beneficio a cambio.
+FORMATIONS_BY_MODALITY = {
+    modalidad: {nombre: _puestos_de_lineas(lineas) for nombre, lineas in formaciones.items()}
+    for modalidad, formaciones in _LINEAS_POR_MODALIDAD.items()
+}
+FORMATIONS_BY_MODALITY[11] = FORMATIONS
+
+FORMATION_COORDS_BY_MODALITY = {
+    modalidad: {nombre: _coords_de_lineas(lineas) for nombre, lineas in formaciones.items()}
+    for modalidad, formaciones in _LINEAS_POR_MODALIDAD.items()
+}
+FORMATION_COORDS_BY_MODALITY[11] = FORMATION_COORDS
+
+
+def formaciones_de(modality: int) -> dict:
+    """Formaciones de una modalidad. Dict vacío si no hay (nunca revienta)."""
+    return FORMATIONS_BY_MODALITY.get(modality, {})
+
+
+def coords_de(modality: int, formation: str | None) -> list:
+    """Coordenadas de una formación concreta. Lista vacía si no existe."""
+    if not formation:
+        return []
+    return FORMATION_COORDS_BY_MODALITY.get(modality, {}).get(formation, [])
+
+
 GUEST_TO_REGULAR_THRESHOLD = 4
 
 MATCH_STATUSES = [

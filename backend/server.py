@@ -61,11 +61,27 @@ async def get_tournament_formats():
 
 
 @app.get("/api/formations")
-async def get_formations():
-    from constants import FORMATIONS, FORMATION_COORDS
+async def get_formations(modality: int = 11):
+    """
+    Formaciones de una modalidad. Por defecto 11, que es lo que devolvía antes
+    de que existieran las de los formatos chicos: así ningún cliente viejo
+    cambia de comportamiento sin pedirlo.
+    """
+    from constants import FORMATION_COORDS_BY_MODALITY, FORMATIONS_BY_MODALITY
     return {
-        "formations": {k: v for k, v in FORMATIONS.items()},
-        "coords": {k: v for k, v in FORMATION_COORDS.items()},
+        "modality": modality,
+        "formations": FORMATIONS_BY_MODALITY.get(modality, {}),
+        "coords": FORMATION_COORDS_BY_MODALITY.get(modality, {}),
+    }
+
+
+@app.get("/api/formations/all")
+async def get_all_formations():
+    """Todas las modalidades de una, para quien quiera precargarlas."""
+    from constants import FORMATION_COORDS_BY_MODALITY, FORMATIONS_BY_MODALITY
+    return {
+        "formations": FORMATIONS_BY_MODALITY,
+        "coords": FORMATION_COORDS_BY_MODALITY,
     }
 
 logging.basicConfig(

@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
-from constants import FORMATION_COORDS, FORMATIONS
+from constants import coords_de, formaciones_de
 from database import db
 from models import ManualAdjustRequest, TeamGenerationResponse
 from rating_calculator import get_player_score_for_balance
@@ -143,9 +143,13 @@ async def get_match_teams(match_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="No se han generado equipos aún")
 
     enriched_assignments = await _enrich_assignments(gen.get("assignments", []))
-    coords_a = FORMATION_COORDS.get(gen.get("formation_a"), [])
-    coords_b = FORMATION_COORDS.get(gen.get("formation_b"), [])
-    available_formations = list(FORMATIONS.keys())
+    # Las formaciones dependen de la modalidad del partido: un F7 no puede
+    # ofrecer un 4-4-2. Antes esto devolvía siempre las siete de 11, así que en
+    # un partido chico el selector mostraba formaciones imposibles de llenar.
+    modality = match["modality"]
+    coords_a = coords_de(modality, gen.get("formation_a"))
+    coords_b = coords_de(modality, gen.get("formation_b"))
+    available_formations = list(formaciones_de(modality).keys())
 
     return {
         **gen,

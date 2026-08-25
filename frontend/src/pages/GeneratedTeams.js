@@ -128,7 +128,6 @@ export default function GeneratedTeams() {
   const currentAssignments = editMode ? editAssignments : (teams?.assignments || []);
   const teamA = currentAssignments.filter((a) => a.team === 'A');
   const teamB = currentAssignments.filter((a) => a.team === 'B');
-  const is11 = match?.modality === 11;
   const availableFormations = teams?.available_formations || [];
   const teamSummaryA = teams?.team_summaries?.A;
   const teamSummaryB = teams?.team_summaries?.B;
@@ -137,8 +136,14 @@ export default function GeneratedTeams() {
   const formationChangedB = editMode && !!(teams?.formation_b || teams?.formation_a) && editFormationB && editFormationB !== (teams?.formation_b || teams?.formation_a);
   const slotsA = teams?.coords_a?.length || 0;
   const slotsB = teams?.coords_b?.length || teams?.coords_a?.length || 0;
-  const incompleteA = is11 && slotsA > 0 && teamA.length < slotsA;
-  const incompleteB = is11 && slotsB > 0 && teamB.length < slotsB;
+
+  // Hay cancha cuando el backend mandó coordenadas, y no cuando la modalidad es
+  // 11. Antes se comparaba `match.modality === 11` y por eso un F5 o un F7
+  // nunca veían el dibujo aunque tuvieran formación: ahora la tienen todas las
+  // modalidades, y quien decide es el dato, no un número escrito a mano.
+  const tieneCancha = slotsA > 0;
+  const incompleteA = slotsA > 0 && teamA.length < slotsA;
+  const incompleteB = slotsB > 0 && teamB.length < slotsB;
 
   const handleSwapPlayer = (playerId) => {
     setEditAssignments((prev) => prev.map((a) => (
@@ -457,7 +462,7 @@ export default function GeneratedTeams() {
           </div>
         )}
 
-        {editMode && is11 && availableFormations.length > 0 && (
+        {editMode && availableFormations.length > 0 && (
           <Card className="border-slate-200 rounded-3xl shadow-lift">
             <CardContent className="p-4">
               <p className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">Cambiar formación</p>
@@ -485,7 +490,7 @@ export default function GeneratedTeams() {
           </Card>
         )}
 
-        {is11 && teams.formation_a && (
+        {tieneCancha && teams.formation_a && (
           <section className="space-y-4" data-testid="pitch-section">
             <SectionHeading
               icono={LayoutGrid}

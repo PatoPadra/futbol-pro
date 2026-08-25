@@ -1,5 +1,5 @@
 from database import db
-from constants import FORMATIONS, FORMATION_COORDS, MODALITY_CAPACITY, POSITION_MAP
+from constants import POSITION_MAP, formaciones_de
 from rating_calculator import get_player_scores_for_balance
 import logging
 
@@ -149,10 +149,17 @@ async def generate_teams(match_id: str) -> dict:
             "player_score": round(float(score), 2),
         })
 
-    if modality == 11 and len(players) >= 22:
-        return await _balance_11v11(players[:22], match_id)
-    else:
-        return _balance_small_format(players, match_id, modality)
+    # Con el plantel completo se arma por FORMACIÓN, en cualquier modalidad.
+    # Antes esto era `if modality == 11`, y por eso un F5 o un F7 nunca veían la
+    # cancha: caían siempre en el reparto sin puestos. Lo que decide no es el
+    # número mágico 11 sino si hay gente para llenar los dos equipos.
+    formaciones = formaciones_de(modality)
+    if formaciones and len(players) >= modality * 2:
+        return _balance_con_formacion(players[:modality * 2], match_id, formaciones)
+
+    # Si falta gente, no hay formación que se pueda completar: se reparte igual,
+    # sin puestos, para que el organizador tenga los equipos aunque falten dos.
+    return _balance_small_format(players, match_id, modality)
 
 
 def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
@@ -253,20 +260,22 @@ def _gender_split(team_a: list, team_b: list) -> dict:
     return conteo
 
 
-async def _balance_11v11(players: list, match_id: str) -> dict:
-    """Balance teams for 11v11 using formation-aware assignment."""
+def _balance_con_formacion(players: list, match_id: str, formaciones: dict) -> dict:
+    """
+    Arma los dos equipos probando todas las formaciones de la modalidad y se
+    queda con la que mejor combina balance de puntaje y jugadores en su puesto.
+    """
     best_result = None
     best_score = -1
 
-    for formation_name, positions in FORMATIONS.items():
+    for formation_name, positions in formaciones.items():
         result = _try_formation(players, positions, formation_name, match_id)
         if result and result["combined_score"] > best_score:
             best_score = result["combined_score"]
             best_result = result
 
     if not best_result:
-        # Fallback to small format
-        return _balance_small_format(players, match_id, 11)
+        return _balance_small_format(players, match_id, len(players) // 2)
 
     return {
         "match_id": match_id,
