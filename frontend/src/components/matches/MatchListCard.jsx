@@ -26,6 +26,7 @@ const CARD_LINK_FOCUS =
  */
 export default function MatchListCard({ match }) {
   const tone = MATCH_STATUS_BADGE_CLASS[match.status] || FALLBACK_TONE;
+  const resultado = match.result || null;
   const spotsLeft = match.max_players - match.titular_count;
   const isFull = spotsLeft <= 0;
   const fillPct = match.max_players
@@ -77,6 +78,25 @@ export default function MatchListCard({ match }) {
             </div>
           </div>
 
+          {/* Con el partido ya jugado, la barra de cupo no le importa a nadie:
+              lo que se busca en la lista es cómo salió. Por eso el marcador
+              reemplaza al cupo en vez de sumarse abajo. */}
+          {resultado ? (
+            <div
+              className="mt-4 flex items-center justify-center gap-3 border-t border-slate-100 pt-3"
+              data-testid={`match-list-result-${match.id}`}
+            >
+              <span className="min-w-0 flex-1 truncate text-right text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                {match.home_label || 'Equipo A'}
+              </span>
+              <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 font-heading text-base font-bold tabular-nums text-slate-900">
+                {resultado.home_score} - {resultado.away_score}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                {match.away_label || 'Equipo B'}
+              </span>
+            </div>
+          ) : (
           <div className="mt-4 border-t border-slate-100 pt-3">
             <div className="flex items-center gap-2 text-sm">
               <Users className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
@@ -103,6 +123,7 @@ export default function MatchListCard({ match }) {
               />
             </div>
           </div>
+          )}
         </div>
       </Card>
     </Link>

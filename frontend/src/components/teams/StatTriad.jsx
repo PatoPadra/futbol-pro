@@ -1,45 +1,74 @@
 import React from 'react';
-import { Hand, Target, Users } from 'lucide-react';
+import { AlertTriangle, Hand, Target, Users } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
 /**
- * Goles, asistencias y atajadas de una propuesta, siempre las tres y siempre en
- * el mismo orden.
+ * Las estadísticas de una fila, siempre todas y siempre en el mismo orden.
  *
- * Antes se escondian las que estaban en cero, y eso hacia imposible comparar dos
- * propuestas del mismo jugador: una fila con dos chips y otra con tres no se
- * leen en paralelo. Ahora el cero se muestra apagado, que ademas es informacion
- * ("propuso cero goles" no es lo mismo que "no dijo nada").
+ * El cero se muestra apagado en vez de esconderse, y eso es a propósito: dos
+ * propuestas del mismo jugador con distinta cantidad de chips no se pueden leer
+ * en paralelo, y además "propuso cero goles" no es lo mismo que "no dijo nada".
+ *
+ * Dejó de ser fija en goles/asistencias/atajadas cuando las estadísticas pasaron
+ * a elegirse por partido: ahora las columnas se las dicta quien la usa. El
+ * nombre quedó, aunque ya no sean tres.
+ *
+ * Las negativas (faltas, tarjetas) van en tono ámbar. Una amarilla no se pinta
+ * de verde como si fuera un logro.
  */
-const CAMPOS = [
-  { key: 'goals', label: 'Goles', corto: 'G', icono: Target },
-  { key: 'assists', label: 'Asistencias', corto: 'A', icono: Users },
-  { key: 'saves', label: 'Atajadas', corto: 'At', icono: Hand },
+const ICONOS = {
+  goals: Target,
+  assists: Users,
+  saves: Hand,
+};
+
+/** Las tres de siempre, para quien todavía la use con los props viejos. */
+const CLASICAS = [
+  { id: 'goals', name: 'Goles', short: 'G' },
+  { id: 'assists', name: 'Asistencias', short: 'A' },
+  { id: 'saves', name: 'Atajadas', short: 'At' },
 ];
 
-export default function StatTriad({ goals = 0, assists = 0, saves = 0, className }) {
-  const valores = { goals: goals || 0, assists: assists || 0, saves: saves || 0 };
+export default function StatTriad({
+  /** {stat_id: valor}. Es la forma nueva. */
+  values,
+  /** Definiciones del catálogo: [{id, name, short, negative}]. */
+  stats,
+  // Props viejos, por si queda alguna llamada sin migrar.
+  goals,
+  assists,
+  saves,
+  className,
+}) {
+  const definiciones = stats?.length ? stats : CLASICAS;
+  const valores = values || { goals: goals || 0, assists: assists || 0, saves: saves || 0 };
+
+  if (!definiciones.length) return null;
 
   return (
     <ul className={cn('flex flex-wrap gap-2', className)}>
-      {CAMPOS.map(({ key, label, corto, icono: Icono }) => {
-        const valor = valores[key];
+      {definiciones.map((stat) => {
+        const valor = Number(valores[stat.id]) || 0;
         const activo = valor > 0;
+        const Icono = ICONOS[stat.id] || (stat.negative ? AlertTriangle : null);
+
         return (
           <li
-            key={key}
+            key={stat.id}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1',
-              activo
-                ? 'border-turf/25 bg-turf/10 text-turf-accessible'
-                : 'border-slate-200 bg-slate-50 text-slate-600',
+              !activo && 'border-slate-200 bg-slate-50 text-slate-600',
+              activo && stat.negative && 'border-amber-300 bg-amber-50 text-amber-800',
+              activo && !stat.negative && 'border-turf/25 bg-turf/10 text-turf-accessible',
             )}
           >
-            <Icono className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {Icono && <Icono className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
             <span className="text-sm font-bold tabular-nums">{valor}</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wide" aria-hidden="true">{corto}</span>
-            <span className="sr-only">{label}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide" aria-hidden="true">
+              {stat.short || stat.id}
+            </span>
+            <span className="sr-only">{stat.name || stat.id}</span>
           </li>
         );
       })}

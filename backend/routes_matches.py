@@ -4,10 +4,19 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth import get_current_user
-from constants import MODALITY_CAPACITY
+from constants import (
+    DEFAULT_MATCH_MODE,
+    DEFAULT_MATCH_TYPE,
+    MODALITY_CAPACITY,
+    capacidades_de,
+    modo_disponible,
+    modo_label,
+    resolver_stats_seguidas,
+    stats_de,
+)
 from database import db
 from models import CreateMatchRequest, MatchResponse, RegistrationResponse, UpdateMatchRequest
-from services.matches import ensure_match_manager, get_match_or_404
+from services.matches import datos_de_modo, ensure_match_manager, get_match_or_404
 from services.permissions import ensure_group_member, ensure_group_organizer
 from services.profiles import get_my_profile_or_404
 
@@ -85,6 +94,20 @@ async def ensure_can_manage_match(match: dict, user):
     return True
 
 
+def ensure_modo_disponible(mode: str) -> None:
+    """Un modo que todavía no tiene sus pantallas no se puede usar.
+
+    El Literal de pydantic acepta los cinco porque los cinco son valores válidos
+    y hay partidos que algún día van a tenerlos. Lo que decide si se puede elegir
+    HOY es el catálogo.
+    """
+    if not modo_disponible(mode):
+        raise HTTPException(
+            status_code=400,
+            detail=f'El modo "{modo_label(mode)}" todavía no está disponible',
+        )
+
+
 async def promote_first_substitute(match_id: str):
     first_sup = await db.match_registrations.find_one(
         {"match_id": match_id, "status": "suplente"},
@@ -115,6 +138,18 @@ async def create_match(data: CreateMatchRequest, user=Depends(get_current_user))
     now = datetime.now(timezone.utc).isoformat()
     match_id = str(uuid.uuid4())
 
+    # El modo se hereda del grupo salvo que el que crea el partido elija otro.
+    # Ese orden es el que hace que un grupo no tenga que volver a elegir modo
+    # cincuenta y dos veces al año.
+    mode = data.mode or group.get("default_match_mode") or DEFAULT_MATCH_MODE
+    ensure_modo_disponible(mode)
+
+    # Qué estadísticas sigue el partido sale del modo. En los modos que no las
+    # dejan elegir es una constante; en los que sí, lo que haya tildado el
+    # organizador. En Diversión y Básico es lista vacía y no hay pestaña que
+    # mostrar después.
+    tracked_stats = resolver_stats_seguidas(capacidades_de(mode), data.tracked_stats)
+
     match_doc = {
         "id": match_id,
         "group_id": data.group_id,
@@ -129,18 +164,27 @@ async def create_match(data: CreateMatchRequest, user=Depends(get_current_user))
         "status": "abierto",
         "is_recurring": data.is_recurring,
         "max_players": max_players,
+        "mode": mode,
+        "match_type": data.match_type,
+        "tracked_stats": tracked_stats,
+        "opponent_name": (data.opponent_name or "").strip() or None,
+        "result": None,
+        # Quiénes ya tienen este partido sumado en su `matches_played`. Vacío
+        # hasta que se finalice (ver sincronizar_partidos_jugados).
+        "counted_player_ids": [],
         "created_at": now,
     }
     await db.matches.insert_one(match_doc)
 
-    return MatchResponse(
+    return MatchResponse(**{
         **{k: v for k, v in match_doc.items() if k != "_id"},
-        group_name=group["name"],
-        my_group_role="organizador",
-        organizer_name=profile["name"],
-        titular_count=0,
-        suplente_count=0,
-    )
+        **datos_de_modo(match_doc, group_name=group["name"]),
+        "group_name": group["name"],
+        "my_group_role": "organizador",
+        "organizer_name": profile["name"],
+        "titular_count": 0,
+        "suplente_count": 0,
+    })
 
 
 @router.get("")
@@ -194,15 +238,20 @@ async def list_matches(
         else:
             my_group_role = role_by_group.get(match["group_id"])
 
+        group_name = group_map.get(match["group_id"], {}).get("name")
+        # Se arma el dict y se pasa de una sola vez: `datos_de_modo` devuelve
+        # claves que también están en `match` (mode, match_type), y splatear los
+        # dos por separado sería un "multiple values for keyword".
         result.append(
-            MatchResponse(
+            MatchResponse(**{
                 **match,
-                group_name=group_map.get(match["group_id"], {}).get("name"),
-                my_group_role=my_group_role,
-                organizer_name=organizer_map.get(match["organizer_id"], {}).get("name", "Desconocido"),
-                titular_count=count_map.get((match["id"], "titular"), 0),
-                suplente_count=count_map.get((match["id"], "suplente"), 0),
-            )
+                **datos_de_modo(match, group_name=group_name),
+                "group_name": group_name,
+                "my_group_role": my_group_role,
+                "organizer_name": organizer_map.get(match["organizer_id"], {}).get("name", "Desconocido"),
+                "titular_count": count_map.get((match["id"], "titular"), 0),
+                "suplente_count": count_map.get((match["id"], "suplente"), 0),
+            })
         )
 
     return result
@@ -250,9 +299,14 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
                 "registration_type": infer_registration_type(match, registration=reg, membership=membership, profile=profile),
             }
 
+    group_name = group["name"] if group else None
+
     return {
-        **match,
-        "group_name": group["name"] if group else None,
+        # `counted_player_ids` es contabilidad interna del contador de partidos
+        # jugados: no le sirve a nadie del otro lado y sólo agrega ruido.
+        **{k: v for k, v in match.items() if k != "counted_player_ids"},
+        **datos_de_modo(match, group_name=group_name),
+        "group_name": group_name,
         "my_group_role": membership.get("member_role") if user["role"] != "admin" else "admin",
         "organizer_name": organizer["name"] if organizer else "Desconocido",
         "titular_count": titular_count,
@@ -273,6 +327,37 @@ async def update_match(
     await ensure_can_manage_match(match, user)
 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    # Una vez que el partido deja de estar abierto ya hay equipos armados,
+    # evaluaciones o estadísticas cargadas bajo las reglas del modo viejo.
+    # Cambiarlo a esa altura no reescribe esos datos: sólo deja el historial del
+    # jugador contando cosas que no pasaron.
+    if "mode" in update_data:
+        ensure_modo_disponible(update_data["mode"])
+
+    if "mode" in update_data and match.get("status") != "abierto":
+        raise HTTPException(
+            status_code=400,
+            detail="El modo sólo se puede cambiar mientras la inscripción está abierta",
+        )
+
+    # Mismo motivo para las estadísticas: si ya hay filas cargadas, sumar o sacar
+    # una columna deja el resto a medio llenar sin forma de distinguir "el
+    # jugador no hizo nada" de "esto no se seguía todavía".
+    if "tracked_stats" in update_data and match.get("status") != "abierto":
+        raise HTTPException(
+            status_code=400,
+            detail="Las estadísticas a seguir sólo se cambian mientras la inscripción está abierta",
+        )
+
+    # Cambiar el modo recalcula qué se sigue, salvo que en el mismo pedido venga
+    # una elección explícita. Si no, pasar de Pro a Diversión dejaría un partido
+    # sin estadísticas pero con la lista vieja colgada.
+    if "mode" in update_data and "tracked_stats" not in update_data:
+        update_data["tracked_stats"] = resolver_stats_seguidas(
+            capacidades_de(update_data["mode"]), None
+        )
+
     if update_data:
         await db.matches.update_one({"id": match_id}, {"$set": update_data})
 
@@ -291,6 +376,8 @@ async def delete_match(match_id: str, user=Depends(get_current_user)):
     await db.stats_proposals.delete_many({"match_id": match_id})
     await db.stats_final.delete_many({"match_id": match_id})
     await db.team_generations.delete_many({"match_id": match_id})
+    await db.match_outcomes.delete_many({"match_id": match_id})
+    await db.player_match_notes.delete_many({"match_id": match_id})
     await db.matches.delete_one({"id": match_id})
 
     return {"message": "Partido borrado correctamente"}
@@ -476,6 +563,7 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
                     status=reg["status"],
                     registration_type=infer_registration_type(match, registration=reg, membership=membership, profile=profile),
                     registered_by=reg.get("registered_by"),
+                    attendance=reg.get("attendance"),
                     order=reg["order"],
                     registered_at=reg["registered_at"],
                 )
@@ -579,6 +667,17 @@ async def duplicate_match(match_id: str, user=Depends(get_current_user)):
         "status": "abierto",
         "is_recurring": True,
         "max_players": match["max_players"],
+        # El duplicado es "la fecha que viene de lo mismo": si heredara el modo
+        # por default en vez del original, un grupo en modo Diversión que duplica
+        # su partido semanal se encontraría de golpe pidiendo evaluaciones.
+        "mode": match.get("mode") or DEFAULT_MATCH_MODE,
+        "match_type": match.get("match_type") or DEFAULT_MATCH_TYPE,
+        "tracked_stats": stats_de(match),
+        # El rival se hereda: el duplicado es la revancha de la semana que viene
+        # con el mismo equipo, y si hay que cambiarlo se cambia a mano.
+        "opponent_name": match.get("opponent_name"),
+        "result": None,
+        "counted_player_ids": [],
         "created_at": now,
     }
     await db.matches.insert_one(new_match)

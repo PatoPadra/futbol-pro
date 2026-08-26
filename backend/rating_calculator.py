@@ -3,6 +3,15 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
+from constants import (
+    MAX_STATS_BONUS,
+    SPLIT_MIN_MATCHES,
+    TRACKABLE_STAT_MAP,
+    encoger_hacia,
+    peso_de_tipo,
+    peso_del_resultado,
+    valores_de_stats,
+)
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -29,6 +38,118 @@ def compute_final_score(
     )
 
 
+def _promedio_pesado_por_tipo(filas: list) -> tuple:
+    """Promedio de puntajes pesando oficial más que práctica.
+
+    Devuelve (promedio, evidencia_efectiva). La evidencia efectiva no es la
+    cantidad de filas sino la suma de los pesos: diez prácticas cuentan como
+    siete partidos, que es lo mismo que dice el peso de cada una.
+    """
+    suma = 0.0
+    peso_total = 0.0
+    for fila in filas:
+        peso = peso_de_tipo(fila.get("match_type"))
+        suma += float(fila.get("score") or 0.0) * peso
+        peso_total += peso
+    if peso_total <= 0:
+        return 0.0, 0.0
+    return suma / peso_total, peso_total
+
+
+def _mezclar_con_resultado(base: float, outcomes: list) -> float:
+    """Mezcla el rating de las evaluaciones con el que sale de los resultados.
+
+    Son dos canales que miden cosas distintas y por eso se mezclan a nivel de
+    RATING y no fila por fila. Si se mezclaran fila por fila, las evaluaciones
+    ganarían por goleada nada más que por cantidad: un partido deja una fila de
+    resultado y hasta veinte de evaluación, y el resultado quedaría en el 5% del
+    puntaje sin que nadie lo haya decidido.
+
+    Cuánto pesa el resultado lo decide `peso_del_resultado`, que crece con la
+    evidencia y tiene techo. En un grupo que no evalúa a nadie (modo Básico) el
+    resultado es lo único que se mueve, y ahí está la gracia: los equipos mejoran
+    solos sin pedirle nada a nadie.
+    """
+    if not outcomes:
+        return base
+    promedio, evidencia = _promedio_pesado_por_tipo(outcomes)
+    if evidencia <= 0:
+        return base
+    peso = peso_del_resultado(evidencia)
+    return base * (1 - peso) + promedio * peso
+
+
+def _rendimiento_por_partido(match_ratings: list, outcomes: list, tipo_por_partido: dict) -> dict:
+    """Un puntaje por partido jugado, con su tipo. {match_id: (score, tipo)}.
+
+    La evaluación de los compañeros manda cuando existe: es lo más cerca que hay
+    de una medida individual. Cuando no hay, vale el resultado. Nunca se suman
+    los dos para el mismo partido — serían dos votos del mismo hecho.
+    """
+    por_partido = {}
+
+    acumulado = {}
+    for rating in match_ratings:
+        suma, cuenta = acumulado.get(rating["match_id"], (0.0, 0))
+        acumulado[rating["match_id"]] = (suma + rating["score"], cuenta + 1)
+    for match_id, (suma, cuenta) in acumulado.items():
+        if cuenta:
+            por_partido[match_id] = (suma / cuenta, tipo_por_partido.get(match_id))
+
+    for outcome in outcomes:
+        match_id = outcome.get("match_id")
+        if match_id and match_id not in por_partido:
+            por_partido[match_id] = (
+                float(outcome.get("score") or 0.0),
+                outcome.get("match_type") or tipo_por_partido.get(match_id),
+            )
+
+    return por_partido
+
+
+def _split_por_tipo(por_partido: dict, referencia: float) -> dict:
+    """Cómo le fue al jugador en oficiales contra prácticas.
+
+    Los dos frenos que evitan vender ruido como si fuera un dato (ver
+    SPLIT_MIN_MATCHES en constants.py):
+
+      1. `comparable` sólo es verdadero con suficientes partidos de CADA tipo.
+         La pantalla no muestra la comparación hasta entonces; muestra cuántos
+         faltan.
+      2. Cada promedio se encoge hacia el rating general. Con tres partidos
+         flojos el número apenas se despega del general; hace falta que la
+         diferencia se sostenga para que sobreviva.
+
+    Sin esto, cuatro partidos oficiales malos alcanzarían para decirle a alguien
+    que no rinde cuando le toca en serio. Eso, en un grupo de amigos, no es una
+    estadística: es una acusación.
+    """
+    agrupado = {"oficial": [], "practica": []}
+    for score, tipo in por_partido.values():
+        clave = tipo if tipo in agrupado else "oficial"
+        agrupado[clave].append(score)
+
+    tipos = {}
+    for clave, scores in agrupado.items():
+        cantidad = len(scores)
+        crudo = sum(scores) / cantidad if cantidad else referencia
+        tipos[clave] = {
+            "matches": cantidad,
+            "rating": round(encoger_hacia(crudo, cantidad, referencia), 2),
+            "missing": max(0, SPLIT_MIN_MATCHES - cantidad),
+        }
+
+    comparable = all(datos["matches"] >= SPLIT_MIN_MATCHES for datos in tipos.values())
+    return {
+        "comparable": comparable,
+        "min_matches": SPLIT_MIN_MATCHES,
+        "types": tipos,
+        # La diferencia sólo se publica cuando se puede comparar. Un número que
+        # no hay que mirar todavía es un número que alguien va a mirar igual.
+        "gap": round(tipos["oficial"]["rating"] - tipos["practica"]["rating"], 2) if comparable else None,
+    }
+
+
 async def calculate_player_metrics(player_id: str) -> dict:
     now = datetime.now(timezone.utc)
     sixty_days_ago = (now - timedelta(days=60)).isoformat()
@@ -44,8 +165,29 @@ async def calculate_player_metrics(player_id: str) -> dict:
         {"_id": 0},
     ).to_list(1000)
 
+    # El resultado convertido en puntaje (ver services/match_outcomes.py).
+    outcomes = await db.match_outcomes.find(
+        {"player_id": player_id},
+        {"_id": 0},
+    ).to_list(1000)
+    recent_outcomes = [o for o in outcomes if o.get("created_at", "") >= sixty_days_ago]
+
+    # De qué tipo era cada partido en el que lo evaluaron. Una consulta sola con
+    # $in: hace falta para pesar las prácticas menos que los oficiales, y las
+    # evaluaciones no guardan el tipo (los outcomes sí, denormalizado).
+    match_ids = sorted({r["match_id"] for r in all_match_ratings if r.get("match_id")})
+    tipo_por_partido = {}
+    if match_ids:
+        partidos = await db.matches.find(
+            {"id": {"$in": match_ids}}, {"_id": 0, "id": 1, "match_type": 1}
+        ).to_list(len(match_ids))
+        tipo_por_partido = {m["id"]: m.get("match_type") for m in partidos}
+
     combined_ratings = [
-        {**r, "weight": 1.0, "rating_type": "match"}
+        # Una evaluación de una práctica pesa menos que una de un oficial, con el
+        # mismo mecanismo con el que una evaluación inicial pesa menos que una de
+        # partido. Es un peso más, no un caso especial.
+        {**r, "weight": peso_de_tipo(tipo_por_partido.get(r.get("match_id"))), "rating_type": "match"}
         for r in all_match_ratings
     ] + [
         {**r, "weight": 0.6, "rating_type": "seed"}
@@ -59,12 +201,18 @@ async def calculate_player_metrics(player_id: str) -> dict:
     if not profile:
         return _default_metrics(player_id)
 
-    general_rating = _weighted_average(combined_ratings) if combined_ratings else profile.get("estimated_level", 5.0) or 5.0
-    recent_rating = _recency_weighted_average(recent_match_ratings, now) if recent_match_ratings else general_rating
+    evaluado = _weighted_average(combined_ratings) if combined_ratings else profile.get("estimated_level", 5.0) or 5.0
+    general_rating = _mezclar_con_resultado(evaluado, outcomes)
+
+    reciente_evaluado = _recency_weighted_average(recent_match_ratings, now) if recent_match_ratings else evaluado
+    recent_rating = _mezclar_con_resultado(reciente_evaluado, recent_outcomes)
+
     position_ratings = await _calculate_position_ratings(player_id, all_match_ratings)
 
     total_matches = profile.get("matches_played", 0)
     seed_count = len(all_seed_ratings)
+    # Los partidos ya cuentan en `matches_played`, así que los outcomes no suman
+    # evidencia aparte: sería contar dos veces el mismo partido.
     evidence_points = total_matches + min(seed_count, 8)
     confidence_index = min(1.0, evidence_points / 10.0)
 
@@ -74,9 +222,13 @@ async def calculate_player_metrics(player_id: str) -> dict:
     stats_bonus = _calculate_stats_bonus(recent_stats)
     final_score = compute_final_score(recent_rating, effective_confidence, stats_bonus)
 
-    total_goals = sum(s.get("goals", 0) for s in all_stats)
-    total_assists = sum(s.get("assists", 0) for s in all_stats)
-    total_saves = sum(s.get("saves", 0) for s in all_stats)
+    # Acumulado de TODAS las estadísticas que el jugador tenga cargadas. Los
+    # tres de siempre salen de acá y siguen viajando con su nombre porque hay
+    # pantallas que los leen así.
+    totales = _acumular_stats(all_stats)
+
+    por_partido = _rendimiento_por_partido(all_match_ratings, outcomes, tipo_por_partido)
+    match_type_split = _split_por_tipo(por_partido, general_rating)
 
     return {
         "player_id": player_id,
@@ -86,10 +238,13 @@ async def calculate_player_metrics(player_id: str) -> dict:
         "stats_bonus": round(stats_bonus, 2),
         "final_score": round(final_score, 2),
         "position_ratings": position_ratings,
+        "match_type_split": match_type_split,
+        "result_matches": len(outcomes),
         "total_matches": total_matches,
-        "total_goals": total_goals,
-        "total_assists": total_assists,
-        "total_saves": total_saves,
+        "totals": totales,
+        "total_goals": totales.get("goals", 0),
+        "total_assists": totales.get("assists", 0),
+        "total_saves": totales.get("saves", 0),
     }
 
 
@@ -104,7 +259,10 @@ def _default_metrics(player_id: str) -> dict:
         # con confianza 0.0 (5.0), no casi cero.
         "final_score": round(compute_final_score(NEUTRAL_PRIOR, 0.0, 0.0), 2),
         "position_ratings": {},
+        "match_type_split": _split_por_tipo({}, NEUTRAL_PRIOR),
+        "result_matches": 0,
         "total_matches": 0,
+        "totals": {},
         "total_goals": 0,
         "total_assists": 0,
         "total_saves": 0,
@@ -176,21 +334,43 @@ async def _calculate_position_ratings(player_id: str, all_ratings: list) -> dict
     }
 
 
+def _acumular_stats(filas: list) -> dict:
+    """Suma las estadísticas de varias filas en un solo {stat_id: total}."""
+    totales: dict[str, int] = {}
+    for fila in filas:
+        for stat_id, valor in valores_de_stats(fila).items():
+            totales[stat_id] = totales.get(stat_id, 0) + valor
+    return totales
+
+
 def _calculate_stats_bonus(recent_stats: list) -> float:
+    """Bonus por estadísticas, con los pesos que declara el catálogo.
+
+    Antes eran tres números escritos acá (0.3 / 0.2 / 0.15). Ahora cada
+    estadística trae el suyo en TRACKABLE_STATS, y las que no deben mover el
+    puntaje pesan cero — que es la mayoría, y por buenas razones (ver el
+    comentario largo del catálogo en constants.py).
+
+    La cuenta de goles, asistencias y atajadas da exactamente lo mismo que antes:
+    los pesos son los mismos y se sigue promediando por partido jugado con
+    estadísticas cargadas. Un historial ya guardado no cambia de valor.
+
+    El techo importa más que nunca: sin él, un partido con ocho métricas
+    prendidas pesaría distinto que uno con dos por el sólo hecho de contar más
+    cosas.
+    """
     if not recent_stats:
         return 0.0
 
-    total_goals = sum(stat.get("goals", 0) for stat in recent_stats)
-    total_assists = sum(stat.get("assists", 0) for stat in recent_stats)
-    total_saves = sum(stat.get("saves", 0) for stat in recent_stats)
     match_count = len(recent_stats)
+    totales = _acumular_stats(recent_stats)
 
-    goals_per_match = total_goals / match_count if match_count else 0
-    assists_per_match = total_assists / match_count if match_count else 0
-    saves_per_match = total_saves / match_count if match_count else 0
-
-    raw_bonus = goals_per_match * 0.3 + assists_per_match * 0.2 + saves_per_match * 0.15
-    return min(raw_bonus, 1.0)
+    raw_bonus = sum(
+        (total / match_count) * TRACKABLE_STAT_MAP[stat_id]["bonus_weight"]
+        for stat_id, total in totales.items()
+        if stat_id in TRACKABLE_STAT_MAP
+    )
+    return min(raw_bonus, MAX_STATS_BONUS)
 
 
 async def get_player_score_for_balance(player_id: str) -> float:

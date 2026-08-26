@@ -1,19 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import {
-  ArrowRight,
-  CheckCircle2,
   ClipboardList,
   Eye,
   Loader2,
-  Send,
   Star,
   UserCircle2,
   Users,
-  ZoomIn,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,53 +19,36 @@ import SectionHeading from '@/components/teams/SectionHeading';
 import PeerRatingCard from '@/components/teams/PeerRatingCard';
 import ProgressTrack from '@/components/teams/ProgressTrack';
 import MetaChip from '@/components/matches/MetaChip';
+import StatsSheet from '@/components/matches/StatsSheet';
+import EmptyState from '@/components/common/EmptyState';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 import { getRatingTone } from '@/utils/ratings';
-
-const statRowSchema = z.object({
-  goals: z.coerce
-    .number({ invalid_type_error: 'Ingresá un número válido' })
-    .int('Tiene que ser un número entero')
-    .min(0, 'No puede ser negativo'),
-  assists: z.coerce
-    .number({ invalid_type_error: 'Ingresá un número válido' })
-    .int('Tiene que ser un número entero')
-    .min(0, 'No puede ser negativo'),
-  saves: z.coerce
-    .number({ invalid_type_error: 'Ingresá un número válido' })
-    .int('Tiene que ser un número entero')
-    .min(0, 'No puede ser negativo'),
-});
-
-const statsFormSchema = z.object({
-  stats: z.record(statRowSchema),
-});
 
 /** Panel claro. Las tres pestañas usan el mismo, así se leen como hermanas. */
 const PANEL = 'rounded-3xl border border-slate-200/70 bg-white p-5 shadow-lift sm:p-6';
 const AVISO = 'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
 const NEUTRO = 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600';
-const CAMPO = 'h-11 bg-slate-50 text-center tabular-nums';
 
 export default function PostMatch() {
   const { id } = useParams();
   const { user } = useAuth();
+  const [match, setMatch] = useState(null);
   const [registrations, setRegistrations] = useState([]);
   const [ratings, setRatings] = useState({});
   const [selfEval, setSelfEval] = useState({ score: 5, notes: '' });
   const [existingRatings, setExistingRatings] = useState(null);
   const [existingProposals, setExistingProposals] = useState([]);
-  const [proposedPlayerIds, setProposedPlayerIds] = useState(new Set());
+  const [existingFinal, setExistingFinal] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState('');
   const [photoView, setPhotoView] = useState({ open: false, name: '', photoUrl: '', subtitle: '' });
+  // Contador para volver a pedir todo después de guardar la planilla. Es más
+  // barato que replicar acá el estado que ya sabe el servidor.
+  const [recarga, setRecarga] = useState(0);
 
   const profileId = user?.profile_id || user?.profile?.id;
   const activeRegistrations = useMemo(() => registrations.filter((r) => r.status !== 'baja'), [registrations]);
@@ -80,29 +56,34 @@ export default function PostMatch() {
   const otherPlayers = activeRegistrations.filter((r) => r.player_id !== profileId);
   const canViewAllScores = Boolean(existingRatings?.can_view_all_scores);
   const playerSummaries = existingRatings?.player_summaries || [];
+  const { trackableStats } = useMatchCatalogs();
 
-  const {
-    register: registerStat,
-    trigger: triggerStat,
-    getValues: getStatValues,
-    reset: resetStatsForm,
-    formState: { errors: statsErrors },
-  } = useForm({
-    resolver: zodResolver(statsFormSchema),
-    defaultValues: { stats: {} },
-  });
+  // Qué se pide en esta pantalla lo decide el modo del partido, no la pantalla.
+  // Un partido de Diversión no muestra ninguna pestaña, y no porque acá haya un
+  // `if` con su nombre: porque sus capacidades dicen que no evalúa ni sigue
+  // estadísticas.
+  const capacidades = match?.capabilities || {};
+  const evaluaPorPartido = Boolean(capacidades.rating_por_partido);
+  const llevaEstadisticas = Boolean(match?.tracked_stats?.length);
+  const isOrganizer = Boolean(
+    match?.can_manage || match?.organizer_id === profileId || user?.role === 'admin',
+  );
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [regsRes, ratingsRes, proposalsRes] = await Promise.all([
+        const [matchRes, regsRes, ratingsRes, proposalsRes, finalRes] = await Promise.all([
+          api.get(`/matches/${id}`),
           api.get(`/matches/${id}/registrations`),
           api.get(`/matches/${id}/ratings`),
           api.get(`/matches/${id}/stats/proposals`).catch(() => ({ data: [] })),
+          api.get(`/matches/${id}/stats/final`).catch(() => ({ data: [] })),
         ]);
+        setMatch(matchRes.data);
         setRegistrations(regsRes.data || []);
         setExistingRatings(ratingsRes.data);
         setExistingProposals(proposalsRes.data || []);
+        setExistingFinal(finalRes.data || []);
       } catch (err) {
         toast.error(err.response?.data?.detail || 'Error al cargar post partido');
       } finally {
@@ -110,29 +91,7 @@ export default function PostMatch() {
       }
     };
     load();
-  }, [id]);
-
-  useEffect(() => {
-    if (!profileId || activeRegistrations.length === 0) return;
-    const defaults = {};
-    activeRegistrations.forEach((player) => {
-      defaults[player.player_id] = { goals: 0, assists: 0, saves: 0 };
-    });
-    const ids = new Set();
-    existingProposals.forEach((p) => {
-      if (p.proposed_by === profileId) {
-        defaults[p.player_id] = {
-          goals: p.goals != null ? p.goals : 0,
-          assists: p.assists != null ? p.assists : 0,
-          saves: p.saves != null ? p.saves : 0,
-        };
-        ids.add(p.player_id);
-      }
-    });
-    resetStatsForm({ stats: defaults });
-    setProposedPlayerIds(ids);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId, activeRegistrations, existingProposals]);
+  }, [id, recarga]);
 
   useEffect(() => {
     if (!profileId) return;
@@ -149,6 +108,9 @@ export default function PostMatch() {
     }
 
     setRatings(baseRatings);
+    // otherPlayers se deriva de registrations y profileId, que sí están en la
+    // lista. Agregarlo sería un bucle: es un array nuevo en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId, registrations, existingRatings]);
 
   const submitRatings = async () => {
@@ -190,32 +152,6 @@ export default function PostMatch() {
     }
   };
 
-  const submitStats = async (playerId) => {
-    const rowIsValid = await triggerStat([
-      `stats.${playerId}.goals`,
-      `stats.${playerId}.assists`,
-      `stats.${playerId}.saves`,
-    ]);
-    if (!rowIsValid) return;
-
-    const row = getStatValues(`stats.${playerId}`) || {};
-    setSubmitting(`stats-${playerId}`);
-    try {
-      await api.post(`/matches/${id}/stats/propose`, {
-        player_id: playerId,
-        goals: row.goals ?? 0,
-        assists: row.assists ?? 0,
-        saves: row.saves ?? 0,
-      });
-      toast.success('Estadísticas propuestas');
-      setProposedPlayerIds((prev) => new Set(prev).add(playerId));
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Error al proponer estadísticas');
-    } finally {
-      setSubmitting('');
-    }
-  };
-
   const openPhoto = (player) => {
     setPhotoView({
       open: true,
@@ -246,7 +182,30 @@ export default function PostMatch() {
 
   const totalAEvaluar = otherPlayers.length;
   const yaGuardados = otherPlayers.filter((p) => guardados.has(p.player_id)).length;
-  const propuestasHechas = activeRegistrations.filter((p) => proposedPlayerIds.has(p.player_id)).length;
+
+  // Las pestañas que existen dependen del modo. No se muestran deshabilitadas:
+  // una pestaña gris que no se puede tocar es una pregunta sin respuesta.
+  const pestanas = [
+    ...(evaluaPorPartido
+      ? [
+          { value: 'evaluaciones', label: 'Evaluaciones', testId: 'tab-evaluaciones' },
+          { value: 'autoevaluacion', label: 'Autoevaluación', testId: 'tab-autoevaluacion' },
+        ]
+      : []),
+    ...(llevaEstadisticas
+      ? [{ value: 'estadisticas', label: 'Estadísticas', testId: 'tab-estadisticas' }]
+      : []),
+  ];
+
+  // Tailwind necesita las clases escritas enteras para poder verlas al compilar:
+  // `grid-cols-${n}` se queda afuera del CSS final.
+  const COLUMNAS_TAB = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
+
+  const bajadaSegunModo = evaluaPorPartido
+    ? (llevaEstadisticas
+      ? 'Evaluá a tus compañeros, cargá tu autoevaluación y las estadísticas de la fecha.'
+      : 'Evaluá a tus compañeros y cargá tu autoevaluación.')
+    : 'Cargá las estadísticas de la fecha.';
 
   return (
     <div className="page-container mx-auto max-w-4xl" data-testid="post-match-page">
@@ -255,7 +214,7 @@ export default function PostMatch() {
           slug="post-partido"
           eyebrow="Terminó el partido"
           titulo="Post partido"
-          bajada="Evaluá a tus compañeros, cargá tu autoevaluación y proponé las estadísticas de la fecha."
+          bajada={bajadaSegunModo}
           volverA={`/partidos/${id}`}
           volverLabel="Volver al partido"
           volverTestId="back-to-match-post"
@@ -265,9 +224,11 @@ export default function PostMatch() {
               <MetaChip icono={Users}>
                 {activeRegistrations.length} {activeRegistrations.length === 1 ? 'jugador' : 'jugadores'}
               </MetaChip>
-              <MetaChip icono={Star} tono={totalAEvaluar > 0 ? 'turf' : 'apagado'}>
-                {totalAEvaluar} a evaluar
-              </MetaChip>
+              {evaluaPorPartido && (
+                <MetaChip icono={Star} tono={totalAEvaluar > 0 ? 'turf' : 'apagado'}>
+                  {totalAEvaluar} a evaluar
+                </MetaChip>
+              )}
               <MetaChip tono={myRegistration ? 'turf' : 'alerta'} punto>
                 {myRegistration ? 'Jugaste este partido' : 'No estabas anotado'}
               </MetaChip>
@@ -275,14 +236,33 @@ export default function PostMatch() {
           }
         />
 
-        <Tabs defaultValue="evaluaciones" className="space-y-5">
+        {pestanas.length === 0 && (
+          <div className={PANEL}>
+            <EmptyState
+              variante={2}
+              icono={ClipboardList}
+              titulo="Acá no hay nada que cargar"
+              descripcion="Este partido no lleva evaluaciones ni estadísticas. El resultado se carga desde la pantalla del partido."
+              testId="post-match-sin-tareas"
+            />
+            <Button
+              asChild
+              variant="outline"
+              className="mt-4 min-h-11 w-full rounded-xl font-semibold"
+              data-testid="back-to-match-empty"
+            >
+              <Link to={`/partidos/${id}`}>Volver al partido</Link>
+            </Button>
+          </div>
+        )}
+
+        {pestanas.length > 0 && (
+        <Tabs defaultValue={pestanas[0].value} className="space-y-5">
           {/* Control segmentado: pastilla blanca sobre riel gris, 44px de alto. */}
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-2xl border border-slate-200/70 bg-slate-100 p-1 shadow-sm">
-            {[
-              { value: 'evaluaciones', label: 'Evaluaciones', testId: 'tab-evaluaciones' },
-              { value: 'autoevaluacion', label: 'Autoevaluación', testId: 'tab-autoevaluacion' },
-              { value: 'estadisticas', label: 'Estadísticas', testId: 'tab-estadisticas' },
-            ].map((t) => (
+          <TabsList
+            className={`grid h-auto w-full ${COLUMNAS_TAB[pestanas.length] || 'grid-cols-3'} gap-1 rounded-2xl border border-slate-200/70 bg-slate-100 p-1 shadow-sm`}
+          >
+            {pestanas.map((t) => (
               <TabsTrigger
                 key={t.value}
                 value={t.value}
@@ -496,154 +476,23 @@ export default function PostMatch() {
           {/* ---------------- Estadísticas ---------------- */}
           <TabsContent value="estadisticas" className="mt-0">
             <div className={PANEL}>
-              <SectionHeading
-                icono={ClipboardList}
-                tono="orange"
-                titulo="Proponer estadísticas"
-                bajada="Después se validan con los votos del resto de los jugadores."
-                acciones={
-                  activeRegistrations.length > 0 ? (
-                    <span className="text-xs font-semibold tabular-nums text-slate-600">
-                      {propuestasHechas}/{activeRegistrations.length} propuestas
-                    </span>
-                  ) : null
-                }
+              <StatsSheet
+                matchId={id}
+                match={match}
+                players={activeRegistrations}
+                trackableStats={trackableStats}
+                existingProposals={existingProposals}
+                existingFinal={existingFinal}
+                myRegistration={myRegistration}
+                isOrganizer={isOrganizer}
+                profileId={profileId}
+                onAbrirFoto={openPhoto}
+                onSaved={() => setRecarga((n) => n + 1)}
               />
-
-              <div className="mt-5 space-y-4">
-                {!myRegistration && (
-                  <p className={AVISO}>
-                    Tenés que estar anotado en este partido para poder proponer estadísticas.
-                  </p>
-                )}
-
-                {activeRegistrations.length === 0 && (
-                  <p className={NEUTRO}>No hay participantes cargados para este partido todavía.</p>
-                )}
-
-                {activeRegistrations.map((player) => {
-                  const alreadyProposed = proposedPlayerIds.has(player.player_id);
-                  const errores = statsErrors.stats?.[player.player_id];
-                  return (
-                    <div
-                      key={player.player_id}
-                      className={`rounded-2xl border p-4 transition-colors ${
-                        alreadyProposed ? 'border-turf/25 bg-turf/5' : 'border-slate-200 bg-white'
-                      }`}
-                      data-testid={`stats-player-${player.player_id}`}
-                    >
-                      <div className="mb-4 flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => openPhoto(player)}
-                          className="group relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                          aria-label={`Ver foto de ${player.player_name}`}
-                        >
-                          <Avatar className="h-11 w-11 shadow-sm ring-2 ring-white">
-                            <AvatarImage src={buildPhotoUrl(player.player_photo) || undefined} />
-                            <AvatarFallback className="bg-turf/10 text-xs font-bold text-turf-accessible">
-                              {initialsFromName(player.player_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors group-hover:text-turf-accessible">
-                            <ZoomIn className="h-3 w-3" aria-hidden="true" />
-                          </span>
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900">
-                            {player.player_name}
-                          </span>
-                          <span className="text-xs text-slate-600">
-                            {player.primary_position || 'Sin posición cargada'}
-                          </span>
-                        </div>
-                        {alreadyProposed && (
-                          <Badge
-                            className="min-h-0 gap-1 border-turf/25 bg-turf/10 font-semibold text-turf-accessible"
-                            data-testid={`proposed-badge-${player.player_id}`}
-                          >
-                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Propuesto
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        {/* Los data-testid van escritos enteros a proposito y no armados
-                            como `stat-${campo}-...`: hay tests que dependen de estos
-                            nombres, y si el prefijo se arma con una variable dejan de
-                            aparecer al buscarlos en el codigo. */}
-                        {[
-                          { campo: 'goals', label: 'Goles', testId: 'stat-goals', errorTestId: 'stat-goals-error' },
-                          { campo: 'assists', label: 'Asistencias', testId: 'stat-assists', errorTestId: 'stat-assists-error' },
-                          { campo: 'saves', label: 'Atajadas', testId: 'stat-saves', errorTestId: 'stat-saves-error' },
-                        ].map(({ campo, label, testId, errorTestId }) => (
-                          <div key={campo}>
-                            <Label
-                              className="text-[11px] font-semibold uppercase tracking-wide text-slate-600"
-                              htmlFor={`${campo}-${player.player_id}`}
-                            >
-                              {label}
-                            </Label>
-                            <Input
-                              id={`${campo}-${player.player_id}`}
-                              data-testid={`${testId}-${player.player_id}`}
-                              type="number"
-                              min="0"
-                              inputMode="numeric"
-                              className={CAMPO}
-                              disabled={!myRegistration}
-                              aria-invalid={errores?.[campo] ? 'true' : undefined}
-                              {...registerStat(`stats.${player.player_id}.${campo}`)}
-                            />
-                            {errores?.[campo] && (
-                              <p
-                                className="mt-1 text-[11px] text-destructive"
-                                data-testid={`${errorTestId}-${player.player_id}`}
-                              >
-                                {errores[campo].message}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      <Button
-                        variant={alreadyProposed ? 'outline' : 'default'}
-                        className={`mt-4 min-h-11 w-full rounded-xl text-xs font-bold uppercase tracking-wide ${
-                          alreadyProposed ? '' : 'bg-turf text-white hover:bg-turf-dark'
-                        }`}
-                        onClick={() => submitStats(player.player_id)}
-                        disabled={submitting === `stats-${player.player_id}` || !myRegistration}
-                        data-testid={`submit-stats-${player.player_id}`}
-                      >
-                        {submitting === `stats-${player.player_id}` ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : alreadyProposed ? (
-                          <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                        ) : (
-                          <Send className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        {alreadyProposed ? 'Actualizar propuesta' : 'Proponer'}
-                      </Button>
-                    </div>
-                  );
-                })}
-
-                <Button
-                  asChild
-                  variant="outline"
-                  className="min-h-11 w-full rounded-xl font-semibold"
-                  data-testid="go-to-stats-confirmation"
-                >
-                  <Link to={`/partidos/${id}/estadisticas`}>
-                    Ver estado de confirmación
-                    <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </Button>
-              </div>
             </div>
           </TabsContent>
         </Tabs>
+        )}
       </div>
 
       <PhotoLightbox

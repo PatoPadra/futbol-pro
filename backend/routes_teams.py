@@ -4,10 +4,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
-from constants import coords_de, formaciones_de
+from constants import capacidades_de, coords_de, formaciones_de
 from database import db
 from models import ManualAdjustRequest, TeamGenerationResponse
 from rating_calculator import get_player_score_for_balance
+from services.match_outcomes import recalcular_outcomes
 from services.matches import ensure_match_manager, get_match_or_404
 from services.permissions import ensure_group_member
 from team_balancer import _bolsa_de_genero, generate_teams
@@ -90,10 +91,30 @@ def _build_team_summary(assignments: list[dict], team_label: str):
     }
 
 
+def _ensure_puede_armar_equipos(match: dict) -> None:
+    """Que el partido sea de un modo que tenga equipos.
+
+    Gatear esto únicamente en la pantalla no alcanza: el botón se esconde, pero
+    el endpoint sigue ahí y un partido de Diversión terminaría con equipos que
+    nadie pidió y un estado del que no se puede salir.
+
+    El modo manual (Entrenador) SÍ pasa: no corre el balanceador, pero necesita
+    que se le arme la alineación inicial para tener algo que editar. De eso se
+    encarga `generate_teams`, que mira las capacidades y elige el camino.
+    """
+    origen = capacidades_de(match.get("mode")).get("team_source")
+    if origen == "ninguno":
+        raise HTTPException(
+            status_code=400,
+            detail="En este modo no se arman equipos: la gente sólo se anota",
+        )
+
+
 @router.post("/{match_id}/generate-teams", response_model=TeamGenerationResponse)
 async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_match_manager(match, user)
+    _ensure_puede_armar_equipos(match)
 
     try:
         result = await generate_teams(match_id)
@@ -182,6 +203,12 @@ async def adjust_teams(match_id: str, data: ManualAdjustRequest, user=Depends(ge
         update["formation_b"] = data.formation_b
 
     await db.team_generations.update_one({"match_id": match_id}, {"$set": update})
+
+    # Si el partido ya tiene resultado, mover un jugador de equipo cambia contra
+    # quién ganó cada uno. Sin esto quedarían filas diciendo que alguien le ganó
+    # a un equipo del que ahora forma parte.
+    if match.get("result"):
+        await recalcular_outcomes(match_id)
 
     updated = await db.team_generations.find_one({"match_id": match_id}, {"_id": 0})
     updated["assignments"] = await _enrich_assignments(updated.get("assignments", []))

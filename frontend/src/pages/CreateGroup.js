@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Users, Loader2, Sparkles } from 'lucide-react';
+import { Gauge, Users, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '../lib/api';
@@ -12,6 +12,8 @@ import { Input } from '../components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form';
 import PageHeader from '../components/common/PageHeader';
 import SectionPanel from '../components/groups/SectionPanel';
+import OptionCards from '@/components/matches/OptionCards';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 
 const groupSchema = z.object({
   name: z
@@ -24,16 +26,28 @@ const groupSchema = z.object({
 export default function CreateGroup() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const { modes, defaultMode } = useMatchCatalogs();
+  const [modo, setModo] = useState('');
 
   const form = useForm({
     resolver: zodResolver(groupSchema),
     defaultValues: { name: '' },
   });
 
+  // El default sale del catálogo del backend y no de un literal acá: si mañana
+  // cambia cuál es el modo de arranque, cambia en un solo lado.
+  useEffect(() => {
+    if (defaultMode && !modo) setModo(defaultMode);
+  }, [defaultMode, modo]);
+
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      const res = await api.post('/groups', { name: data.name.trim() });
+      const res = await api.post('/groups', {
+        name: data.name.trim(),
+        // Sin modo elegido no se manda: el backend pone el suyo.
+        ...(modo ? { default_match_mode: modo } : {}),
+      });
       toast.success('¡Grupo creado!');
       navigate(`/partidos/crear?group_id=${res.data.id}`);
     } catch (err) {
@@ -85,6 +99,23 @@ export default function CreateGroup() {
                 )}
               />
             </SectionPanel>
+
+            {modes.length > 0 && (
+              <SectionPanel
+                icono={Gauge}
+                titulo="¿Cómo juegan?"
+                descripcion="Con qué configuración van a arrancar los partidos de este grupo. Se puede cambiar después, y cada partido lo puede pisar."
+                testId="create-group-mode-panel"
+              >
+                <OptionCards
+                  options={modes}
+                  value={modo}
+                  onChange={setModo}
+                  name="Modo de los partidos"
+                  testId="create-group-mode"
+                />
+              </SectionPanel>
+            )}
 
             <Button
               type="submit"

@@ -1,3 +1,10 @@
+from constants import (
+    DEFAULT_MATCH_MODE,
+    DEFAULT_MATCH_TYPE,
+    capacidades_de,
+    resolver_stats_seguidas,
+    valores_de_stats,
+)
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING
 from pymongo.errors import DuplicateKeyError, OperationFailure
@@ -100,6 +107,18 @@ INDEX_SPEC = {
         {"keys": [("tournament_id", ASCENDING), ("round", ASCENDING), ("order", ASCENDING)]},
         {"keys": [("tournament_id", ASCENDING), ("status", ASCENDING)]},
     ],
+    # Notas privadas del organizador. Las dos lecturas que existen son "las
+    # mías de este partido" y "las mías sobre este jugador".
+    "player_match_notes": [
+        {"keys": [("match_id", ASCENDING), ("author_id", ASCENDING)]},
+        {"keys": [("author_id", ASCENDING), ("player_id", ASCENDING)]},
+    ],
+    # El resultado convertido en puntaje. Se lee siempre por jugador (para
+    # calcular su rating) y se borra siempre por partido (al recalcular).
+    "match_outcomes": [
+        {"keys": [("match_id", ASCENDING)]},
+        {"keys": [("player_id", ASCENDING)]},
+    ],
     "group_seed_ratings": [
         {"keys": [("group_id", ASCENDING), ("rater_id", ASCENDING)]},
         {"keys": [("rated_player_id", ASCENDING)]},
@@ -127,6 +146,109 @@ async def _ensure_unique_email_index() -> None:
             "Mientras tanto la app funciona, pero el registro sigue expuesto a la "
             "condición de carrera de alta duplicada.",
             e,
+        )
+
+
+async def backfill_match_defaults() -> None:
+    """Le pone modo, tipo y contador de asistencia a lo que ya existía.
+
+    Idempotente: cada paso filtra por `$exists: False`, así que correrla en cada
+    arranque no hace nada después de la primera vez.
+
+    El default es "avanzado" porque es exactamente lo que la app hacía antes de
+    que los modos existieran: equipos automáticos, evaluación entre pares y
+    estadísticas por consenso. Y "oficial" porque hasta ahora todos los partidos
+    contaban igual — degradarlos retroactivamente a práctica cambiaría el peso de
+    un historial que se cargó bajo otra regla.
+
+    El paso delicado es el último. Los partidos ya finalizados YA le sumaron un
+    partido jugado a sus titulares con el código viejo, que no dejaba registro de
+    a quién había contado. Si quedaran sin `counted_player_ids`, la primera vez
+    que alguien tocara su asistencia el sincronizador creería que no contó a
+    nadie y les sumaría el partido por segunda vez. Por eso se reconstruye el
+    conjunto que aquel código habría contado: los titulares, ni más ni menos.
+    """
+    await db.matches.update_many(
+        {"mode": {"$exists": False}}, {"$set": {"mode": DEFAULT_MATCH_MODE}}
+    )
+    await db.matches.update_many(
+        {"match_type": {"$exists": False}}, {"$set": {"match_type": DEFAULT_MATCH_TYPE}}
+    )
+    await db.groups.update_many(
+        {"default_match_mode": {"$exists": False}},
+        {"$set": {"default_match_mode": DEFAULT_MATCH_MODE}},
+    )
+
+    ya_jugados = await db.matches.find(
+        {
+            "status": {"$in": ["finalizado", "completado"]},
+            "counted_player_ids": {"$exists": False},
+        },
+        {"_id": 0, "id": 1},
+    ).to_list(5000)
+
+    for match in ya_jugados:
+        titulares = await db.match_registrations.find(
+            {"match_id": match["id"], "status": "titular"},
+            {"_id": 0, "player_id": 1},
+        ).to_list(500)
+        await db.matches.update_one(
+            {"id": match["id"]},
+            {"$set": {"counted_player_ids": sorted({t["player_id"] for t in titulares})}},
+        )
+
+    # Los que todavía no se jugaron no le sumaron el partido a nadie.
+    await db.matches.update_many(
+        {"counted_player_ids": {"$exists": False}}, {"$set": {"counted_player_ids": []}}
+    )
+
+    if ya_jugados:
+        logger.info(
+            "Migración de modos: %d partidos ya finalizados quedaron con su conteo reconstruido",
+            len(ya_jugados),
+        )
+
+    await _backfill_estadisticas()
+
+
+async def _backfill_estadisticas() -> None:
+    """Pasa las estadísticas de tres columnas fijas a un dict, y le pone a cada
+    partido qué estadísticas sigue.
+
+    Las tres columnas viejas NO se borran. Cuestan nada, las siguen leyendo
+    clientes cacheados, y borrarlas convertiría una migración aditiva en una que
+    puede perder datos si algo sale mal a mitad de camino.
+
+    Idempotente por el `$exists: False`, igual que el resto.
+    """
+    sin_seguidas = await db.matches.find(
+        {"tracked_stats": {"$exists": False}},
+        {"_id": 0, "id": 1, "mode": 1},
+    ).to_list(5000)
+
+    for match in sin_seguidas:
+        # Se resuelve desde el modo y no se pone la lista clásica a todos: si
+        # mañana esta migración corre sobre partidos que ya nacieron en modo
+        # Diversión, no tienen que quedar con estadísticas que nadie sigue.
+        seguidas = resolver_stats_seguidas(capacidades_de(match.get("mode")), None)
+        await db.matches.update_one({"id": match["id"]}, {"$set": {"tracked_stats": seguidas}})
+
+    migradas = 0
+    for coleccion in (db.stats_final, db.stats_proposals):
+        docs = await coleccion.find({"values": {"$exists": False}}, {"_id": 0}).to_list(20000)
+        for doc in docs:
+            if not doc.get("id"):
+                continue
+            await coleccion.update_one(
+                {"id": doc["id"]}, {"$set": {"values": valores_de_stats(doc)}}
+            )
+            migradas += 1
+
+    if sin_seguidas or migradas:
+        logger.info(
+            "Migración de estadísticas: %d partidos con lista de seguidas, %d filas pasadas a dict",
+            len(sin_seguidas),
+            migradas,
         )
 
 

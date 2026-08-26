@@ -22,15 +22,18 @@ import SectionHeading from '@/components/teams/SectionHeading';
 import StatTriad from '@/components/teams/StatTriad';
 import ProgressTrack from '@/components/teams/ProgressTrack';
 import MetaChip from '@/components/matches/MetaChip';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 
 const PANEL = 'rounded-3xl border border-slate-200/70 bg-white p-5 shadow-lift sm:p-6';
 
 export default function StatsConfirmation() {
   const { id } = useParams();
   const { user } = useAuth();
+  const [match, setMatch] = useState(null);
   const [proposals, setProposals] = useState([]);
   const [finalStats, setFinalStats] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const { trackableStats } = useMatchCatalogs();
   const [loading, setLoading] = useState(true);
   const [votingId, setVotingId] = useState('');
 
@@ -38,11 +41,13 @@ export default function StatsConfirmation() {
 
   const loadData = async () => {
     try {
-      const [propRes, finalRes, regsRes] = await Promise.all([
+      const [matchRes, propRes, finalRes, regsRes] = await Promise.all([
+        api.get(`/matches/${id}`).catch(() => ({ data: null })),
         api.get(`/matches/${id}/stats/proposals`),
         api.get(`/matches/${id}/stats/final`),
         api.get(`/matches/${id}/registrations`).catch(() => ({ data: [] })),
       ]);
+      setMatch(matchRes.data);
       setProposals(propRes.data || []);
       setFinalStats(finalRes.data || []);
       setRegistrations(regsRes.data || []);
@@ -70,6 +75,17 @@ export default function StatsConfirmation() {
   };
 
   const confirmedPlayerIds = useMemo(() => new Set(finalStats.map((s) => s.player_id)), [finalStats]);
+
+  // Las columnas son las que sigue ESTE partido, no las tres de siempre. Un
+  // partido que sólo sigue goles no tiene por qué mostrar dos columnas en cero.
+  const columnas = useMemo(() => {
+    const porId = new Map((trackableStats || []).map((s) => [s.id, s]));
+    return (match?.tracked_stats || []).map((statId) => porId.get(statId) || { id: statId, name: statId, short: statId });
+  }, [match?.tracked_stats, trackableStats]);
+
+  // En los modos con planilla no hay nada que votar: el organizador carga y
+  // queda firme. Sin este aviso, esta pantalla se ve vacía y parece rota.
+  const porConsenso = (match?.capabilities?.stats_source || 'consenso') === 'consenso';
 
   const requiredVotes = useMemo(() => {
     const titularCount = registrations.filter((r) => r.status === 'titular').length;
@@ -100,9 +116,13 @@ export default function StatsConfirmation() {
       <div className="animate-slide-up space-y-6">
         <PageHeader
           slug="estadisticas"
-          eyebrow="Se vota entre todos"
+          eyebrow={porConsenso ? 'Se vota entre todos' : 'Las carga el organizador'}
           titulo="Confirmar estadísticas"
-          bajada={`Una estadística queda confirmada cuando la votan al menos ${requiredVotes} jugador${requiredVotes === 1 ? '' : 'es'}. Si hay dos propuestas distintas para el mismo jugador, quedan disputadas hasta que una junte los votos.`}
+          bajada={
+            porConsenso
+              ? `Una estadística queda confirmada cuando la votan al menos ${requiredVotes} jugador${requiredVotes === 1 ? '' : 'es'}. Si hay dos propuestas distintas para el mismo jugador, quedan disputadas hasta que una junte los votos.`
+              : 'En este partido las estadísticas las carga el organizador y quedan firmes al guardar: acá no hay nada que votar.'
+          }
           volverA={`/partidos/${id}/post-partido`}
           volverLabel="Volver al post partido"
           volverTestId="back-to-post-match"
@@ -167,7 +187,7 @@ export default function StatsConfirmation() {
                       <CheckCircle className="h-3 w-3" aria-hidden="true" /> Confirmado
                     </Badge>
                   </div>
-                  <StatTriad goals={s.goals} assists={s.assists} saves={s.saves} className="mt-3" />
+                  <StatTriad values={s.values} stats={columnas} className="mt-3" />
                 </div>
               ))}
             </div>
@@ -248,7 +268,7 @@ export default function StatsConfirmation() {
                             data-testid={`proposal-${p.id}`}
                           >
                             <div className="min-w-0 flex-1">
-                              <StatTriad goals={p.goals} assists={p.assists} saves={p.saves} />
+                              <StatTriad values={p.values} stats={columnas} />
                               <div className="mt-2.5 flex items-center gap-2">
                                 <ProgressTrack
                                   valor={votesCount}

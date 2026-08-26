@@ -7,6 +7,7 @@ from auth import get_current_user
 from database import db
 from models import CreateGuestRequest, ProfileResponse
 from rating_calculator import calculate_player_metrics
+from services.player_record import calcular_historial, resultado_del_jugador
 from services.score_visibility import get_score_visibility_for_player
 from storage_cloudinary import delete_image, upload_image_bytes
 
@@ -123,6 +124,12 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         stats = stats_by_match.get(reg["match_id"])
         self_eval = self_eval_by_match.get(reg["match_id"])
 
+        # Cómo salió el partido para ESTE jugador. No cuesta una consulta más:
+        # el partido y su equipo ya estaban los dos arriba.
+        outcome, goles_a_favor, goles_en_contra = resultado_del_jugador(
+            match.get("result"), assignment.get("team") if assignment else None
+        )
+
         history.append({
             "match_id": match["id"],
             "match_title": match["title"],
@@ -131,6 +138,9 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
             "avg_rating": round(avg_rating, 2) if avg_rating is not None else None,
             "position_played": assignment.get("position") if assignment else None,
             "team": assignment.get("team") if assignment else None,
+            "outcome": outcome,
+            "goals_for": goles_a_favor,
+            "goals_against": goles_en_contra,
             "stats": stats,
             "self_evaluation": self_eval,
         })
@@ -142,6 +152,17 @@ async def get_player_history(player_id: str, user=Depends(get_current_user)):
         "can_view_self_scores": can_view_self_scores,
         "score_visibility_scope": visibility["scope"],
     }
+
+
+@router.get("/{player_id}/record")
+async def get_player_record(player_id: str, user=Depends(get_current_user)):
+    """Ganados, empatados, perdidos y la racha de los últimos partidos.
+
+    No pasa por `score_visibility`: quién ganó el sábado no es un dato reservado,
+    lo vieron los veintidós. Lo que se esconde a los que no organizan son los
+    puntajes internos, y acá no hay ninguno.
+    """
+    return await calcular_historial(player_id)
 
 
 @router.get("/{player_id}/metrics")
@@ -157,6 +178,14 @@ async def get_player_metrics(player_id: str, user=Depends(get_current_user)):
         metrics["stats_bonus"] = None
         metrics["final_score"] = None
         metrics["position_ratings"] = {}
+        # Del split se esconden los puntajes, no los conteos: cuántos oficiales y
+        # cuántas prácticas jugó no es un dato reservado, y dejarlos permite
+        # seguir mostrando "te faltan tres oficiales para poder comparar" sin
+        # filtrar ningún número.
+        split = metrics.get("match_type_split") or {}
+        for datos in (split.get("types") or {}).values():
+            datos["rating"] = None
+        split["gap"] = None
 
     metrics["can_view_peer_scores"] = can_view_peer_scores
     metrics["can_view_self_scores"] = visibility["can_view_self_scores"]

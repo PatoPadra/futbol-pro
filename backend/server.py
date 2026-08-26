@@ -17,6 +17,7 @@ from routes_post_match import router as post_match_router
 from routes_players import router as players_router
 from routes_admin import router as admin_router
 from routes_groups import router as groups_router
+from routes_notes import router as notes_router
 from routes_tournaments import router as tournaments_router
 
 app = FastAPI(title="App Fútbol API")
@@ -37,6 +38,7 @@ app.include_router(post_match_router)
 app.include_router(players_router)
 app.include_router(admin_router)
 app.include_router(groups_router)
+app.include_router(notes_router)
 app.include_router(tournaments_router)
 
 @app.get("/api")
@@ -52,6 +54,40 @@ async def get_positions():
 async def get_genders():
     from constants import GENDERS
     return GENDERS
+
+
+@app.get("/api/match-catalogs")
+async def get_match_catalogs():
+    """Modos, tipos y valores de asistencia, todo junto.
+
+    Van en un solo endpoint y no en tres al estilo de /api/positions porque son
+    el vocabulario de la misma feature y quien necesita uno casi siempre
+    necesita los otros: el formulario de crear partido pide modo y tipo en la
+    misma pantalla. Tres round-trips para llenar un formulario es peor que una
+    respuesta con tres listas.
+
+    Sale del catálogo de constants.py, que es la única fuente de verdad: si el
+    front repitiera la tabla de modos, tarde o temprano diría otra cosa que el
+    backend.
+    """
+    from constants import (
+        ATTENDANCE_STATUSES,
+        DEFAULT_MATCH_MODE,
+        DEFAULT_MATCH_TYPE,
+        DEFAULT_TRACKED_STATS,
+        MATCH_MODES,
+        MATCH_TYPES,
+        TRACKABLE_STATS,
+    )
+    return {
+        "modes": MATCH_MODES,
+        "default_mode": DEFAULT_MATCH_MODE,
+        "types": MATCH_TYPES,
+        "default_type": DEFAULT_MATCH_TYPE,
+        "attendance": ATTENDANCE_STATUSES,
+        "trackable_stats": TRACKABLE_STATS,
+        "default_tracked_stats": DEFAULT_TRACKED_STATS,
+    }
 
 
 @app.get("/api/tournament-formats")
@@ -90,7 +126,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from database import client as db_client, db as app_db, ensure_indexes
+from database import (
+    backfill_match_defaults,
+    client as db_client,
+    db as app_db,
+    ensure_indexes,
+)
 
 ADMIN_EMAILS = ["padrapatricio@gmail.com"]
 
@@ -124,6 +165,13 @@ async def startup():
     except Exception as e:
         # Los índices son una optimización: que fallen no debe tumbar la app.
         logger.exception(f"No se pudieron crear los índices: {e}")
+
+    try:
+        await backfill_match_defaults()
+    except Exception as e:
+        # Tampoco tumba la app: las lecturas toleran los campos faltantes y el
+        # sincronizador de partidos jugados reconstruye lo suyo si hace falta.
+        logger.exception(f"No se pudo completar la migración de modos: {e}")
 
     try:
         for email in ADMIN_EMAILS:

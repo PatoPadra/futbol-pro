@@ -1,5 +1,5 @@
 from database import db
-from constants import POSITION_MAP, formaciones_de
+from constants import DEFAULT_LINEUP_ROLE, POSITION_MAP, capacidades_de, formaciones_de
 from rating_calculator import get_player_scores_for_balance
 import logging
 
@@ -149,11 +149,18 @@ async def generate_teams(match_id: str) -> dict:
             "player_score": round(float(score), 2),
         })
 
+    formaciones = formaciones_de(modality)
+
+    # El modo Entrenador no reparte a nadie: hay UN equipo, el nuestro, y el
+    # rival no está en la app. Lo que se arma es una alineación con su banco, y
+    # de ahí en más la toca el DT. El balanceador no tiene nada que hacer acá.
+    if capacidades_de(match.get("mode")).get("team_source") == "manual":
+        return _alineacion_de_dt(players, match_id, formaciones)
+
     # Con el plantel completo se arma por FORMACIÓN, en cualquier modalidad.
     # Antes esto era `if modality == 11`, y por eso un F5 o un F7 nunca veían la
     # cancha: caían siempre en el reparto sin puestos. Lo que decide no es el
     # número mágico 11 sino si hay gente para llenar los dos equipos.
-    formaciones = formaciones_de(modality)
     if formaciones and len(players) >= modality * 2:
         return _balance_con_formacion(players[:modality * 2], match_id, formaciones)
 
@@ -232,8 +239,12 @@ def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
     }
 
 
-def _assignment(player: dict, team: str, position: str) -> dict:
-    """La fila de un jugador en la generación. Un solo lugar donde se arma."""
+def _assignment(player: dict, team: str, position: str, role: str = DEFAULT_LINEUP_ROLE) -> dict:
+    """La fila de un jugador en la generación. Un solo lugar donde se arma.
+
+    `role` sólo lo mueven los modos con banco. En los demás son todos titulares,
+    que es el default, y nadie tiene que pensar en el campo.
+    """
     return {
         "player_id": player["id"],
         "player_name": player["name"],
@@ -241,6 +252,7 @@ def _assignment(player: dict, team: str, position: str) -> dict:
         "player_gender": player.get("gender"),
         "team": team,
         "position": position,
+        "role": role,
         "is_manual": False,
         "player_score": player.get("player_score"),
     }
@@ -258,6 +270,98 @@ def _gender_split(team_a: list, team_b: list) -> dict:
             bolsa = _bolsa_de_genero(p)
             conteo.setdefault(bolsa, {"A": 0, "B": 0})[equipo] += 1
     return conteo
+
+
+def _once_de(players: list, puestos: list) -> tuple:
+    """Llena una formación con los mejores disponibles. Devuelve (once, fit_promedio).
+
+    Mismo criterio que usa el balanceador para el 11v11: primero quién encaja en
+    el puesto y después quién es mejor. Un arquero natural le gana a un crack que
+    nunca atajó, que es lo que uno quiere de un punto de partida.
+
+    Y eso es: un punto de partida. La gracia del modo es que el DT lo corrija, no
+    que el algoritmo tenga razón.
+    """
+    usados = set()
+    once = []
+    fit_total = 0.0
+
+    for pos in puestos:
+        candidatos = [
+            (jugador, _position_fit(jugador, pos))
+            for jugador in players
+            if jugador["id"] not in usados
+        ]
+        if not candidatos:
+            break
+        candidatos.sort(key=lambda par: (par[1], par[0]["score"]), reverse=True)
+        elegido, fit = candidatos[0]
+        once.append((pos, elegido))
+        usados.add(elegido["id"])
+        fit_total += fit
+
+    return once, (fit_total / len(puestos) if puestos else 0.0)
+
+
+def _alineacion_de_dt(players: list, match_id: str, formaciones: dict) -> dict:
+    """Un equipo con su banco: los que arrancan y los que esperan.
+
+    Se prueban todas las formaciones de la modalidad y gana la que mejor le
+    calza al plantel que hay. Con quince jugadores para once puestos, los cuatro
+    que sobran van al banco con su puesto natural.
+
+    Ojo con la palabra "suplente": acá significa "está en el banco de MI equipo y
+    puede entrar", que no es lo mismo que el `status: suplente` de la
+    inscripción, donde significa "no entró en el cupo del partido". Por eso el
+    banco vive en la alineación y no en las inscripciones.
+    """
+    if not formaciones:
+        # Sin formaciones para la modalidad no hay once que llenar: van todos
+        # como titulares en su puesto y que el DT ordene.
+        asignaciones = [
+            _assignment(jugador, "A", jugador.get("primary_position") or "JUG")
+            for jugador in players
+        ]
+        return {
+            "match_id": match_id,
+            "formation_a": None,
+            "formation_b": None,
+            "assignments": asignaciones,
+            "balance_score": 1.0,
+            "gender_split": _gender_split(players, []),
+        }
+
+    mejor_nombre = None
+    mejor_once = []
+    mejor_fit = -1.0
+    for nombre, puestos in formaciones.items():
+        once, fit = _once_de(players, puestos)
+        if fit > mejor_fit:
+            mejor_nombre, mejor_once, mejor_fit = nombre, once, fit
+
+    titulares = {jugador["id"] for _, jugador in mejor_once}
+    asignaciones = [
+        _assignment(jugador, "A", pos, role="titular") for pos, jugador in mejor_once
+    ]
+    asignaciones += [
+        _assignment(jugador, "A", jugador.get("primary_position") or "JUG", role="suplente")
+        for jugador in players
+        if jugador["id"] not in titulares
+    ]
+
+    return {
+        "match_id": match_id,
+        "formation_a": mejor_nombre,
+        # No hay equipo B: el rival no está en la app.
+        "formation_b": None,
+        "assignments": asignaciones,
+        # No significa nada con un solo equipo — no hay dos lados que emparejar.
+        # Se manda 1.0 porque el modelo pide un número, y la pantalla lo esconde
+        # en este modo en vez de mostrar un "Balance: 100%" que no quiere decir
+        # nada.
+        "balance_score": 1.0,
+        "gender_split": _gender_split([jugador for _, jugador in mejor_once], []),
+    }
 
 
 def _balance_con_formacion(players: list, match_id: str, formaciones: dict) -> dict:

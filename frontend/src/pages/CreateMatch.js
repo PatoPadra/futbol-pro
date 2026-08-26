@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { AlertTriangle, CalendarPlus, Clock, LayoutGrid, MapPin, Repeat, Users } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, Clock, Gauge, LayoutGrid, MapPin, Repeat, Users } from 'lucide-react';
 
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -14,6 +14,9 @@ import { Switch } from '../components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form';
 import PageHeader from '@/components/common/PageHeader';
 import Panel from '@/components/matches/Panel';
+import OptionCards from '@/components/matches/OptionCards';
+import StatPicker from '@/components/matches/StatPicker';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
@@ -49,6 +52,13 @@ const matchSchema = z.object({
       'Ingresá un link válido (debe empezar con http:// o https://)'
     ),
   is_recurring: z.boolean(),
+  // El modo se valida en el backend contra el catálogo. Acá alcanza con que sea
+  // un string: repetir la lista de modos en el front es exactamente la
+  // duplicación que este diseño trata de evitar.
+  mode: z.string().optional(),
+  match_type: z.string().min(1),
+  tracked_stats: z.array(z.string()),
+  opponent_name: z.string().trim().max(80, 'El nombre es demasiado largo'),
 });
 
 export default function CreateMatch() {
@@ -59,6 +69,7 @@ export default function CreateMatch() {
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [groups, setGroups] = useState([]);
+  const { modes, types, trackableStats, defaultTrackedStats, defaultType } = useMatchCatalogs();
 
   const form = useForm({
     resolver: zodResolver(matchSchema),
@@ -71,11 +82,28 @@ export default function CreateMatch() {
       location: '',
       maps_link: '',
       is_recurring: false,
+      mode: '',
+      match_type: 'oficial',
+      tracked_stats: [],
+      opponent_name: '',
     },
   });
 
   const { control, handleSubmit, setValue, watch } = form;
   const selectedModality = watch('modality');
+  const selectedGroupId = watch('group_id');
+  const selectedMode = watch('mode');
+
+  // Las capacidades del modo elegido salen del mismo catálogo que usa el
+  // backend, así que la pantalla no tiene una tabla propia que pueda divergir.
+  const capacidades = modes.find((m) => m.id === selectedMode)?.capabilities || {};
+  const eligeEstadisticas = Boolean(capacidades.stats_configurables);
+  // Cuando el rival no está en la app hay que preguntarle el nombre a alguien.
+  // La condición sale de la capacidad y no de `modo === 'entrenador'`: la tabla
+  // de modos vive en el backend y esta pantalla no tiene por qué repetirla.
+  const juegaContraAfuera = capacidades.opponent === 'externo';
+  const rival = watch('opponent_name');
+  const faltaElRival = juegaContraAfuera && !rival?.trim();
 
   useEffect(() => {
     const loadGroups = async () => {
@@ -102,6 +130,34 @@ export default function CreateMatch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedGroupId]);
 
+  // Al elegir grupo, el modo arranca en el que ese grupo tiene configurado. Si
+  // después se cambia de grupo el modo vuelve a sincronizarse, aunque ya se
+  // hubiera tocado: el default del grupo nuevo es una respuesta más razonable
+  // que arrastrar la elección hecha pensando en otro. Y el cambio se ve — las
+  // tarjetas muestran cuál quedó elegida.
+  useEffect(() => {
+    if (!selectedGroupId) return;
+    const grupo = groups.find((g) => g.id === selectedGroupId);
+    if (grupo?.default_match_mode) {
+      setValue('mode', grupo.default_match_mode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroupId, groups]);
+
+  // El tipo por default sale del catálogo, no de un literal repetido acá.
+  useEffect(() => {
+    if (defaultType) setValue('match_type', defaultType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultType]);
+
+  // Al pasar a un modo que deja elegir estadísticas, arrancan tildadas las dos
+  // razonables. Al salir de ese modo se vacía: dejar la lista colgada haría que
+  // volver a entrar muestre la elección de un modo que ya no está.
+  useEffect(() => {
+    setValue('tracked_stats', eligeEstadisticas ? [...defaultTrackedStats] : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligeEstadisticas, defaultTrackedStats]);
+
   const onSubmit = async (data) => {
     setLoading(true);
     try {
@@ -109,6 +165,14 @@ export default function CreateMatch() {
         ...data,
         maps_link: data.maps_link || undefined,
         modality: parseInt(data.modality, 10),
+        // Sin modo elegido no se manda el campo: el backend hereda el del grupo.
+        // Mandar '' sería un 422, y mandar un default del front pisaría al grupo.
+        mode: data.mode || undefined,
+        // Sólo cuando el modo las deja elegir. En los demás el backend resuelve
+        // la lista solo, y mandar una lista vacía se leería como "no quiero
+        // ninguna" en vez de "no me corresponde elegir".
+        tracked_stats: eligeEstadisticas ? data.tracked_stats : undefined,
+        opponent_name: juegaContraAfuera ? data.opponent_name.trim() : undefined,
       };
 
       const res = await api.post('/matches', payload);
@@ -210,6 +274,31 @@ export default function CreateMatch() {
                   </FormItem>
                 )}
               />
+
+              {juegaContraAfuera && (
+                <FormField
+                  control={control}
+                  name="opponent_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contra quién juegan</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          data-testid="match-opponent-input"
+                          placeholder="Ej: Deportivo Español"
+                          className={FIELD}
+                        />
+                      </FormControl>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                        El rival no está en la app: alcanza con el nombre para que
+                        aparezca en el marcador y en el historial.
+                      </p>
+                      <FormMessage data-testid="match-opponent-error" />
+                    </FormItem>
+                  )}
+                />
+              )}
             </Panel>
 
             <Panel
@@ -272,6 +361,99 @@ export default function CreateMatch() {
                   del partido al mediodía.
                 </p>
               </div>
+            </Panel>
+
+            <Panel
+              icono={Gauge}
+              titulo="¿Cómo se juega?"
+              bajada="Qué le va a pedir la app al grupo cuando termine el partido."
+              tono="slate"
+              testId="create-match-modo"
+              contentClassName="space-y-5 p-4 sm:p-5"
+            >
+              <FormField
+                control={control}
+                name="mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Modo del partido</FormLabel>
+                    <p className="mb-2.5 mt-0.5 text-xs leading-relaxed text-slate-600">
+                      Viene del grupo. Cambialo sólo si esta fecha es distinta de
+                      las demás.
+                    </p>
+                    <OptionCards
+                      options={modes}
+                      value={field.value}
+                      onChange={field.onChange}
+                      name="Modo del partido"
+                      testId="match-mode"
+                    />
+                    <FormMessage data-testid="match-mode-error" />
+                  </FormItem>
+                )}
+              />
+
+              {types.length > 0 && (
+                <FormField
+                  control={control}
+                  name="match_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de partido</FormLabel>
+                      <p className="mb-2.5 mt-0.5 text-xs leading-relaxed text-slate-600">
+                        Sirve para ver, más adelante, quién rinde parecido en los
+                        dos y quién no.
+                      </p>
+                      <OptionCards
+                        options={types}
+                        value={field.value}
+                        onChange={field.onChange}
+                        columns={2}
+                        name="Tipo de partido"
+                        testId="match-type"
+                      />
+                      <FormMessage data-testid="match-type-error" />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {eligeEstadisticas && trackableStats.length > 0 && (
+                <FormField
+                  control={control}
+                  name="tracked_stats"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>¿Qué estadísticas vas a seguir?</FormLabel>
+                      <p className="mb-2.5 mt-0.5 text-xs leading-relaxed text-slate-600">
+                        Cargar esto lleva tiempo cuando termina el partido. Tildá
+                        sólo lo que de verdad vayas a completar.
+                      </p>
+                      <StatPicker
+                        stats={trackableStats}
+                        value={field.value}
+                        onChange={field.onChange}
+                        testId="match-tracked-stats"
+                      />
+                      {field.value?.length === 0 && (
+                        <p
+                          className="mt-2 text-xs text-slate-600"
+                          data-testid="no-stats-notice"
+                        >
+                          Sin ninguna tildada el partido no va a pedir estadísticas.
+                        </p>
+                      )}
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {!modes.length && (
+                <p className="text-sm text-slate-600" data-testid="modes-unavailable">
+                  No pudimos cargar los modos. El partido se va a crear con el
+                  modo que tenga configurado el grupo.
+                </p>
+              )}
             </Panel>
 
             <Panel
@@ -405,7 +587,7 @@ export default function CreateMatch() {
               <Button
                 type="submit"
                 data-testid="create-match-submit"
-                disabled={loading || loadingGroups || groups.length === 0}
+                disabled={loading || loadingGroups || groups.length === 0 || faltaElRival}
                 shape="pill"
                 className="w-full h-12 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/25 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
               >
@@ -415,6 +597,11 @@ export default function CreateMatch() {
               {!loadingGroups && groups.length === 0 && (
                 <p className="mt-2 text-center text-xs text-slate-600">
                   Necesitás ser organizador de al menos un grupo para crear partidos.
+                </p>
+              )}
+              {faltaElRival && (
+                <p className="mt-2 text-center text-xs text-slate-600" data-testid="missing-opponent-hint">
+                  Cargá contra quién juegan para poder crear el partido.
                 </p>
               )}
             </div>

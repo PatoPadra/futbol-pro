@@ -1,10 +1,64 @@
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional, get_args
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from constants import (
+    ATTENDANCE_IDS,
+    CLASSIC_TRACKED_STATS,
+    DEFAULT_MATCH_MODE,
+    DEFAULT_MATCH_TYPE,
+    MATCH_MODE_IDS,
+    MATCH_TYPE_IDS,
+    TRACKABLE_STAT_MAP,
+)
+
+# Tope de una estadística en un partido. Como el del marcador, es la red contra
+# el dedo gordo: nadie mete 400 goles, y un número así ensucia el promedio del
+# jugador para siempre.
+MAX_STAT_VALUE = 99
+
+
+def _limpiar_valores_de_stats(valores: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
+    """Valida el dict de estadísticas: claves conocidas, enteros de 0 a 99.
+
+    Una clave que no está en el catálogo es un error del cliente y no se ignora
+    en silencio: si el front manda "goles" en vez de "goals", queremos enterarnos
+    ahora y no dentro de tres meses cuando alguien note que faltan datos.
+    """
+    if valores is None:
+        return None
+
+    limpios: Dict[str, int] = {}
+    for stat_id, valor in valores.items():
+        if stat_id not in TRACKABLE_STAT_MAP:
+            raise ValueError(f"Estadística desconocida: {stat_id}")
+        if not isinstance(valor, int) or isinstance(valor, bool):
+            raise ValueError(f"{stat_id} tiene que ser un número entero")
+        if valor < 0 or valor > MAX_STAT_VALUE:
+            raise ValueError(f"{stat_id} tiene que estar entre 0 y {MAX_STAT_VALUE}")
+        if valor:
+            limpios[stat_id] = valor
+    return limpios
 
 # El género es un Literal y no un str suelto para que un valor inventado sea un
 # 422 del framework y no un dato basura guardado en Mongo.
 Gender = Literal["masculino", "femenino", "otro", "prefiero_no_decir"]
+
+# Modo, tipo y asistencia siguen el mismo criterio que Gender: un Literal, para
+# que un valor inventado sea un 422 del framework y no un dato basura en Mongo.
+#
+# Los valores están escritos dos veces (acá y en el catálogo de constants.py)
+# porque un Literal necesita literales; no se puede construir desde una lista en
+# runtime. El assert de abajo hace que esa duplicación no pueda derivar: si
+# alguien agrega un modo en un solo lado, la app no arranca — que es mucho mejor
+# que enterarse tres pantallas después, con datos ya guardados.
+MatchMode = Literal["diversion", "basico", "avanzado", "pro", "entrenador"]
+MatchType = Literal["oficial", "practica"]
+Attendance = Literal["presente", "ausente", "sin_aviso"]
+
+assert set(get_args(MatchMode)) == set(MATCH_MODE_IDS), "MatchMode y MATCH_MODES no coinciden"
+assert set(get_args(MatchType)) == set(MATCH_TYPE_IDS), "MatchType y MATCH_TYPES no coinciden"
+assert set(get_args(Attendance)) == set(ATTENDANCE_IDS), "Attendance y ATTENDANCE_STATUSES no coinciden"
 
 
 class EmailNormalizedModel(BaseModel):
@@ -81,6 +135,17 @@ class CreateMatchRequest(BaseModel):
     location: str
     maps_link: Optional[str] = None
     is_recurring: bool = False
+    # None a propósito, y no DEFAULT_MATCH_MODE: significa "el que use el grupo".
+    # Si acá pusiéramos el default global, un grupo configurado en otro modo lo
+    # vería pisado en cada partido que se cree sin tocar el selector.
+    mode: Optional[MatchMode] = None
+    match_type: MatchType = DEFAULT_MATCH_TYPE
+    # None = "no vino nada", y se usa el default del modo. Una lista vacía SÍ es
+    # una elección: el organizador destildó todo y no quiere estadísticas.
+    tracked_stats: Optional[List[str]] = None
+    # Contra quién se juega, cuando el rival no está en la app (modo Entrenador).
+    # Es sólo un nombre: el rival no tiene jugadores ni puntaje acá.
+    opponent_name: Optional[str] = Field(default=None, max_length=80)
 
 
 class UpdateMatchRequest(BaseModel):
@@ -91,6 +156,47 @@ class UpdateMatchRequest(BaseModel):
     location: Optional[str] = None
     maps_link: Optional[str] = None
     status: Optional[str] = None
+    # El modo sólo se puede cambiar mientras el partido está abierto (lo valida
+    # la ruta). Después de eso ya hay equipos armados, evaluaciones o
+    # estadísticas cargadas bajo las reglas del modo viejo, y cambiarlo dejaría
+    # el historial del jugador contando cosas que no pasaron.
+    mode: Optional[MatchMode] = None
+    match_type: Optional[MatchType] = None
+    # Se congela junto con el modo: cambiar qué se sigue cuando ya hay filas
+    # cargadas dejaría columnas a medio llenar sin forma de saber si están vacías
+    # porque el jugador no hizo nada o porque no se seguían todavía.
+    tracked_stats: Optional[List[str]] = None
+    # El nombre del rival sí se puede corregir después: es una etiqueta, no
+    # cambia ninguna regla del partido.
+    opponent_name: Optional[str] = Field(default=None, max_length=80)
+
+
+class MatchResultModel(BaseModel):
+    """El resultado de un partido, tal como se guarda embebido en el partido.
+
+    Va como `home`/`away` y no como `A`/`B` a propósito. En un partido interno
+    home es el equipo A y away el B; en modo Entrenador home es mi equipo y away
+    el rival. Una sola forma sirve para los dos casos — y es la misma que ya
+    tienen los fixtures de torneo, así que el día que un fixture sea un partido
+    de verdad no hay dos conceptos de "resultado" que reconciliar.
+    """
+
+    home_score: int
+    away_score: int
+    notes: Optional[str] = None
+    loaded_by: Optional[str] = None
+    loaded_by_name: Optional[str] = None
+    loaded_at: Optional[str] = None
+
+
+class SetMatchResultRequest(BaseModel):
+    # El techo de 99 no es burocracia: es la red contra el dedo gordo. Un 100-0
+    # cargado por error no se ve raro en una tabla, pero cuando el resultado
+    # empiece a mover el puntaje de los jugadores, un margen así corrompe a los
+    # veintidós de una sola vez.
+    home_score: int = Field(ge=0, le=99)
+    away_score: int = Field(ge=0, le=99)
+    notes: Optional[str] = None
 
 
 class MatchResponse(BaseModel):
@@ -112,6 +218,37 @@ class MatchResponse(BaseModel):
     titular_count: int = 0
     suplente_count: int = 0
     created_at: str
+    mode: str = DEFAULT_MATCH_MODE
+    mode_label: Optional[str] = None
+    match_type: str = DEFAULT_MATCH_TYPE
+    match_type_label: Optional[str] = None
+    # Las capacidades viajan resueltas en la respuesta para que el front no tenga
+    # que repetir la tabla de modos. Una sola fuente de verdad: constants.py.
+    capabilities: dict = Field(default_factory=dict)
+    tracked_stats: List[str] = Field(default_factory=lambda: list(CLASSIC_TRACKED_STATS))
+    opponent_name: Optional[str] = None
+    result: Optional[MatchResultModel] = None
+    # Cómo se llaman los dos lados del marcador. Hoy son siempre Equipo A y
+    # Equipo B; en modo Entrenador van a ser mi equipo y el rival. Se resuelven
+    # en el backend para que la pantalla del resultado no sepa nada del modo.
+    home_label: str = "Equipo A"
+    away_label: str = "Equipo B"
+    # Declarado de verdad y no pasado como kwarg suelto: las rutas ya se lo
+    # mandaban al construir la respuesta, pero al no estar declarado pydantic lo
+    # descartaba en silencio. Por eso el panel del organizador y
+    # utils/permissions.js nunca veían el rol del que mira en el listado.
+    my_group_role: Optional[str] = None
+
+
+class AttendanceEntry(BaseModel):
+    player_id: str
+    # None borra la marca y devuelve la inscripción a "no se tomó asistencia",
+    # que NO es lo mismo que haber faltado (ver jugo_el_partido en constants.py).
+    attendance: Optional[Attendance] = None
+
+
+class SetAttendanceRequest(BaseModel):
+    entries: List[AttendanceEntry]
 
 
 class RegistrationResponse(BaseModel):
@@ -125,6 +262,7 @@ class RegistrationResponse(BaseModel):
     status: str
     registration_type: Optional[Literal["organizador", "frecuente", "invitado"]] = None
     registered_by: Optional[str] = None
+    attendance: Optional[Attendance] = None
     order: int
     registered_at: str
 
@@ -139,6 +277,9 @@ class TeamAssignmentModel(BaseModel):
     player_gender: Optional[Gender] = None
     team: str
     position: str
+    # Titular o banco. Sólo lo usan los modos con banco (ver LINEUP_ROLES); en
+    # los demás son todos titulares y el campo no molesta.
+    role: Literal["titular", "suplente"] = "titular"
     is_manual: bool = False
 
 
@@ -185,14 +326,66 @@ class GroupSeedRatingBatchRequest(BaseModel):
 
 # Stats
 class StatsProposalRequest(BaseModel):
+    """Propuesta de estadísticas de un jugador, en el modo por consenso.
+
+    `values` es el formato nuevo. Los tres campos sueltos se siguen aceptando
+    porque un cliente viejo cacheado en el celular de alguien los va a mandar por
+    un rato más, y una propuesta perdida es una discusión en el grupo.
+    """
+
     player_id: str
+    values: Optional[Dict[str, int]] = None
     goals: int = 0
     assists: int = 0
     saves: int = 0
 
+    @field_validator("values", mode="after")
+    @classmethod
+    def _validar_values(cls, value):
+        return _limpiar_valores_de_stats(value)
+
+    def valores(self) -> Dict[str, int]:
+        """Los valores de la propuesta, sea cual sea el formato en que llegaron."""
+        if self.values is not None:
+            return dict(self.values)
+        sueltos = {"goals": self.goals, "assists": self.assists, "saves": self.saves}
+        return {k: v for k, v in sueltos.items() if v}
+
+
+class PlayerStatsRow(BaseModel):
+    player_id: str
+    values: Dict[str, int] = Field(default_factory=dict)
+
+    @field_validator("values", mode="after")
+    @classmethod
+    def _validar_values(cls, value):
+        return _limpiar_valores_de_stats(value) or {}
+
+
+class SetMatchStatsRequest(BaseModel):
+    """La planilla entera de una vez, para el modo en que las carga el organizador.
+
+    Va toda junta y no fila por fila porque quien carga ocho métricas de dieciséis
+    jugadores las carga de un tirón, mirando la planilla de papel: un pedido por
+    fila serían ciento veintiocho idas y vueltas y ninguna forma de saber en cuál
+    se cortó.
+    """
+
+    rows: List[PlayerStatsRow] = Field(default_factory=list)
+
 
 class StatsVoteRequest(BaseModel):
     proposal_id: str
+
+
+class PlayerNoteRequest(BaseModel):
+    """Nota del organizador sobre un jugador en un partido.
+
+    El techo de mil caracteres es para que siga siendo una nota. Lo que necesite
+    más que eso es una conversación, no un campo de texto.
+    """
+
+    text: str = Field(default="", max_length=1000)
 
 
 # Admin
@@ -209,7 +402,17 @@ class PlayerMetricsResponse(BaseModel):
     stats_bonus: float
     final_score: float
     position_ratings: dict = Field(default_factory=dict)
+    # Cómo le fue en oficiales contra prácticas. Trae su propio `comparable`:
+    # con pocos partidos de un tipo la diferencia es ruido y no se muestra.
+    match_type_split: dict = Field(default_factory=dict)
+    # Cuántos partidos suyos ya tienen resultado cargado. Es la evidencia del
+    # canal nuevo del rating.
+    result_matches: int = 0
     total_matches: int = 0
+    # Los acumulados de TODAS las estadísticas que el jugador tenga cargadas,
+    # {stat_id: total}. Los tres campos de abajo son los de siempre y quedan
+    # porque hay pantallas que los leen por nombre; salen de acá.
+    totals: Dict[str, int] = Field(default_factory=dict)
     total_goals: int = 0
     total_assists: int = 0
     total_saves: int = 0
@@ -218,6 +421,14 @@ class PlayerMetricsResponse(BaseModel):
 # Groups
 class CreateGroupRequest(BaseModel):
     name: str
+    # El modo se elige una vez por grupo y no una vez por partido. Un grupo que
+    # juega todos los martes va a elegir siempre lo mismo; pedírselo cincuenta y
+    # dos veces al año es fricción pura. Cada partido igual puede pisarlo.
+    default_match_mode: MatchMode = DEFAULT_MATCH_MODE
+
+
+class UpdateGroupRequest(BaseModel):
+    default_match_mode: Optional[MatchMode] = None
 
 
 class GroupResponse(BaseModel):
@@ -225,6 +436,7 @@ class GroupResponse(BaseModel):
     name: str
     created_by: str
     created_at: str
+    default_match_mode: str = DEFAULT_MATCH_MODE
     my_member_role: Optional[str] = None
     members_count: int = 0
 

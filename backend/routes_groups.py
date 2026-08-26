@@ -6,11 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
 from database import db
+from constants import DEFAULT_MATCH_MODE, modo_disponible, modo_label
 from models import (
     AddGroupMemberRequest,
     CreateGroupRequest,
     GroupSeedRatingBatchRequest,
     MergeGuestRequest,
+    UpdateGroupRequest,
 )
 from services.guest_merge import merge_guest_into_profile
 from services.permissions import (
@@ -112,6 +114,12 @@ async def create_group(data: CreateGroupRequest, user=Depends(get_current_user))
     if user["role"] not in ["admin", "organizador"]:
         raise HTTPException(status_code=403, detail="Solo organizadores o admins pueden crear grupos")
 
+    if not modo_disponible(data.default_match_mode):
+        raise HTTPException(
+            status_code=400,
+            detail=f'El modo "{modo_label(data.default_match_mode)}" todavía no está disponible',
+        )
+
     profile = await get_my_profile_or_404(user)
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
@@ -120,6 +128,9 @@ async def create_group(data: CreateGroupRequest, user=Depends(get_current_user))
         "id": group_id,
         "name": data.name.strip(),
         "created_by": profile["id"],
+        # Modo por default de los partidos de este grupo. Cada partido lo puede
+        # pisar, pero el que juega siempre lo mismo lo elige una sola vez.
+        "default_match_mode": data.default_match_mode,
         "created_at": now,
     }
     await db.groups.insert_one(group_doc)
@@ -173,6 +184,7 @@ async def list_groups(user=Depends(get_current_user)):
             members_count = counts.get(group["id"], 0)
             result.append(clean_mongo({
                 **group,
+                "default_match_mode": group.get("default_match_mode") or DEFAULT_MATCH_MODE,
                 "my_member_role": "admin",
                 "my_group_permission": "organizador",
                 "my_membership_type": "frecuente",
@@ -204,6 +216,7 @@ async def list_groups(user=Depends(get_current_user)):
 
         result.append(clean_mongo({
             **group,
+            "default_match_mode": group.get("default_match_mode") or DEFAULT_MATCH_MODE,
             "my_member_role": member_role,
             "my_group_permission": build_group_permission(member_role),
             "my_membership_type": build_membership_type(member_role, profile.get("player_type")),
@@ -243,6 +256,9 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
 
     return clean_mongo({
         **group,
+        # Explícito y no confiado a la migración: un grupo creado en el hueco
+        # entre el deploy y el backfill igual responde con un modo válido.
+        "default_match_mode": group.get("default_match_mode") or DEFAULT_MATCH_MODE,
         "my_member_role": my_member_role,
         "my_group_permission": my_group_permission,
         "my_membership_type": my_membership_type,
@@ -251,6 +267,36 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
         "can_invite": can_invite,
         "can_rate_seed": can_rate_seed,
         "members_count": members_count,
+    })
+
+
+@router.patch("/{group_id}")
+async def update_group(group_id: str, data: UpdateGroupRequest, user=Depends(get_current_user)):
+    """Cambia la configuración del grupo. Hoy: el modo por default.
+
+    No toca los partidos que ya existen. Cambiar el default es decir "de acá en
+    adelante", no reescribir el historial: un partido que se jugó en modo
+    Diversión no tiene evaluaciones que mostrar por más que el grupo pase a
+    modo Pro.
+    """
+    await get_group_or_404(group_id)
+    await ensure_can_manage_group(group_id, user)
+
+    cambios = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    if "default_match_mode" in cambios and not modo_disponible(cambios["default_match_mode"]):
+        raise HTTPException(
+            status_code=400,
+            detail=f'El modo "{modo_label(cambios["default_match_mode"])}" todavía no está disponible',
+        )
+
+    if cambios:
+        await db.groups.update_one({"id": group_id}, {"$set": cambios})
+
+    group = await get_group_or_404(group_id)
+    return clean_mongo({
+        **group,
+        "default_match_mode": group.get("default_match_mode") or DEFAULT_MATCH_MODE,
     })
 
 

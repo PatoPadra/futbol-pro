@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import PhotoLightbox from '@/components/common/PhotoLightbox';
 import PositionBadge from '@/components/common/PositionBadge';
+import AttendanceControl from '@/components/matches/AttendanceControl';
+import PlayerNoteField from '@/components/matches/PlayerNoteField';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 
 /**
@@ -16,13 +18,27 @@ import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
  * lo primero que se lee y la posición va como badge abajo. El número de orden va
  * en un círculo con el tono de su estado (verde titular, naranja suplente) para
  * que el orden de la lista de espera se entienda de un vistazo.
+ *
+ * La marca de asistencia va debajo del nombre y no en una pantalla aparte: quien
+ * la carga la carga mirando la lista, y una pantalla "tomar asistencia" sería la
+ * misma lista dos veces. Sólo aparece cuando hay algo para marcar — con la
+ * inscripción todavía abierta el que no va se da de baja solo.
  */
 export default function RegistrationCard({
   registration,
   index,
   canManage,
   onRemove,
+  /** Opciones del catálogo. Vacío o ausente = no se muestra el control. */
+  attendanceOptions,
+  onAttendanceChange,
+  attendanceSaving = false,
+  /** Nota privada de quien mira. null o ausente = no se ofrece escribir. */
+  nota,
+  onNoteSave,
 }) {
+  const puedeMarcarAsistencia = Boolean(onAttendanceChange && attendanceOptions?.length);
+  const puedeAnotar = Boolean(onNoteSave);
   const [photoOpen, setPhotoOpen] = useState(false);
   const photoUrl = buildPhotoUrl(registration.player_photo);
   const esTitular = registration.status === 'titular';
@@ -96,6 +112,29 @@ export default function RegistrationCard({
               <p className="text-xs text-slate-600">Sin posición cargada</p>
             )}
           </div>
+
+          {(puedeMarcarAsistencia || puedeAnotar) && (
+            <div className="mt-2 flex flex-wrap items-start gap-2">
+              {puedeMarcarAsistencia && (
+                <AttendanceControl
+                  value={registration.attendance || null}
+                  options={attendanceOptions}
+                  disabled={attendanceSaving}
+                  playerName={registration.player_name}
+                  onChange={(marca) => onAttendanceChange(registration, marca)}
+                  testId={`attendance-${registration.player_id}`}
+                />
+              )}
+              {puedeAnotar && (
+                <PlayerNoteField
+                  nota={nota}
+                  playerName={registration.player_name}
+                  disabled={attendanceSaving}
+                  onSave={(texto) => onNoteSave(registration, texto)}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {canManage && (

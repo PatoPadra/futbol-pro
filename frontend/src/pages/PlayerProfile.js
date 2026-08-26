@@ -20,6 +20,8 @@ import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import Reveal from '@/components/common/Reveal';
 import MetricTiles from '@/components/players/MetricTiles';
+import FormGuide from '@/components/players/FormGuide';
+import MatchTypeSplit from '@/components/players/MatchTypeSplit';
 import RatingPanel from '@/components/players/RatingPanel';
 import PositionPicker from '@/components/players/PositionPicker';
 import PlayerIdentityCard from '@/components/players/PlayerIdentityCard';
@@ -60,6 +62,7 @@ export default function PlayerProfile({ isSelf }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [metrics, setMetrics] = useState(null);
+  const [record, setRecord] = useState(null);
   const [positions, setPositions] = useState([]);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -93,13 +96,15 @@ export default function PlayerProfile({ isSelf }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [profileRes, metricsRes, posRes] = await Promise.all([
+        const [profileRes, metricsRes, recordRes, posRes] = await Promise.all([
           isOwn ? api.get('/profile') : api.get(`/players/${playerId}`),
           api.get(`/players/${playerId}/metrics`).catch(() => ({ data: null })),
+          api.get(`/players/${playerId}/record`).catch(() => ({ data: null })),
           api.get('/positions'),
         ]);
         setProfile(profileRes.data);
         setMetrics(metricsRes.data);
+        setRecord(recordRes.data);
         setPositions(posRes.data || []);
         reset({
           name: profileRes.data.name,
@@ -399,10 +404,27 @@ export default function PlayerProfile({ isSelf }) {
         </Reveal>
       )}
 
+      {/* Racha. Va antes que el rating y las métricas porque es lo primero que
+          alguien busca al abrir un perfil, y porque no depende de permisos:
+          quién ganó el sábado lo vieron los veintidós. */}
+      {record && (
+        <Reveal from="up" delay={45} className="mt-6 block">
+          <FormGuide record={record} />
+        </Reveal>
+      )}
+
       {/* Rating */}
       {metrics && canViewPeerScores && (
         <Reveal from="up" delay={60} className="mt-6 block">
           <RatingPanel metrics={metrics} confidence={confidence} testId="rating-summary-card" />
+        </Reveal>
+      )}
+
+      {/* Oficiales contra prácticas. Se muestra aunque los puntajes estén
+          ocultos: los conteos y el "te faltan X" no son datos reservados. */}
+      {metrics?.match_type_split && (
+        <Reveal from="up" delay={75} className="mt-4 block">
+          <MatchTypeSplit split={metrics.match_type_split} esPropio={isOwn} />
         </Reveal>
       )}
 

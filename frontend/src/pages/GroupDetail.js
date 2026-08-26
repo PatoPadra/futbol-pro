@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { GROUP_PERMISSION_LABELS, MEMBERSHIP_TYPE_LABELS } from '@/constants/groups';
 import GroupDangerZone from '@/components/groups/GroupDangerZone';
 import GroupMembersPanel from '@/components/groups/GroupMembersPanel';
+import GroupModePanel from '@/components/groups/GroupModePanel';
 import GroupNotFound from '@/components/groups/GroupNotFound';
 import HeaderChip from '@/components/groups/HeaderChip';
 import InviteMemberPanel from '@/components/groups/InviteMemberPanel';
@@ -26,6 +27,7 @@ import LinkGuestDialog from '@/components/groups/LinkGuestDialog';
 import SeedRatingsPanel from '@/components/groups/SeedRatingsPanel';
 import PageHeader from '@/components/common/PageHeader';
 import PageLoader from '@/components/common/PageLoader';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 import StatTile from '@/components/common/StatTile';
 import { Button } from '@/components/ui/button';
 import {
@@ -78,6 +80,7 @@ export default function GroupDetail() {
   const [linkGuestTarget, setLinkGuestTarget] = useState(null);
   const [confirmDeleteGroupOpen, setConfirmDeleteGroupOpen] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState(false);
+  const { modes } = useMatchCatalogs();
 
   const {
     register: registerInvite,
@@ -270,6 +273,14 @@ export default function GroupDetail() {
 
   const totalGuests = members.filter((m) => m.membership_type === 'invitado').length;
   const totalOrganizers = members.filter((m) => m.group_permission === 'organizador').length;
+
+  // El puntaje inicial es la semilla del balanceador. En un grupo que juega en
+  // modo Diversión no lo usa nadie, así que pedirlo es hacer trabajar a la gente
+  // para nada. Ante la duda (catálogo sin cargar) se muestra: esconder algo que
+  // sí sirve es peor que mostrar algo de más.
+  const capacidadesDelGrupo =
+    modes.find((m) => m.id === group?.default_match_mode)?.capabilities || {};
+  const usaPuntajes = capacidadesDelGrupo.usa_puntajes !== false;
   const miRol = GROUP_PERMISSION_LABELS[group.my_group_permission] || group.my_group_permission;
 
   return (
@@ -338,7 +349,7 @@ export default function GroupDetail() {
               onLinkGuest={setLinkGuestTarget}
             />
 
-            {canRate && (
+            {canRate && usaPuntajes && (
               <SeedRatingsPanel
                 rateableMembers={rateableMembers}
                 ratingMap={ratingMap}
@@ -362,6 +373,10 @@ export default function GroupDetail() {
                 saving={savingInvite}
                 serverError={inviteServerError}
               />
+            )}
+
+            {canManage && (
+              <GroupModePanel group={group} onSaved={() => loadData({ keepLoader: true })} />
             )}
           </div>
         </div>

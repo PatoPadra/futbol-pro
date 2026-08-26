@@ -1,3 +1,5 @@
+import math
+
 # Género del jugador.
 #
 # Es un dato del perfil y ADEMÁS entra en el armado de equipos: el balanceador
@@ -267,6 +269,613 @@ MATCH_STATUSES = [
     "finalizado",
     "completado",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Modos de partido
+# ---------------------------------------------------------------------------
+#
+# Un modo es un PRESET, no un camino aparte en el código. Los cinco se expanden
+# a las MISMAS capacidades con valores distintos, y el resto de la app pregunta
+# siempre por la capacidad ("¿este partido arma los equipos solo?") y nunca por
+# el nombre del modo ("¿es pro?"). Es la diferencia entre siete banderas y cinco
+# variantes de cada pantalla.
+#
+# Se nota mirando "avanzado" y "pro": difieren SÓLO en las estadísticas. Son el
+# mismo camino con la lista vacía o no. Siguen separados acá porque como preset
+# comunican cosas distintas al que crea el partido, no porque el código los trate
+# distinto.
+#
+# Las capacidades, una por una:
+#
+#   team_source          ninguno | algoritmo | manual
+#                        De dónde salen los equipos: de ningún lado (nadie los
+#                        arma), del balanceador, o los elige un DT a mano.
+#   opponent             interno | externo
+#                        Si se juega A contra B entre los anotados, o nosotros
+#                        contra un rival que no está en la app.
+#   usa_puntajes         Si los jugadores tienen puntaje (inicial y/o evaluado).
+#   rating_por_partido   Si se evalúa fecha a fecha (evaluaciones entre pares).
+#   stats_configurables  Si el organizador elige qué estadísticas seguir.
+#   stats_source         ninguno | consenso | organizador
+#                        Quién confirma las estadísticas. El consenso (votación
+#                        de los que jugaron) no escala cuando son muchas stats:
+#                        ahí las carga el organizador y quedan firmes al guardar.
+#   tiene_banco          Si la alineación distingue titulares de suplentes.
+#                        OJO: es la ALINEACIÓN, no la inscripción. Un "suplente"
+#                        de match_registrations es alguien que no entró en el
+#                        cupo; un suplente del banco es alguien de mi equipo que
+#                        va a entrar. Son cosas distintas, y por eso viven en
+#                        lugares distintos.
+#
+# Los nombres visibles no son los técnicos. "Pro" y "Avanzado" no le dicen nada
+# al que organiza el partido del martes: cada modo se llama por lo que pasa.
+MATCH_MODES = [
+    {
+        "id": "diversion",
+        "name": "Sólo anotarse",
+        "description": "La gente se anota y al final cargás el resultado. Nada más.",
+        "available": True,
+        "capabilities": {
+            "team_source": "ninguno",
+            "opponent": "interno",
+            "usa_puntajes": False,
+            "rating_por_partido": False,
+            "stats_configurables": False,
+            "stats_source": "ninguno",
+            "tiene_banco": False,
+        },
+    },
+    {
+        "id": "basico",
+        "name": "Equipos armados",
+        "description": "Con el puntaje inicial armamos los equipos. Después cargás el resultado.",
+        "available": True,
+        "capabilities": {
+            "team_source": "algoritmo",
+            "opponent": "interno",
+            "usa_puntajes": True,
+            "rating_por_partido": False,
+            "stats_configurables": False,
+            "stats_source": "ninguno",
+            "tiene_banco": False,
+        },
+    },
+    {
+        "id": "avanzado",
+        "name": "Con puntajes",
+        "description": "Además se evalúan fecha a fecha, y los equipos van mejorando solos.",
+        "available": True,
+        "capabilities": {
+            "team_source": "algoritmo",
+            "opponent": "interno",
+            "usa_puntajes": True,
+            "rating_por_partido": True,
+            "stats_configurables": False,
+            "stats_source": "consenso",
+            "tiene_banco": False,
+        },
+    },
+    {
+        "id": "pro",
+        "name": "Con estadísticas",
+        "description": "Lo anterior más las estadísticas que vos elijas seguir.",
+        "available": True,
+        "capabilities": {
+            "team_source": "algoritmo",
+            "opponent": "interno",
+            "usa_puntajes": True,
+            "rating_por_partido": True,
+            "stats_configurables": True,
+            "stats_source": "organizador",
+            "tiene_banco": False,
+        },
+    },
+    {
+        "id": "entrenador",
+        "name": "Equipo con DT",
+        "description": "Para jugar contra otro equipo: vos elegís los titulares y el banco.",
+        "available": True,
+        "capabilities": {
+            "team_source": "manual",
+            "opponent": "externo",
+            "usa_puntajes": True,
+            "rating_por_partido": True,
+            "stats_configurables": True,
+            "stats_source": "organizador",
+            "tiene_banco": True,
+        },
+    },
+]
+
+MATCH_MODE_IDS = [m["id"] for m in MATCH_MODES]
+MATCH_MODE_MAP = {m["id"]: m for m in MATCH_MODES}
+
+# Los que se pueden elegir hoy. Un modo que existe en el catálogo pero todavía no
+# tiene sus pantallas se muestra como "próximamente" y el backend lo rechaza: es
+# preferible un error claro al crear que un partido en un estado del que no se
+# puede salir.
+AVAILABLE_MATCH_MODE_IDS = [m["id"] for m in MATCH_MODES if m.get("available", True)]
+
+
+def modo_disponible(mode: str | None) -> bool:
+    modo = MATCH_MODE_MAP.get(mode)
+    return bool(modo and modo.get("available", True))
+
+# El default es "avanzado" y no "basico" porque es EXACTAMENTE lo que la app
+# hacía antes de que existieran los modos: equipos automáticos, evaluación entre
+# pares y estadísticas por consenso. Así los partidos que ya existen y los que se
+# creen sin elegir nada se comportan igual que siempre.
+DEFAULT_MATCH_MODE = "avanzado"
+
+
+def capacidades_de(mode: str | None) -> dict:
+    """Capacidades de un modo. Las del default si el modo no existe o falta.
+
+    Nunca revienta y nunca devuelve vacío: quien la llama va a escribir
+    `capacidades["usa_puntajes"]` sin un `.get()` de por medio, y un partido
+    viejo sin modo tiene que seguir funcionando igual.
+    """
+    modo = MATCH_MODE_MAP.get(mode) or MATCH_MODE_MAP[DEFAULT_MATCH_MODE]
+    return dict(modo["capabilities"])
+
+
+def modo_label(mode: str | None) -> str:
+    """Nombre visible de un modo, para no repetir el mapa en cada respuesta."""
+    modo = MATCH_MODE_MAP.get(mode) or MATCH_MODE_MAP[DEFAULT_MATCH_MODE]
+    return modo["name"]
+
+
+# ---------------------------------------------------------------------------
+# Tipo de partido: oficial o práctica
+# ---------------------------------------------------------------------------
+#
+# Es un eje INDEPENDIENTE del modo: una práctica puede ser modo Pro, y un oficial
+# puede ser modo Básico. Sirve para poder trazar al jugador que la rompe en los
+# informales y en los oficiales no aparece.
+#
+# Son dos y no tres (no hay "amistoso") porque la gracia es comparar dos
+# poblaciones, y una tercera categoría parte la muestra en tres justo cuando el
+# problema de fondo es que en fútbol amateur nunca hay partidos de sobra.
+#
+# `rating_weight` es cuánto pesa cada tipo en el puntaje del jugador. Todavía no
+# lo consume nadie: lo va a usar el cálculo de rating, con el mismo mecanismo con
+# el que hoy `rating_calculator` mezcla las evaluaciones de partido (1.0) con las
+# iniciales del grupo (0.6). Vive acá y no allá para que se vea que es una
+# convención y no una ley del fútbol.
+MATCH_TYPES = [
+    {
+        "id": "oficial",
+        "name": "Oficial",
+        "description": "Cuenta como partido en serio.",
+        "rating_weight": 1.0,
+    },
+    {
+        "id": "practica",
+        "name": "Práctica",
+        "description": "Entrenamiento o informal. Pesa menos en el puntaje.",
+        "rating_weight": 0.7,
+    },
+]
+
+MATCH_TYPE_IDS = [t["id"] for t in MATCH_TYPES]
+MATCH_TYPE_MAP = {t["id"]: t for t in MATCH_TYPES}
+DEFAULT_MATCH_TYPE = "oficial"
+
+
+def tipo_label(match_type: str | None) -> str:
+    tipo = MATCH_TYPE_MAP.get(match_type) or MATCH_TYPE_MAP[DEFAULT_MATCH_TYPE]
+    return tipo["name"]
+
+
+def peso_de_tipo(match_type: str | None) -> float:
+    """Cuánto pesa un partido de este tipo en el puntaje del jugador.
+
+    Los dos tipos alimentan el rating; lo que cambia es cuánto. Una práctica no
+    se descarta — sería tirar la mitad de la evidencia de un equipo que entrena
+    dos veces por semana — pero tampoco vale lo mismo que un partido en serio.
+    """
+    tipo = MATCH_TYPE_MAP.get(match_type) or MATCH_TYPE_MAP[DEFAULT_MATCH_TYPE]
+    return float(tipo["rating_weight"])
+
+
+# ---------------------------------------------------------------------------
+# Estadísticas que se pueden seguir
+# ---------------------------------------------------------------------------
+#
+# Antes eran tres columnas fijas (goals, assists, saves) escritas a mano en seis
+# lugares: dos colecciones, el modelo del pedido, el del perfil, el cálculo del
+# bonus y el formulario del front. Agregar "cortes" eran seis ediciones y la
+# garantía de que la séptima quedaba afuera. Ahora son un catálogo, y el valor
+# guardado es un dict.
+#
+# `bonus_weight` es cuánto pesa esa estadística en el puntaje del jugador, por
+# partido. Los tres primeros conservan EXACTAMENTE los pesos que estaban
+# hardcodeados en rating_calculator (0.3 / 0.2 / 0.15) para que ningún historial
+# ya cargado cambie de valor al migrar.
+#
+# El resto pesa CERO, y no es que falte completarlo:
+#
+#   Cortes, duelos y regates miden cuánto tocás la pelota, no qué tan bien
+#   jugás. El que juega de 5 en un equipo que se defiende toda la tarde acumula
+#   cortes por dónde le tocó pararse, no por ser mejor. Si eso sumara puntaje, el
+#   balanceador terminaría armando equipos alrededor de una métrica de
+#   exposición. Se guardan y se muestran porque al grupo le divierte y porque son
+#   historia real del jugador; no tocan el puntaje.
+#
+#   Con las tarjetas y las faltas pasa algo parecido al revés, y ahí además
+#   habría que decidir si restan — que es una conversación aparte, no un número
+#   que uno mete de callado en una constante.
+#
+# `negative` es para la pantalla: una amarilla no se pinta como un logro.
+# `position_dependent` marca las que dependen del puesto. Atajadas ya lo era
+# antes de todo esto (un delantero con cero atajadas no es peor que un arquero
+# con ocho) y su peso quedó como estaba para no cambiar el pasado, pero está
+# anotado para cuando se normalice el bonus por puesto.
+TRACKABLE_STATS = [
+    {
+        "id": "goals",
+        "name": "Goles",
+        "short": "G",
+        "default": True,
+        "bonus_weight": 0.3,
+        "negative": False,
+        "position_dependent": False,
+    },
+    {
+        "id": "assists",
+        "name": "Asistencias",
+        "short": "A",
+        "default": True,
+        "bonus_weight": 0.2,
+        "negative": False,
+        "position_dependent": False,
+    },
+    {
+        "id": "saves",
+        "name": "Atajadas",
+        "short": "At",
+        "default": False,
+        "bonus_weight": 0.15,
+        "negative": False,
+        "position_dependent": True,
+    },
+    {
+        "id": "tackles",
+        "name": "Cortes",
+        "short": "C",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": False,
+        "position_dependent": True,
+    },
+    {
+        "id": "duels_won",
+        "name": "Duelos ganados",
+        "short": "D",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": False,
+        "position_dependent": True,
+    },
+    {
+        "id": "dribbles_won",
+        "name": "Regates ganados",
+        "short": "R",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": False,
+        "position_dependent": True,
+    },
+    {
+        "id": "key_passes",
+        "name": "Pases clave",
+        "short": "PC",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": False,
+        "position_dependent": True,
+    },
+    {
+        "id": "fouls",
+        "name": "Faltas",
+        "short": "F",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": True,
+        "position_dependent": False,
+    },
+    {
+        "id": "yellow_cards",
+        "name": "Amarillas",
+        "short": "TA",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": True,
+        "position_dependent": False,
+    },
+    {
+        "id": "red_cards",
+        "name": "Rojas",
+        "short": "TR",
+        "default": False,
+        "bonus_weight": 0.0,
+        "negative": True,
+        "position_dependent": False,
+    },
+]
+
+TRACKABLE_STAT_IDS = [s["id"] for s in TRACKABLE_STATS]
+TRACKABLE_STAT_MAP = {s["id"]: s for s in TRACKABLE_STATS}
+
+# Las tres de siempre. Es lo que la app pedía antes de que las estadísticas se
+# pudieran elegir, así que es lo que sigue usando el modo que no las configura
+# (avanzado): un partido creado hoy en ese modo pide exactamente lo mismo que
+# pedía ayer.
+CLASSIC_TRACKED_STATS = ["goals", "assists", "saves"]
+
+# Las que vienen tildadas cuando SÍ se pueden elegir. Dos, porque es lo que la
+# enorme mayoría va a querer y porque una lista con diez tildes es una lista que
+# nadie completa.
+DEFAULT_TRACKED_STATS = [s["id"] for s in TRACKABLE_STATS if s["default"]]
+
+# Techo del bonus por estadísticas dentro del puntaje. Estaba escrito como un
+# `min(raw_bonus, 1.0)` suelto en el cálculo; vive acá porque ahora que las
+# estadísticas se eligen, el techo es lo único que impide que un partido con
+# ocho métricas prendidas pese distinto que uno con dos.
+MAX_STATS_BONUS = 1.0
+
+
+def stats_de(match: dict) -> list:
+    """Qué estadísticas sigue este partido. Lista vacía si no sigue ninguna.
+
+    Un partido viejo sin `tracked_stats` cae en las tres clásicas, que es lo que
+    de hecho tiene cargado.
+    """
+    seguidas = match.get("tracked_stats")
+    if seguidas is None:
+        return list(CLASSIC_TRACKED_STATS)
+    return [stat_id for stat_id in seguidas if stat_id in TRACKABLE_STAT_MAP]
+
+
+def resolver_stats_seguidas(capacidades: dict, elegidas: list | None) -> list:
+    """Las estadísticas que le corresponden a un partido según su modo.
+
+    `elegidas` en None significa "no vino nada en el pedido" y se usa el default
+    del modo. Una lista vacía SÍ es una elección: el organizador destildó todo y
+    no quiere estadísticas.
+    """
+    if capacidades.get("stats_source") == "ninguno":
+        return []
+    if not capacidades.get("stats_configurables"):
+        return list(CLASSIC_TRACKED_STATS)
+    if elegidas is None:
+        return list(DEFAULT_TRACKED_STATS)
+    return [stat_id for stat_id in elegidas if stat_id in TRACKABLE_STAT_MAP]
+
+
+def valores_de_stats(doc: dict) -> dict:
+    """Los valores de una fila de estadísticas, venga del formato nuevo o del viejo.
+
+    Nuevo: `{"values": {"goals": 2}}`. Viejo: `{"goals": 2, "assists": 0, ...}`
+    como columnas sueltas. La migración de arranque pasa todo al formato nuevo,
+    pero esto no depende de que haya corrido — y encima cubre el hueco entre el
+    deploy y el arranque.
+
+    Los ceros se descartan: guardar diez claves en cero por jugador para decir
+    que no hizo nada es ruido, y `.get(id, 0)` del otro lado da lo mismo.
+    """
+    crudos = doc.get("values")
+    if not isinstance(crudos, dict):
+        crudos = {k: doc.get(k) for k in CLASSIC_TRACKED_STATS}
+
+    limpios = {}
+    for stat_id, valor in crudos.items():
+        if stat_id not in TRACKABLE_STAT_MAP:
+            continue
+        try:
+            entero = int(valor)
+        except (TypeError, ValueError):
+            continue
+        if entero:
+            limpios[stat_id] = entero
+    return limpios
+
+
+# ---------------------------------------------------------------------------
+# El resultado como señal de puntaje
+# ---------------------------------------------------------------------------
+#
+# Hasta acá el puntaje de un jugador salía SOLO de que otros lo calificaran. Eso
+# tiene tres problemas conocidos: la política del grupo, la vagancia (nadie
+# califica a trece personas del uno al diez) y el sesgo del que califica. Y uno
+# peor: la app armaba equipos, decía "balance 0.97" y nunca se enteraba de si
+# terminó 6 a 0.
+#
+# El resultado arregla las cuatro cosas. Es un número por partido que restringe a
+# los veintidós a la vez, no se lo pide a nadie (ya se carga igual) y —lo más
+# importante— es la ETIQUETA que el balanceador nunca tuvo: si dijo que estaban
+# parejos y uno ganó por goleada, se equivocó, y ahora queda registrado.
+#
+# Cómo se convierte un resultado en puntaje:
+#
+#   1. Se calcula qué se ESPERABA, con la fuerza que tenía cada equipo cuando se
+#      armaron (los `player_score` congelados en team_generations). No hay
+#      circularidad: es lo que creíamos en ese momento, no lo que creemos ahora.
+#   2. Se compara con lo que PASÓ (ganó, empató, perdió).
+#   3. La diferencia — la sorpresa — es lo que mueve el puntaje. Ganarle a un
+#      equipo más fuerte vale mucho; ganarle al que tenías que ganarle, casi nada.
+#
+# Un partido parejo (que es lo que el balanceador busca) da una expectativa de
+# 0.5, y ahí el puntaje del resultado es básicamente "ganaste o perdiste". Que es
+# exactamente lo correcto cuando los equipos estaban parejos.
+
+# Cuánta diferencia de puntaje hace falta para que un equipo sea claramente
+# favorito. Con 4.0, un equipo un punto mejor (en la escala de 0 a 10) gana el
+# 64% de las veces. La escala de Elo original usa 400 sobre ratings de ~1500;
+# acá los ratings van de 0 a 10, y 4.0 da una curva realista para fútbol amateur,
+# donde el azar pesa mucho. Un valor más chico haría que el sistema se
+# "sorprenda" poco y el resultado casi no moviera nada.
+RESULT_ELO_SCALE = 4.0
+
+# Cuánto puede mover el resultado de UN partido, como máximo. Con 4.0, ganarle a
+# un equipo que te daba por perdido lleva el puntaje de ese partido a 9; perder
+# siendo amplio favorito, a 1.
+RESULT_SWING = 4.0
+
+# El margen importa, pero poco y con techo. Un 10 a 0 no puede valer diez veces
+# un 1 a 0: en fútbol amateur una goleada suele significar que faltaron dos y
+# jugaron nueve contra once, no que un equipo sea diez veces mejor.
+RESULT_MARGIN_STEP = 0.15
+RESULT_MARGIN_CAP = 1.5
+
+# Cuánto del puntaje del jugador puede venir del resultado, y qué tan rápido
+# llega ahí. La proporción crece con la cantidad de partidos con resultado:
+#
+#   share = MAX * n / (n + HALF)
+#
+#   1 partido  -> 10%    4 partidos -> 25%
+#   10         -> 36%    30         -> 44%
+#
+# El techo del 50% es a propósito. El resultado es una señal COMPARTIDA por diez
+# a veintidós jugadores: el arquero que no tocó una pelota gana igual que el que
+# hizo tres goles. Dejarla mandar sola convertiría el puntaje en "en qué equipo
+# te tocó". La curva hace lo otro que importa: un solo partido mueve el 10% y no
+# el 50, así que una goleada suelta no le arruina el puntaje a nadie.
+RESULT_MAX_SHARE = 0.5
+RESULT_EVIDENCE_HALF = 4.0
+
+
+def probabilidad_esperada(mi_fuerza: float, fuerza_rival: float) -> float:
+    """Qué chance tenía mi equipo, según cómo estaban armados. Entre 0 y 1."""
+    return 1.0 / (1.0 + 10 ** ((fuerza_rival - mi_fuerza) / RESULT_ELO_SCALE))
+
+
+def factor_de_margen(diferencia_de_gol: int) -> float:
+    """Cuánto pesa el margen. Crece despacio y con techo (ver RESULT_MARGIN_CAP)."""
+    margen = abs(int(diferencia_de_gol or 0))
+    return min(RESULT_MARGIN_CAP, 1.0 + math.log2(1 + margen) * RESULT_MARGIN_STEP)
+
+
+def resultado_real(goles_a_favor: int, goles_en_contra: int) -> float:
+    """1.0 ganó, 0.5 empató, 0.0 perdió."""
+    if goles_a_favor > goles_en_contra:
+        return 1.0
+    if goles_a_favor < goles_en_contra:
+        return 0.0
+    return 0.5
+
+
+def puntaje_por_resultado(esperado: float, real: float, diferencia_de_gol: int) -> float:
+    """El puntaje de 1 a 10 que se lleva un jugador por cómo salió el partido.
+
+    Va en la misma escala que las evaluaciones entre pares a propósito: así entra
+    al promedio del rating como un canal más y no como una unidad nueva que haya
+    que traducir.
+
+    El centro es 5.0 — el prior neutro del proyecto — y de ahí se mueve por la
+    sorpresa. Un partido que salió exactamente como se esperaba deja el puntaje
+    en 5 y por lo tanto no mueve nada, que es lo correcto: no aporta información.
+    """
+    sorpresa = real - esperado
+    crudo = 5.0 + RESULT_SWING * sorpresa * factor_de_margen(diferencia_de_gol)
+    return max(1.0, min(10.0, crudo))
+
+
+def peso_del_resultado(cantidad_de_partidos: int) -> float:
+    """Qué proporción del puntaje aporta el resultado. Ver RESULT_MAX_SHARE."""
+    if cantidad_de_partidos <= 0:
+        return 0.0
+    n = float(cantidad_de_partidos)
+    return RESULT_MAX_SHARE * n / (n + RESULT_EVIDENCE_HALF)
+
+
+# ---------------------------------------------------------------------------
+# Oficial contra práctica
+# ---------------------------------------------------------------------------
+#
+# Poder decir "este jugador la rompe en las prácticas y en los oficiales no
+# aparece" es de lo más útil que puede dar la app. También es la forma más fácil
+# de vender ruido como si fuera un dato.
+#
+# Con cuatro partidos oficiales, la diferencia entre un promedio y el otro es
+# casi siempre azar. Y esa frase, en un grupo de amigos, no es una estadística:
+# es una acusación. Así que hay dos frenos:
+#
+#   1. La comparación no se MUESTRA hasta que haya SPLIT_MIN_MATCHES de cada
+#      tipo. Antes de eso la app dice cuántos faltan, que además engancha.
+#   2. Cada promedio se encoge hacia el rating general del jugador con
+#      SPLIT_SHRINK_K. Sólo una diferencia que se sostiene en el tiempo
+#      sobrevive; una racha de dos partidos se desarma sola.
+SPLIT_MIN_MATCHES = 5
+SPLIT_SHRINK_K = 5.0
+
+
+def encoger_hacia(promedio: float, cantidad: int, referencia: float, k: float = SPLIT_SHRINK_K) -> float:
+    """Acerca un promedio flaco a una referencia. Con muchos datos casi no lo toca."""
+    if cantidad <= 0:
+        return referencia
+    confianza = cantidad / (cantidad + k)
+    return promedio * confianza + referencia * (1 - confianza)
+
+
+# ---------------------------------------------------------------------------
+# Asistencia
+# ---------------------------------------------------------------------------
+#
+# Anotarse no es venir. Hasta ahora finalizar el partido le sumaba un
+# `matches_played` a todos los que figuraban como titulares, incluido el que
+# nunca apareció — y ese contador es el que alimenta el índice de confianza del
+# rating, así que el error se acumula callado.
+#
+# Que nadie haya marcado nada (`None`) NO es lo mismo que "faltó": significa que
+# no se tomó asistencia, y ahí vale la regla vieja (titular = jugó). Sólo una
+# marca explícita cambia el conteo.
+#
+# `ausente` y `sin_aviso` cuentan igual para el rating: los dos son "no jugó".
+# Están separados porque la diferencia entre avisar y plantar es justamente el
+# dato que al grupo le interesa ver.
+# Rol de un jugador DENTRO de la alineación. Ojo con la palabra "suplente", que
+# en esta app significa dos cosas distintas según dónde esté:
+#
+#   match_registrations.status = "suplente"  -> se llenó el cupo, está en lista
+#                                               de espera y NO forma parte del
+#                                               plantel del partido.
+#   assignments[].role = "suplente"          -> es del equipo, está en el banco
+#                                               y puede entrar.
+#
+# Son cosas distintas y por eso viven en lugares distintos. Meter el banco en la
+# inscripción habría mezclado "no entraste al partido" con "arrancás afuera",
+# que para el que las lee es lo mismo y para el sistema no.
+LINEUP_ROLES = ["titular", "suplente"]
+DEFAULT_LINEUP_ROLE = "titular"
+
+ATTENDANCE_PRESENT = "presente"
+# El `short` es para el control compacto que va al lado de cada jugador en la
+# lista, donde "Avisó que no venía" no entra. El `name` completo viaja igual y se
+# usa como etiqueta accesible, así el que navega con lector de pantalla escucha
+# la diferencia entre avisar y plantar, que es justamente el dato que importa.
+ATTENDANCE_STATUSES = [
+    {"id": ATTENDANCE_PRESENT, "name": "Vino", "short": "Vino", "jugo": True},
+    {"id": "ausente", "name": "Avisó que no venía", "short": "Avisó", "jugo": False},
+    {"id": "sin_aviso", "name": "No vino ni avisó", "short": "Plantó", "jugo": False},
+]
+
+ATTENDANCE_IDS = [a["id"] for a in ATTENDANCE_STATUSES]
+ATTENDANCE_MAP = {a["id"]: a for a in ATTENDANCE_STATUSES}
+
+
+def jugo_el_partido(registration: dict) -> bool:
+    """Si una inscripción cuenta como partido jugado.
+
+    La marca explícita manda. Sin marca vale la regla vieja: el titular jugó, el
+    suplente no. Así un partido al que nadie le tomó asistencia sigue contando
+    exactamente como contaba antes de que la asistencia existiera.
+    """
+    marca = registration.get("attendance")
+    if marca in ATTENDANCE_MAP:
+        return ATTENDANCE_MAP[marca]["jugo"]
+    return registration.get("status") == "titular"
 
 
 # Torneos: un torneo agrupa GRUPOS existentes, cada grupo juega como un equipo.

@@ -8,7 +8,9 @@ import {
   ClipboardList,
   Clock,
   Copy,
+  Dumbbell,
   ExternalLink,
+  Gauge,
   Info,
   LayoutGrid,
   MapPin,
@@ -16,6 +18,7 @@ import {
   RefreshCw,
   Settings2,
   Share2,
+  Swords,
   Shuffle,
   Trash2,
   Trophy,
@@ -32,8 +35,10 @@ import api from '@/lib/api';
 import { MODALITY_LABELS, MATCH_STATUS_LABELS } from '@/constants/matches';
 import RegistrationCard from '@/components/matches/RegistrationCard';
 import AddGuestDialog from '@/components/matches/AddGuestDialog';
+import MatchResultPanel from '@/components/matches/MatchResultPanel';
 import Panel from '@/components/matches/Panel';
 import MetaChip from '@/components/matches/MetaChip';
+import useMatchCatalogs from '@/hooks/use-match-catalogs';
 import PageHeader from '@/components/common/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -117,17 +122,24 @@ export default function MatchDetail() {
   const [actionLoading, setActionLoading] = useState('');
   const [loadError, setLoadError] = useState(null); // 'not_found' | 'error' | null
   const [addGuestOpen, setAddGuestOpen] = useState(false);
+  const [attendanceSaving, setAttendanceSaving] = useState('');
+  const [notas, setNotas] = useState({});
+  const { attendance: attendanceOptions } = useMatchCatalogs();
 
   const loadData = async ({ keepLoader = false } = {}) => {
     if (!keepLoader) setLoading(true);
     setLoadError(null);
     try {
-      const [matchRes, regsRes] = await Promise.all([
+      const [matchRes, regsRes, notasRes] = await Promise.all([
         api.get(`/matches/${id}`),
         api.get(`/matches/${id}/registrations`),
+        // Sólo el organizador tiene notas; para el resto el endpoint responde
+        // 403 y se sigue de largo con un objeto vacío.
+        api.get(`/matches/${id}/notes`).catch(() => ({ data: {} })),
       ]);
       setMatch(matchRes.data);
       setRegistrations(regsRes.data || []);
+      setNotas(notasRes.data || {});
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al cargar partido');
       setLoadError(err.response?.status === 404 ? 'not_found' : 'error');
@@ -148,6 +160,33 @@ export default function MatchDetail() {
   const titulars = useMemo(() => registrations.filter((r) => r.status === 'titular'), [registrations]);
   const suplentes = useMemo(() => registrations.filter((r) => r.status === 'suplente'), [registrations]);
   const canEditRegistrations = isOrganizer && !['finalizado', 'completado', 'cancelado'].includes(match?.status);
+  // Con la inscripción abierta no hay nada que marcar: el que no va se da de
+  // baja solo. Después del partido sí, y corregir una marca vieja reajusta el
+  // contador de partidos jugados del jugador.
+  const canMarkAttendance = isOrganizer && !['abierto', 'cancelado'].includes(match?.status);
+
+  // Todo lo que la pantalla ofrece sale de las capacidades del modo, que vienen
+  // resueltas del backend. Acá no hay ni un `if (modo === 'pro')`: si mañana un
+  // modo cambia de comportamiento, cambia en constants.py y esta pantalla se
+  // entera sola.
+  const capacidades = match?.capabilities || {};
+  const armaEquipos = capacidades.team_source === 'algoritmo';
+  // El modo con DT no reparte: arma una alineación con banco. Es otra acción y
+  // se llama distinto, aunque por dentro use el mismo endpoint.
+  const armaAlineacion = capacidades.team_source === 'manual';
+  const tieneEquipos = armaEquipos || armaAlineacion;
+  const evaluaPorPartido = Boolean(capacidades.rating_por_partido);
+  const statsSource = capacidades.stats_source || 'ninguno';
+  // Quién tiene algo que hacer en el post partido depende del modo: si se
+  // evalúa, todos los que jugaron; si las estadísticas son por consenso,
+  // también; si las carga el organizador, sólo él.
+  const hayPostPartido =
+    (evaluaPorPartido && isRegistered)
+    || (statsSource === 'consenso' && isRegistered)
+    || (statsSource === 'organizador' && isOrganizer);
+  // Sin equipos que armar, el partido va derecho de cerrado a finalizado. Sin
+  // esto un partido de Diversión no llegaría nunca a poder cargar su resultado.
+  const finalizaDesdeCerrado = !tieneEquipos && match?.status === 'cerrado';
   const registeredPlayerIds = useMemo(() => new Set(registrations.map((r) => r.player_id)), [registrations]);
   const canAddGuest = isOrganizer && match?.status === 'abierto';
 
@@ -186,6 +225,49 @@ export default function MatchDetail() {
     const confirmed = window.confirm('¿Querés borrar definitivamente este partido? Esta acción elimina inscripciones, estadísticas y equipos generados.');
     if (!confirmed) return;
     await runAction('delete', () => api.delete(`/matches/${id}`), 'Partido borrado', { reload: false, onSuccess: () => navigate('/partidos') });
+  };
+
+  const handleAttendanceChange = async (registration, marca) => {
+    const anterior = registration.attendance || null;
+
+    // Optimista: la marca se ve al toque. Tomar asistencia son diez o veinte
+    // toques seguidos y esperar el ida y vuelta en cada uno convierte medio
+    // minuto de tarea en tres.
+    setAttendanceSaving(registration.player_id);
+    setRegistrations((prev) =>
+      prev.map((r) => (r.player_id === registration.player_id ? { ...r, attendance: marca } : r))
+    );
+
+    try {
+      await api.put(`/matches/${id}/attendance`, {
+        entries: [{ player_id: registration.player_id, attendance: marca }],
+      });
+    } catch (err) {
+      setRegistrations((prev) =>
+        prev.map((r) => (r.player_id === registration.player_id ? { ...r, attendance: anterior } : r))
+      );
+      toast.error(err.response?.data?.detail || 'No se pudo guardar la asistencia');
+    } finally {
+      setAttendanceSaving('');
+    }
+  };
+
+  const handleNoteSave = async (registration, texto) => {
+    const limpio = (texto || '').trim();
+    try {
+      await api.put(`/matches/${id}/notes/${registration.player_id}`, { text: limpio });
+      setNotas((prev) => {
+        const siguiente = { ...prev };
+        if (limpio) siguiente[registration.player_id] = { text: limpio };
+        else delete siguiente[registration.player_id];
+        return siguiente;
+      });
+      toast.success(limpio ? 'Nota guardada' : 'Nota borrada');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No se pudo guardar la nota');
+      // Se propaga para que el campo no se cierre como si hubiera guardado.
+      throw err;
+    }
   };
 
   const handleRemoveRegistration = async (registration) => {
@@ -319,14 +401,31 @@ export default function MatchDetail() {
           : `Inscripción abierta hasta ${deadlineLabel || 'el día del partido'}`,
       };
     }
-    if (isOrganizer && ['cerrado', 'equipos_generados'].includes(match.status)) {
+    if (isOrganizer && tieneEquipos && ['cerrado', 'equipos_generados'].includes(match.status)) {
+      const yaEstan = match.status === 'equipos_generados';
       return {
-        label: actionLoading === 'generate' ? 'Generando...' : (match.status === 'equipos_generados' ? 'Recalcular equipos' : 'Generar equipos'),
+        label: actionLoading === 'generate'
+          ? (armaAlineacion ? 'Armando...' : 'Generando...')
+          : (armaAlineacion
+            ? (yaEstan ? 'Rearmar alineación' : 'Armar alineación')
+            : (yaEstan ? 'Recalcular equipos' : 'Generar equipos')),
         icon: Shuffle,
         onClick: handleGenerateTeams,
         className: 'bg-orange hover:bg-orange-light text-white shadow-lg shadow-orange/20',
         testId: 'generate-teams-btn',
-        description: 'Armamos equipos balanceados automáticamente con los jugadores anotados.',
+        description: armaAlineacion
+          ? 'Te proponemos un once con los puestos de cada uno. Después lo acomodás vos.'
+          : 'Armamos equipos balanceados automáticamente con los jugadores anotados.',
+      };
+    }
+    if (isOrganizer && finalizaDesdeCerrado) {
+      return {
+        label: actionLoading === 'finalize' ? 'Finalizando...' : 'Finalizar partido',
+        icon: Play,
+        onClick: handleFinalize,
+        className: 'bg-secondary text-secondary-foreground',
+        testId: 'finalize-match-btn',
+        description: 'En este modo no se arman equipos: marcá el partido como jugado y cargá el resultado.',
       };
     }
     if (isOrganizer && match.status === 'equipos_confirmados') {
@@ -339,14 +438,23 @@ export default function MatchDetail() {
         description: 'Marcá el partido como jugado para habilitar estadísticas y evaluaciones.',
       };
     }
-    if (match.status === 'finalizado' && isRegistered) {
+    if (match.status === 'finalizado' && hayPostPartido) {
+      // La etiqueta dice lo que este modo pide de verdad. "Evaluar y
+      // estadísticas" en un partido que sólo lleva estadísticas manda al que
+      // entra a buscar una pantalla de evaluación que no existe.
+      const soloStats = !evaluaPorPartido;
+      const soloEvaluacion = statsSource === 'ninguno';
       return {
-        label: 'Evaluar y estadísticas',
+        label: soloStats ? 'Cargar estadísticas' : (soloEvaluacion ? 'Evaluar compañeros' : 'Evaluar y estadísticas'),
         icon: Play,
         to: `/partidos/${id}/post-partido`,
         className: 'bg-orange hover:bg-orange-light text-white shadow-lg shadow-orange/20',
         testId: 'post-match-btn',
-        description: 'Cargá goles, asistencias y calificá a tus compañeros de partido.',
+        description: soloStats
+          ? 'Cargá las estadísticas de la fecha.'
+          : (soloEvaluacion
+            ? 'Calificá a tus compañeros de partido.'
+            : 'Cargá las estadísticas y calificá a tus compañeros de partido.'),
       };
     }
     return null;
@@ -357,6 +465,7 @@ export default function MatchDetail() {
       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
       <span>
         Como organizador podés quitar jugadores del partido. Si quitás un titular, sube automáticamente el primer suplente.
+        {canMarkAttendance && ' Y podés marcar quién vino: sin marcar, el partido cuenta para todos los titulares.'}
       </span>
     </div>
   );
@@ -384,6 +493,16 @@ export default function MatchDetail() {
               <MetaChip icono={Users}>
                 {MODALITY_LABELS[match.modality] || `Fútbol ${match.modality}`}
               </MetaChip>
+              {match.mode_label && <MetaChip icono={Gauge}>{match.mode_label}</MetaChip>}
+              {match.opponent_name && (
+                <MetaChip icono={Swords} tono="orange">vs {match.opponent_name}</MetaChip>
+              )}
+              {/* El tipo se muestra sólo cuando es práctica. Un chip "Oficial"
+                  en todos los partidos no enseña nada: lo que informa es la
+                  excepción. */}
+              {match.match_type === 'practica' && (
+                <MetaChip icono={Dumbbell} tono="orange">Práctica</MetaChip>
+              )}
             </>
           }
           acciones={
@@ -499,6 +618,16 @@ export default function MatchDetail() {
           </section>
         )}
 
+        {/* Va antes que todo lo demás: cuando alguien abre un partido de la
+            semana pasada, lo primero que quiere saber es cómo salió. */}
+        <MatchResultPanel
+          match={match}
+          canManage={isOrganizer}
+          api={api}
+          onSaved={() => loadData({ keepLoader: true })}
+          onError={(err) => toast.error(err.response?.data?.detail || 'No se pudo guardar el resultado')}
+        />
+
         <div className={isOrganizer ? 'grid grid-cols-1 lg:grid-cols-[1.25fr_0.95fr] gap-6 items-start' : 'grid grid-cols-1 gap-6 items-start'}>
           <div className="space-y-6">
             <Panel
@@ -513,6 +642,15 @@ export default function MatchDetail() {
                 <DatoTile icono={Clock} etiqueta="Hora">{match.time} hs</DatoTile>
                 <DatoTile icono={MapPin} etiqueta="Lugar">
                   <span className="block truncate">{match.location}</span>
+                </DatoTile>
+                <DatoTile icono={Gauge} etiqueta="Modo">
+                  <span className="block truncate">{match.mode_label || 'Con puntajes'}</span>
+                  <span className="block text-xs font-normal text-slate-600">
+                    {match.match_type === 'practica' ? 'Práctica' : 'Partido oficial'}
+                    {match.tracked_stats?.length
+                      ? ` · ${match.tracked_stats.length} ${match.tracked_stats.length === 1 ? 'estadística' : 'estadísticas'}`
+                      : ''}
+                  </span>
                 </DatoTile>
                 <DatoTile icono={Users} etiqueta="Titulares">
                   <span className="flex flex-wrap items-center gap-1.5">
@@ -575,9 +713,11 @@ export default function MatchDetail() {
                       <LayoutGrid className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">Equipos</p>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">{armaAlineacion ? 'Alineación' : 'Equipos'}</p>
                       <p className="mt-0.5 font-semibold text-slate-900">
-                        {match.status === 'equipos_confirmados' ? 'Los equipos ya están confirmados' : 'Los equipos ya fueron generados'}
+                        {armaAlineacion
+                          ? (match.status === 'equipos_confirmados' ? 'La alineación está confirmada' : 'La alineación ya está armada')
+                          : (match.status === 'equipos_confirmados' ? 'Los equipos ya están confirmados' : 'Los equipos ya fueron generados')}
                       </p>
                     </div>
                   </div>
@@ -588,7 +728,7 @@ export default function MatchDetail() {
                       className="h-11 w-full px-6 border-2 border-slate-200 hover:border-slate-400 sm:w-auto"
                       data-testid="view-teams-btn"
                     >
-                      Ver equipos
+                      {armaAlineacion ? 'Ver alineación' : 'Ver equipos'}
                     </Button>
                   </Link>
                 </div>
@@ -599,9 +739,15 @@ export default function MatchDetail() {
 
             <Panel
               icono={ClipboardList}
-              titulo="Titulares"
+              titulo={armaAlineacion ? 'El plantel' : 'Titulares'}
               contador={`${titulars.length}/${match.max_players}`}
-              bajada={titulars.length > 0 ? 'Tocá la foto para verla más grande.' : undefined}
+              bajada={
+                titulars.length > 0
+                  ? (armaAlineacion
+                    ? 'Los que están para jugar. Quién arranca se decide en la alineación.'
+                    : 'Tocá la foto para verla más grande.')
+                  : undefined
+              }
               tono="turf"
               testId="titulars-panel"
               contentClassName="space-y-3 p-4 sm:p-5"
@@ -641,6 +787,11 @@ export default function MatchDetail() {
                     index={index}
                     canManage={canEditRegistrations && actionLoading !== `remove-${registration.id}`}
                     onRemove={() => handleRemoveRegistration(registration)}
+                    attendanceOptions={canMarkAttendance ? attendanceOptions : null}
+                    onAttendanceChange={canMarkAttendance ? handleAttendanceChange : null}
+                    attendanceSaving={attendanceSaving === registration.player_id}
+                    nota={notas[registration.player_id]?.text}
+                    onNoteSave={canMarkAttendance ? handleNoteSave : null}
                   />
                 ))
               )}
@@ -648,9 +799,15 @@ export default function MatchDetail() {
 
             <Panel
               icono={Users}
-              titulo="Suplentes"
+              titulo={armaAlineacion ? 'En espera' : 'Suplentes'}
               contador={suplentes.length}
-              bajada={suplentes.length > 0 ? 'Entran por orden si se cae un titular.' : undefined}
+              bajada={
+                suplentes.length > 0
+                  ? (armaAlineacion
+                    ? 'Se anotaron después del cupo: todavía no están en el plantel.'
+                    : 'Entran por orden si se cae un titular.')
+                  : undefined
+              }
               tono="orange"
               testId="suplentes-panel"
               contentClassName="space-y-3 p-4 sm:p-5"
@@ -669,6 +826,11 @@ export default function MatchDetail() {
                     index={index}
                     canManage={canEditRegistrations && actionLoading !== `remove-${registration.id}`}
                     onRemove={() => handleRemoveRegistration(registration)}
+                    attendanceOptions={canMarkAttendance ? attendanceOptions : null}
+                    onAttendanceChange={canMarkAttendance ? handleAttendanceChange : null}
+                    attendanceSaving={attendanceSaving === registration.player_id}
+                    nota={notas[registration.player_id]?.text}
+                    onNoteSave={canMarkAttendance ? handleNoteSave : null}
                   />
                 ))
               )}
@@ -700,7 +862,7 @@ export default function MatchDetail() {
                   </Button>
                 )}
 
-                {['cerrado', 'equipos_generados'].includes(match.status) && (
+                {tieneEquipos && ['cerrado', 'equipos_generados'].includes(match.status) && (
                   <Button
                     onClick={handleGenerateTeams}
                     disabled={!!actionLoading}
@@ -709,11 +871,15 @@ export default function MatchDetail() {
                     data-testid="secondary-generate-teams"
                   >
                     <Shuffle className="w-4 h-4 mr-2" aria-hidden="true" />
-                    {actionLoading === 'generate' ? 'Generando...' : (match.status === 'equipos_generados' ? 'Recalcular equipos' : 'Generar equipos')}
+                    {actionLoading === 'generate'
+                      ? 'Trabajando...'
+                      : armaAlineacion
+                        ? (match.status === 'equipos_generados' ? 'Rearmar alineación' : 'Armar alineación')
+                        : (match.status === 'equipos_generados' ? 'Recalcular equipos' : 'Generar equipos')}
                   </Button>
                 )}
 
-                {match.status === 'equipos_confirmados' && (
+                {(match.status === 'equipos_confirmados' || finalizaDesdeCerrado) && (
                   <Button
                     onClick={handleFinalize}
                     disabled={!!actionLoading}

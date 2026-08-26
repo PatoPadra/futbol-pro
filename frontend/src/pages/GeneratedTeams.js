@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Check, Shuffle, ArrowLeft, ArrowRightLeft, Edit3, Save, X, Loader2, AlertTriangle, Info, Users, CircleDashed, ShieldCheck, Swords, LayoutGrid } from 'lucide-react';
+import { Check, Shuffle, ArrowLeft, ArrowRightLeft, ArrowDownToLine, ArrowUpFromLine, Edit3, Save, X, Loader2, AlertTriangle, Info, Users, CircleDashed, ShieldCheck, Swords, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildPhotoUrl, initialsFromName } from '@/utils/photos';
 import PositionBadge from '@/components/common/PositionBadge';
@@ -125,9 +125,26 @@ export default function GeneratedTeams() {
   const profileId = user?.profile_id || user?.profile?.id;
   const isOrganizer = Boolean(match && (match?.can_manage || match.organizer_id === profileId || user?.role === 'admin'));
 
+  // Qué muestra esta pantalla lo decide el modo del partido. En el modo con DT
+  // hay UN equipo — el nuestro — y un banco, y el rival es apenas un nombre: no
+  // hay segundo plantel que dibujar ni balance que medir.
+  const capacidades = match?.capabilities || {};
+  const esDT = capacidades.opponent === 'externo';
+  const tieneBanco = Boolean(capacidades.tiene_banco);
+  const rival = match?.away_label || 'Rival';
+  const nuestroEquipo = match?.home_label || 'Equipo A';
+
   const currentAssignments = editMode ? editAssignments : (teams?.assignments || []);
-  const teamA = currentAssignments.filter((a) => a.team === 'A');
+  const enBanco = (a) => tieneBanco && a.role === 'suplente';
+  const teamA = currentAssignments.filter((a) => a.team === 'A' && !enBanco(a));
   const teamB = currentAssignments.filter((a) => a.team === 'B');
+  const banco = currentAssignments.filter((a) => a.team === 'A' && enBanco(a));
+
+  // La cancha dibuja por equipo, así que el banco no puede viajar en la lista:
+  // aparecerían parados en el campo jugadores que arrancan afuera.
+  const assignmentsEnCancha = tieneBanco
+    ? currentAssignments.filter((a) => !enBanco(a))
+    : currentAssignments;
   const availableFormations = teams?.available_formations || [];
   const teamSummaryA = teams?.team_summaries?.A;
   const teamSummaryB = teams?.team_summaries?.B;
@@ -149,6 +166,14 @@ export default function GeneratedTeams() {
     setEditAssignments((prev) => prev.map((a) => (
       a.player_id === playerId
         ? { ...a, team: a.team === 'A' ? 'B' : 'A', is_manual: true }
+        : a
+    )));
+  };
+
+  const handleToggleRole = (playerId) => {
+    setEditAssignments((prev) => prev.map((a) => (
+      a.player_id === playerId
+        ? { ...a, role: a.role === 'suplente' ? 'titular' : 'suplente', is_manual: true }
         : a
     )));
   };
@@ -303,7 +328,27 @@ export default function GeneratedTeams() {
           )}
         </div>
 
-        {editMode && (
+        {editMode && (tieneBanco ? (
+          // Con banco el movimiento no es "al otro equipo" (no hay otro equipo):
+          // es entrar al once o irse afuera.
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-11 w-11 min-h-11 min-w-11 p-0 shrink-0 text-slate-600 hover:text-turf-accessible hover:bg-turf/10 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            onClick={() => handleToggleRole(a.player_id)}
+            data-testid={`toggle-role-${a.player_id}`}
+            title={a.role === 'suplente' ? 'Poner de titular' : 'Mandar al banco'}
+            aria-label={
+              a.role === 'suplente'
+                ? `Poner a ${a.player_name} de titular`
+                : `Mandar a ${a.player_name} al banco`
+            }
+          >
+            {a.role === 'suplente'
+              ? <ArrowUpFromLine className="w-4 h-4" />
+              : <ArrowDownToLine className="w-4 h-4" />}
+          </Button>
+        ) : (
           <Button
             size="sm"
             variant="ghost"
@@ -315,7 +360,7 @@ export default function GeneratedTeams() {
           >
             <ArrowRightLeft className="w-4 h-4" />
           </Button>
-        )}
+        ))}
       </div>
     );
   };
@@ -339,10 +384,10 @@ export default function GeneratedTeams() {
 
   const canSeeSummaries = isOrganizer || user?.role === 'admin';
 
-  const rosterPanel = (team, jugadores, summary) => (
+  const rosterPanel = (team, jugadores, summary, subtitulo = 'Plantel') => (
     <TeamPanel
       team={team}
-      subtitulo="Plantel"
+      subtitulo={subtitulo}
       cantidad={jugadores.length}
       cantidadLabel={jugadores.length === 1 ? 'jugador' : 'jugadores'}
       testId={team === 'A' ? 'team-a-card' : 'team-b-card'}
@@ -356,6 +401,44 @@ export default function GeneratedTeams() {
         </div>
       )}
     </TeamPanel>
+  );
+
+  /**
+   * El banco.
+   *
+   * Va en su propio panel y no como una sección del plantel porque es una
+   * decisión del DT y se mira aparte: "quién arranca" y "quién tengo para
+   * cambiar" son dos preguntas distintas.
+   */
+  const bancoPanel = (
+    <section
+      className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-lift"
+      data-testid="bench-card"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-orange/10 text-orange-accessible"
+          >
+            <Users className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-heading text-base font-bold uppercase tracking-tight text-slate-900 sm:text-lg">
+              El banco
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-600">
+              {banco.length} {banco.length === 1 ? 'jugador' : 'jugadores'} para cambiar
+            </p>
+          </div>
+        </div>
+      </header>
+      <div className="p-4 sm:p-5">
+        <div className="-mx-2">
+          {banco.map((a) => <PlayerRow key={a.player_id} a={a} team="A" />)}
+        </div>
+      </div>
+    </section>
   );
 
   const pendingPitch = (team, formacion) => {
@@ -393,17 +476,31 @@ export default function GeneratedTeams() {
 
         <PageHeader
           slug="equipos"
-          eyebrow="Ya está sorteado"
-          titulo="Equipos"
-          bajada="Así quedaron los dos equipos. Mirá cómo se paran en la cancha y quién te toca de compañero."
+          eyebrow={esDT ? `Contra ${rival}` : 'Ya está sorteado'}
+          titulo={esDT ? 'La alineación' : 'Equipos'}
+          bajada={
+            esDT
+              ? 'Los que arrancan, los que esperan en el banco, y cómo se para el equipo en la cancha.'
+              : 'Así quedaron los dos equipos. Mirá cómo se paran en la cancha y quién te toca de compañero.'
+          }
           icono={Swords}
           testId="equipos-header"
           meta={(
             <>
-              <HeaderChip testId="balance-badge">
-                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${balanceDotClass}`} />
-                Balance: {balancePct}%
-              </HeaderChip>
+              {/* El balance compara dos equipos. Con uno solo no significa nada,
+                  así que no se muestra en vez de mostrar un 100% inventado. */}
+              {!esDT && (
+                <HeaderChip testId="balance-badge">
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${balanceDotClass}`} />
+                  Balance: {balancePct}%
+                </HeaderChip>
+              )}
+              {esDT && banco.length > 0 && (
+                <HeaderChip testId="bench-badge">
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  {banco.length} en el banco
+                </HeaderChip>
+              )}
               {teams.formation_a && (
                 <HeaderChip>
                   <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
@@ -437,7 +534,7 @@ export default function GeneratedTeams() {
                     <Edit3 className="w-4 h-4 mr-2" /> Ajustar
                   </Button>
                   <Button data-testid="regenerate-teams-btn" variant="outline" shape="pill" onClick={handleRegenerate} disabled={!!actionLoading} className="px-6 min-h-11 bg-white">
-                    {actionLoading === 'regenerate' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Shuffle className="w-4 h-4 mr-2" />} Recalcular
+                    {actionLoading === 'regenerate' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Shuffle className="w-4 h-4 mr-2" />} {esDT ? 'Rearmar' : 'Recalcular'}
                   </Button>
                 </>
               )}
@@ -458,7 +555,11 @@ export default function GeneratedTeams() {
         {editMode && (
           <div className="flex items-start gap-3 rounded-2xl border border-turf/25 bg-turf/5 px-4 py-3 text-sm text-slate-700" data-testid="edit-mode-hint">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-turf-accessible" aria-hidden="true" />
-            <p>Tocá <ArrowRightLeft className="w-3.5 h-3.5 inline mx-0.5 align-text-top" aria-hidden="true" /> para mandar a un jugador al otro equipo, o elegí su posición en el desplegable. No olvides <strong>Guardar Cambios</strong> al terminar.</p>
+            {tieneBanco ? (
+              <p>Tocá <ArrowDownToLine className="w-3.5 h-3.5 inline mx-0.5 align-text-top" aria-hidden="true" /> para mandar a un jugador al banco y <ArrowUpFromLine className="w-3.5 h-3.5 inline mx-0.5 align-text-top" aria-hidden="true" /> para meterlo en el once, o elegí su posición en el desplegable. No olvides <strong>Guardar Cambios</strong> al terminar.</p>
+            ) : (
+              <p>Tocá <ArrowRightLeft className="w-3.5 h-3.5 inline mx-0.5 align-text-top" aria-hidden="true" /> para mandar a un jugador al otro equipo, o elegí su posición en el desplegable. No olvides <strong>Guardar Cambios</strong> al terminar.</p>
+            )}
           </div>
         )}
 
@@ -468,7 +569,9 @@ export default function GeneratedTeams() {
               <p className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">Cambiar formación</p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="flex-1">
-                  <label className="text-xs font-semibold text-slate-600" htmlFor="formation-a-select">Equipo A</label>
+                  <label className="text-xs font-semibold text-slate-600" htmlFor="formation-a-select">
+                    {esDT ? nuestroEquipo : 'Equipo A'}
+                  </label>
                   <Select value={editFormationA} onValueChange={setEditFormationA}>
                     <SelectTrigger id="formation-a-select" className="mt-1 h-11" data-testid="formation-a-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -476,15 +579,18 @@ export default function GeneratedTeams() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1">
-                  <label className="text-xs font-semibold text-slate-600" htmlFor="formation-b-select">Equipo B</label>
-                  <Select value={editFormationB} onValueChange={setEditFormationB}>
-                    <SelectTrigger id="formation-b-select" className="mt-1 h-11" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* El rival no está en la app: no tiene formación que elegir. */}
+                {!esDT && (
+                  <div className="flex-1">
+                    <label className="text-xs font-semibold text-slate-600" htmlFor="formation-b-select">Equipo B</label>
+                    <Select value={editFormationB} onValueChange={setEditFormationB}>
+                      <SelectTrigger id="formation-b-select" className="mt-1 h-11" data-testid="formation-b-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {availableFormations.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -495,9 +601,13 @@ export default function GeneratedTeams() {
             <SectionHeading
               icono={LayoutGrid}
               titulo="Cómo se paran"
-              bajada="Los dos equipos con su formación. Cada jugador está en el puesto que le tocó."
+              bajada={
+                esDT
+                  ? 'Los once que arrancan, cada uno en su puesto.'
+                  : 'Los dos equipos con su formación. Cada jugador está en el puesto que le tocó.'
+              }
             />
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className={esDT ? 'grid grid-cols-1 gap-6' : 'grid grid-cols-1 gap-6 md:grid-cols-2'}>
               <div className="space-y-2">
                 {incompleteA && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900" data-testid="incomplete-formation-a">
@@ -506,9 +616,10 @@ export default function GeneratedTeams() {
                   </div>
                 )}
                 {formationChangedA ? pendingPitch('A', editFormationA) : (
-                  <FootballPitch assignments={currentAssignments} formation={editMode ? editFormationA : teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor={TEAM_COLORS.A} />
+                  <FootballPitch assignments={assignmentsEnCancha} formation={editMode ? editFormationA : teams.formation_a} coords={teams.coords_a} teamLabel="A" teamColor={TEAM_COLORS.A} />
                 )}
               </div>
+              {!esDT && (
               <div className="space-y-2">
                 {incompleteB && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900" data-testid="incomplete-formation-b">
@@ -517,18 +628,21 @@ export default function GeneratedTeams() {
                   </div>
                 )}
                 {formationChangedB ? pendingPitch('B', editFormationB) : (
-                  <FootballPitch assignments={currentAssignments} formation={editMode ? (editFormationB || editFormationA) : (teams.formation_b || teams.formation_a)} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor={TEAM_COLORS.B} />
+                  <FootballPitch assignments={assignmentsEnCancha} formation={editMode ? (editFormationB || editFormationA) : (teams.formation_b || teams.formation_a)} coords={teams.coords_b || teams.coords_a} teamLabel="B" teamColor={TEAM_COLORS.B} />
                 )}
               </div>
+              )}
             </div>
           </section>
         )}
 
-        {(teamSummaryA || teamSummaryB) && (
+        {/* Las dos piezas de abajo comparan un equipo contra el otro. Con un
+            solo plantel no hay nada que comparar. */}
+        {!esDT && (teamSummaryA || teamSummaryB) && (
           <GenderSplit resumenA={teamSummaryA} resumenB={teamSummaryB} />
         )}
 
-        {canSeeSummaries && (teamSummaryA || teamSummaryB) && (
+        {!esDT && canSeeSummaries && (teamSummaryA || teamSummaryB) && (
           <BalanceMeter
             pct={balancePct}
             valorA={typeof teamSummaryA?.total_value === 'number' ? teamSummaryA.total_value : undefined}
@@ -540,13 +654,26 @@ export default function GeneratedTeams() {
         <section className="space-y-4">
           <SectionHeading
             icono={Users}
-            titulo="Los planteles"
-            bajada="Quién juega en cada equipo, con su puesto y su valor."
+            titulo={esDT ? 'El plantel' : 'Los planteles'}
+            bajada={
+              esDT
+                ? 'Los que arrancan y los que esperan, con su puesto y su valor.'
+                : 'Quién juega en cada equipo, con su puesto y su valor.'
+            }
           />
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Reveal from="up">{rosterPanel('A', teamA, teamSummaryA)}</Reveal>
-            <Reveal from="up" delay={100}>{rosterPanel('B', teamB, teamSummaryB)}</Reveal>
-          </div>
+          {esDT ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <Reveal from="up">{rosterPanel('A', teamA, teamSummaryA, 'Titulares')}</Reveal>
+              {banco.length > 0 && (
+                <Reveal from="up" delay={100}>{bancoPanel}</Reveal>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <Reveal from="up">{rosterPanel('A', teamA, teamSummaryA)}</Reveal>
+              <Reveal from="up" delay={100}>{rosterPanel('B', teamB, teamSummaryB)}</Reveal>
+            </div>
+          )}
         </section>
       </div>
 

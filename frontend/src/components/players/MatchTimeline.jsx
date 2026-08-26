@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Hand, Shirt, Target, Users } from 'lucide-react';
+import { Check, ChevronRight, Hand, Minus, Shirt, Target, Users, X } from 'lucide-react';
 
 import RatingBadge from '@/components/common/RatingBadge';
 import { cn } from '@/lib/utils';
@@ -83,6 +83,36 @@ export default function MatchTimeline({ history, posMap, canViewPeerScores }) {
   );
 }
 
+/**
+ * Cómo salió el partido para el jugador de esta fila.
+ *
+ * El color no es la única señal: cada resultado tiene su forma (tilde, cruz,
+ * guión) y el marcador está escrito al lado, desde el lado del jugador.
+ */
+const DESENLACES = {
+  ganado: { icono: Check, clase: 'bg-turf/10 text-turf-accessible ring-turf/25', label: 'Ganado' },
+  empatado: { icono: Minus, clase: 'bg-slate-100 text-slate-700 ring-slate-200', label: 'Empatado' },
+  perdido: { icono: X, clase: 'bg-red-50 text-red-700 ring-red-200', label: 'Perdido' },
+};
+
+function ChipDeResultado({ h }) {
+  const tono = DESENLACES[h.outcome];
+  if (!tono) return null;
+  const Icono = tono.icono;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ring-inset ${tono.clase}`}
+      title={`${tono.label} ${h.goals_for}-${h.goals_against}`}
+      data-testid={`history-outcome-${h.match_id}`}
+    >
+      <Icono className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+      <span className="tabular-nums">{h.goals_for}-{h.goals_against}</span>
+      <span className="sr-only">{tono.label}</span>
+    </span>
+  );
+}
+
 function FilaPartido({ h, posMap, canViewPeerScores }) {
   const partes = partesDeFecha(h.match_date);
   const stats = h.stats || {};
@@ -112,6 +142,7 @@ function FilaPartido({ h, posMap, canViewPeerScores }) {
           <p className="truncate text-sm font-semibold text-slate-900">{h.match_title}</p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <ChipDeResultado h={h} />
             {h.position_played && (
               <span className="inline-flex items-center rounded-full bg-turf/10 px-2 py-0.5 text-[11px] font-semibold text-turf-accessible">
                 {posMap[h.position_played] || h.position_played}
