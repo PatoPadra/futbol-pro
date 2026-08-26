@@ -23,6 +23,13 @@ import {
  *
  * El estado del form (react-hook-form + zod) vive en GroupDetail; aca solo se
  * pinta.
+ *
+ * NO va sticky, aunque antes lo estaba. Cuando era el unico panel de la columna
+ * derecha funcionaba, pero al sumarse el del modo de los partidos empezo a
+ * pisarlo: sticky corre al panel de su lugar en el flujo y no mueve a sus
+ * hermanos, asi que el de abajo le queda encima. Y hacer sticky a la columna
+ * entera tampoco sirve — los dos paneles juntos miden mas que una pantalla, o
+ * sea que el fondo quedaria inalcanzable.
  */
 export default function InviteMemberPanel({
   onSubmit,
@@ -38,7 +45,6 @@ export default function InviteMemberPanel({
       titulo="Sumar jugador"
       descripcion="Podés sumar jugadores frecuentes o invitados al grupo."
       tono="mesh"
-      className="xl:sticky xl:top-20"
     >
       <form onSubmit={onSubmit} className="space-y-5" noValidate data-testid="group-invite-form">
         {serverError && (
