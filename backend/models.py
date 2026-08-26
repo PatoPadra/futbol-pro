@@ -183,6 +183,12 @@ class MatchResultModel(BaseModel):
 
     home_score: int
     away_score: int
+    # Sólo se llenan cuando el partido es una llave de torneo que se definió por
+    # penales. El marcador de arriba sigue siendo el de los noventa minutos.
+    home_penalties: Optional[int] = None
+    away_penalties: Optional[int] = None
+    # El resultado bajó del torneo: no se edita desde el partido.
+    from_fixture: bool = False
     notes: Optional[str] = None
     loaded_by: Optional[str] = None
     loaded_by_name: Optional[str] = None
@@ -196,6 +202,10 @@ class SetMatchResultRequest(BaseModel):
     # veintidós de una sola vez.
     home_score: int = Field(ge=0, le=99)
     away_score: int = Field(ge=0, le=99)
+    # Sólo tienen sentido si el partido es una llave de torneo que hay que
+    # definir. En cualquier otro caso la ruta los rechaza.
+    home_penalties: Optional[int] = Field(default=None, ge=0, le=50)
+    away_penalties: Optional[int] = Field(default=None, ge=0, le=50)
     notes: Optional[str] = None
 
 
@@ -227,6 +237,11 @@ class MatchResponse(BaseModel):
     capabilities: dict = Field(default_factory=dict)
     tracked_stats: List[str] = Field(default_factory=lambda: list(CLASSIC_TRACKED_STATS))
     opponent_name: Optional[str] = None
+    # Cuando el partido es la llave de un torneo. Los tres van juntos o ninguno.
+    fixture_id: Optional[str] = None
+    fixture_side: Optional[Literal["home", "away"]] = None
+    tournament_id: Optional[str] = None
+    tournament_name: Optional[str] = None
     result: Optional[MatchResultModel] = None
     # Cómo se llaman los dos lados del marcador. Hoy son siempre Equipo A y
     # Equipo B; en modo Entrenador van a ser mi equipo y el rival. Se resuelven
@@ -526,6 +541,26 @@ class AddTournamentTeamRequest(BaseModel):
 class SetFixtureResultRequest(BaseModel):
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
+    # Sólo en las llaves que tienen que definir, y sólo si los noventa minutos
+    # terminaron empatados. Las reglas viven en services/fixture_results.
+    home_penalties: Optional[int] = Field(default=None, ge=0, le=50)
+    away_penalties: Optional[int] = Field(default=None, ge=0, le=50)
+
+
+class CreateFixtureMatchRequest(BaseModel):
+    """El partido de MI grupo para una llave del torneo.
+
+    El grupo va explícito porque quien organiza los dos lados tiene que poder
+    elegir de cuál está creando el partido.
+    """
+
+    group_id: str
+    modality: int
+    date: str
+    time: str
+    location: str
+    maps_link: Optional[str] = None
+    title: Optional[str] = None
 
 
 class TournamentTeamResponse(BaseModel):
@@ -552,6 +587,8 @@ class TournamentFixtureResponse(BaseModel):
     home_team_name: Optional[str] = None
     away_team_name: Optional[str] = None
     home_score: Optional[int] = None
+    home_penalties: Optional[int] = None
+    away_penalties: Optional[int] = None
     away_score: Optional[int] = None
     status: str
     winner_team_id: Optional[str] = None

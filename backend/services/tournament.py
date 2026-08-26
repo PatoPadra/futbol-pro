@@ -322,16 +322,31 @@ def clasificados(teams: list, fixtures: list, qualifiers_per_zone: int) -> list:
 
 def ganador_de(fixture: dict) -> str | None:
     """
-    Quién ganó una llave. None si está pendiente o quedó empatada.
+    Quién ganó una llave. None si está pendiente o si quedó sin definir.
 
-    En eliminación directa un empate no define nada, y acá no se inventa ninguna
-    regla de desempate: el resultado se vuelve a cargar con el alargue o los
-    penales ya sumados, que es como se resuelve en la cancha.
+    El empate en los noventa minutos NO define, pero ahora se puede cargar la
+    tanda de penales aparte y esa sí define. Antes la única salida era volver a
+    cargar el resultado con los penales ya sumados a los goles, o sea mentirle al
+    marcador: un 2-2 que se ganó 4-3 quedaba escrito como 6-5, y ese numero
+    despues aparecia en la tabla y en el historial del jugador.
+
+    El marcador de los noventa sigue siendo el que cuenta para todo lo demás
+    (tabla de posiciones, diferencia de gol, racha del jugador). Los penales sólo
+    dicen quién pasa de ronda.
     """
     if fixture.get("status") != "jugado":
         return None
+
     local = fixture.get("home_score")
     visitante = fixture.get("away_score")
-    if local is None or visitante is None or local == visitante:
+    if local is None or visitante is None:
         return None
-    return fixture["home_team_id"] if local > visitante else fixture["away_team_id"]
+
+    if local != visitante:
+        return fixture["home_team_id"] if local > visitante else fixture["away_team_id"]
+
+    pen_local = fixture.get("home_penalties")
+    pen_visitante = fixture.get("away_penalties")
+    if pen_local is None or pen_visitante is None or pen_local == pen_visitante:
+        return None
+    return fixture["home_team_id"] if pen_local > pen_visitante else fixture["away_team_id"]

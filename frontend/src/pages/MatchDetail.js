@@ -497,6 +497,9 @@ export default function MatchDetail() {
               {match.opponent_name && (
                 <MetaChip icono={Swords} tono="orange">vs {match.opponent_name}</MetaChip>
               )}
+              {match.tournament_name && (
+                <MetaChip icono={Trophy}>{match.tournament_name}</MetaChip>
+              )}
               {/* El tipo se muestra sólo cuando es práctica. Un chip "Oficial"
                   en todos los partidos no enseña nada: lo que informa es la
                   excepción. */}

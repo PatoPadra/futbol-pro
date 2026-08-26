@@ -301,12 +301,22 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
 
     group_name = group["name"] if group else None
 
+    # El nombre del torneo, para que la pantalla pueda decir de dónde viene el
+    # resultado. Una consulta más y sólo cuando el partido es de torneo.
+    tournament_name = None
+    if match.get("tournament_id"):
+        torneo = await db.tournaments.find_one(
+            {"id": match["tournament_id"]}, {"_id": 0, "name": 1}
+        )
+        tournament_name = (torneo or {}).get("name")
+
     return {
         # `counted_player_ids` es contabilidad interna del contador de partidos
         # jugados: no le sirve a nadie del otro lado y sólo agrega ruido.
         **{k: v for k, v in match.items() if k != "counted_player_ids"},
         **datos_de_modo(match, group_name=group_name),
         "group_name": group_name,
+        "tournament_name": tournament_name,
         "my_group_role": membership.get("member_role") if user["role"] != "admin" else "admin",
         "organizer_name": organizer["name"] if organizer else "Desconocido",
         "titular_count": titular_count,
@@ -378,6 +388,7 @@ async def delete_match(match_id: str, user=Depends(get_current_user)):
     await db.team_generations.delete_many({"match_id": match_id})
     await db.match_outcomes.delete_many({"match_id": match_id})
     await db.player_match_notes.delete_many({"match_id": match_id})
+    # El partido se va, pero la llave del torneo queda: su resultado vive ahí.
     await db.matches.delete_one({"id": match_id})
 
     return {"message": "Partido borrado correctamente"}

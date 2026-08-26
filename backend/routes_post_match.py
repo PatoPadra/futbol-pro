@@ -15,6 +15,7 @@ from models import (
     StatsProposalRequest,
     StatsVoteRequest,
 )
+from services.fixture_results import aplicar_resultado, orientar
 from services.match_outcomes import recalcular_outcomes
 from services.matches import (
     ensure_match_manager,
@@ -162,6 +163,20 @@ async def set_match_result(match_id: str, data: SetMatchResultRequest, user=Depe
     profile = await get_my_profile_or_404(user)
     notas = (data.notes or "").strip()
 
+    # Si el partido es una llave de torneo, el dueño del marcador es el fixture.
+    # Escribirlo acá dejaría dos verdades para el mismo número — y en una llave
+    # con los dos grupos enlazados, dos escritores. Así que se delega: la llave
+    # avanza, el torneo se cierra si corresponde, y la copia baja a este partido
+    # y al del rival.
+    if match.get("fixture_id"):
+        return await _resultado_por_fixture(match, data, notas, profile)
+
+    if data.home_penalties is not None or data.away_penalties is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Los penales sólo se cargan en un partido de torneo que haya que definir",
+        )
+
     resultado = {
         "home_score": data.home_score,
         "away_score": data.away_score,
@@ -187,6 +202,66 @@ async def set_match_result(match_id: str, data: SetMatchResultRequest, user=Depe
         "message": "Resultado corregido" if ya_estaba else "Resultado guardado",
         "result": resultado,
         "rated_players": resumen["rows"],
+    }
+
+
+async def _resultado_por_fixture(match: dict, data, notas: str, profile: dict) -> dict:
+    """Carga el resultado de un partido enlazado, pasando por su llave.
+
+    Lo único delicado acá es la ORIENTACIÓN. El partido habla desde su lado
+    ("les ganamos 3 a 1"), el fixture habla desde el equipo local. Para el
+    partido del grupo visitante, su 3 a 1 es un 1 a 3 en la llave. Darlo vuelta
+    al revés es el error que después nadie encuentra porque el número igual se
+    ve bien, así que la conversión usa la misma función que la copia de vuelta.
+    """
+    fixture = await db.tournament_fixtures.find_one(
+        {"id": match["fixture_id"]}, {"_id": 0}
+    )
+    if not fixture:
+        raise HTTPException(
+            status_code=400,
+            detail="La llave de este partido ya no existe. Desenlazalo desde el torneo.",
+        )
+
+    lado = match.get("fixture_side") or "home"
+    if lado == "away":
+        local, visitante = data.away_score, data.home_score
+        pen_local, pen_visitante = data.away_penalties, data.home_penalties
+    else:
+        local, visitante = data.home_score, data.away_score
+        pen_local, pen_visitante = data.home_penalties, data.away_penalties
+
+    # La nota es del partido y no viaja al torneo, así que se guarda antes: la
+    # bajada del resultado conserva la que encuentre.
+    await db.matches.update_one(
+        {"id": match["id"]},
+        {"$set": {"result": {**(match.get("result") or {}), "notes": notas or None}}},
+    )
+
+    try:
+        actualizado = await aplicar_resultado(
+            fixture,
+            home_score=local,
+            away_score=visitante,
+            home_penalties=pen_local,
+            away_penalties=pen_visitante,
+            actor=profile,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    a_favor, en_contra, pen_a_favor, pen_en_contra = orientar(actualizado, lado)
+    return {
+        "message": "Resultado guardado y cargado al torneo",
+        "result": {
+            "home_score": a_favor,
+            "away_score": en_contra,
+            "home_penalties": pen_a_favor,
+            "away_penalties": pen_en_contra,
+            "notes": notas or None,
+            "from_fixture": True,
+        },
+        "rated_players": 0,
     }
 
 

@@ -334,7 +334,21 @@ export default function MatchResultPanel({
             </div>
 
             {resultado.home_score === resultado.away_score && (
-              <p className="text-center text-sm font-semibold text-slate-600">Empate</p>
+              <p className="text-center text-sm font-semibold text-slate-600">
+                {resultado.home_penalties != null
+                  ? `Empate, ${resultado.home_penalties > resultado.away_penalties ? 'ganamos' : 'perdimos'} ${resultado.home_penalties}-${resultado.away_penalties} por penales`
+                  : 'Empate'}
+              </p>
+            )}
+
+            {resultado.from_fixture && match.tournament_name && (
+              <p
+                className="rounded-2xl border border-secondary/30 bg-secondary/5 px-4 py-2.5 text-center text-xs font-semibold text-secondary"
+                data-testid="result-from-tournament"
+              >
+                Este resultado cuenta para {match.tournament_name}. Al corregirlo
+                acá también se corrige la llave.
+              </p>
             )}
 
             {resultado.notes && (

@@ -57,6 +57,11 @@ INDEX_SPEC = {
         {"keys": [("id", ASCENDING)]},
         {"keys": [("status", ASCENDING)]},
         {"keys": [("group_id", ASCENDING), ("status", ASCENDING)]},
+        # El enganche con los torneos: "los partidos de esta llave" y "los
+        # partidos de este torneo". Sparse porque la enorme mayoría de los
+        # partidos no son de torneo.
+        {"keys": [("fixture_id", ASCENDING)], "sparse": True},
+        {"keys": [("tournament_id", ASCENDING)], "sparse": True},
     ],
     "match_registrations": [
         {"keys": [("id", ASCENDING)]},

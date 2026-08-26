@@ -20,6 +20,7 @@ import PanelSection from '@/components/panels/PanelSection';
 import Reveal from '@/components/common/Reveal';
 import StandingsTable from '@/components/tournaments/StandingsTable';
 import FixtureRow from '@/components/tournaments/FixtureRow';
+import FixtureMatchDialog from '@/components/tournaments/FixtureMatchDialog';
 import { estadoDe, formatoDe } from '@/constants/torneos';
 import { cn } from '@/lib/utils';
 
@@ -66,12 +67,64 @@ export default function TournamentDetail() {
   const standings = useMemo(() => datos?.standings || [], [datos]);
 
   const puedeGestionar = !!torneo?.can_manage;
+  const [misGrupos, setMisGrupos] = useState([]);
+  const [creando, setCreando] = useState(null);
 
-  const guardarResultado = async (fixtureId, local, visitante) => {
+  // Los grupos que organizo. Hace falta para saber de qué lado de una llave
+  // puedo crear el partido: el plantel que se anota es el de ESE grupo.
+  useEffect(() => {
+    api.get('/groups')
+      .then((res) => setMisGrupos(
+        (res.data || []).filter((g) => g.can_manage || g.my_member_role === 'organizador'),
+      ))
+      .catch(() => setMisGrupos([]));
+  }, []);
+
+  const idsQueOrganizo = new Set(misGrupos.map((g) => g.id));
+
+  /**
+   * De qué lados de esta llave puedo crear el partido.
+   *
+   * Uno por grupo mío que juegue y que todavía no lo haya creado. Normalmente
+   * es cero o uno; son dos sólo si el mismo organizador maneja los dos grupos
+   * que se están cruzando, que en un torneo entre amigos pasa.
+   */
+  const opcionesDePartido = (fixture) => {
+    const yaCreados = new Set((fixture.matches || []).map((m) => m.fixture_side));
+    const porId = new Map(equipos.map((t) => [t.id, t]));
+
+    return [
+      { lado: 'home', mio: fixture.home_team_id, rival: fixture.away_team_name },
+      { lado: 'away', mio: fixture.away_team_id, rival: fixture.home_team_name },
+    ]
+      .map(({ lado, mio, rival }) => {
+        const equipo = porId.get(mio);
+        if (!equipo || yaCreados.has(lado) || !idsQueOrganizo.has(equipo.group_id)) return null;
+        return { group_id: equipo.group_id, name: equipo.name, rival: rival || 'Rival', lado };
+      })
+      .filter(Boolean);
+  };
+
+  const crearPartidoDeFixture = async (payload) => {
+    try {
+      const res = await api.post(
+        `/tournaments/${id}/fixtures/${creando.fixture.id}/match`,
+        payload,
+      );
+      toast.success(res.data.message || 'Partido creado');
+      await cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No pudimos crear el partido');
+      throw err;
+    }
+  };
+
+  const guardarResultado = async (fixtureId, local, visitante, penales = {}) => {
     try {
       const res = await api.put(`/tournaments/${id}/fixtures/${fixtureId}`, {
         home_score: local,
         away_score: visitante,
+        ...penales,
       });
       // El backend devuelve el fixture y la tabla recalculados: los usamos en vez
       // de volver a pedir el torneo entero, así cargar una fecha entera no son
@@ -362,9 +415,21 @@ export default function TournamentDetail() {
                 fixtures={fixtures}
                 puedeEditar={puedeGestionar}
                 onGuardar={guardarResultado}
+                opcionesDePartido={opcionesDePartido}
+                onCrearPartido={(fixture, opciones) => setCreando({ fixture, opciones })}
               />
             </PanelSection>
           </Reveal>
+        )}
+
+        {creando && (
+          <FixtureMatchDialog
+            open
+            onOpenChange={(abierto) => !abierto && setCreando(null)}
+            fixture={creando.fixture}
+            opciones={creando.opciones}
+            onCrear={crearPartidoDeFixture}
+          />
         )}
 
         {puedeGestionar && (
@@ -402,7 +467,7 @@ export default function TournamentDetail() {
  * cargar "la fecha 3", no el partido número 17. Los encabezados de grupo son lo
  * que convierte la lista en algo navegable.
  */
-function GruposDeFixture({ fixtures, puedeEditar, onGuardar }) {
+function GruposDeFixture({ fixtures, puedeEditar, onGuardar, opcionesDePartido, onCrearPartido }) {
   const grupos = [];
   const indice = new Map();
 
@@ -443,6 +508,8 @@ function GruposDeFixture({ fixtures, puedeEditar, onGuardar }) {
                 fixture={fx}
                 puedeEditar={puedeEditar}
                 onGuardar={onGuardar}
+                opcionesDePartido={opcionesDePartido?.(fx)}
+                onCrearPartido={onCrearPartido}
               />
             ))}
           </ul>

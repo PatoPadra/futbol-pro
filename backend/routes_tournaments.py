@@ -19,12 +19,25 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
-from constants import TOURNAMENT_FORMAT_MAP
+from constants import (
+    DEFAULT_MATCH_TYPE,
+    MODALITY_CAPACITY,
+    TOURNAMENT_FORMAT_MAP,
+    capacidades_de,
+    resolver_stats_seguidas,
+)
 from database import db
 from models import (
+    CreateFixtureMatchRequest,
     AddTournamentTeamRequest,
     CreateTournamentRequest,
     SetFixtureResultRequest,
+)
+from services.fixture_results import (
+    admite_penales,
+    aplicar_resultado,
+    bajar_a_los_partidos,
+    desenlazar_partidos,
 )
 from services.permissions import get_group_or_404, get_group_membership
 from services.profiles import get_my_profile_or_404
@@ -128,13 +141,35 @@ async def _members_count_by_group(group_ids: list) -> dict:
     return {row["_id"]: row["total"] async for row in cursor}
 
 
-def _serializar_fixture(fixture: dict, nombres: dict) -> dict:
+async def _partidos_por_fixture(tournament_id: str) -> dict:
+    """Los partidos que los grupos crearon para las llaves de este torneo.
+
+    Una sola consulta para todo el torneo: serializar fixture por fixture
+    disparaba una por llave, y una liga de seis equipos son quince.
+    """
+    partidos = await db.matches.find(
+        {"tournament_id": tournament_id},
+        {"_id": 0, "id": 1, "fixture_id": 1, "fixture_side": 1, "group_id": 1,
+         "title": 1, "status": 1, "date": 1},
+    ).to_list(500)
+
+    por_fixture = {}
+    for partido in partidos:
+        por_fixture.setdefault(partido.get("fixture_id"), []).append(partido)
+    return por_fixture
+
+
+def _serializar_fixture(fixture: dict, nombres: dict, partidos: dict | None = None) -> dict:
     return clean_mongo({
         **fixture,
         "stage_label": stage_label(fixture["stage"], fixture.get("zone")),
         "home_team_name": nombres.get(fixture.get("home_team_id")),
         "away_team_name": nombres.get(fixture.get("away_team_id")),
         "winner_team_id": ganador_de(fixture),
+        # Los penales sólo tienen sentido donde hay que definir; la pantalla usa
+        # esto para no ofrecer los campos en un partido de liga.
+        "allows_penalties": admite_penales(fixture),
+        "matches": (partidos or {}).get(fixture["id"], []),
     })
 
 
@@ -284,7 +319,10 @@ async def get_tournament(tournament_id: str, user=Depends(get_current_user)):
             clean_mongo({**t, "members_count": counts.get(t["group_id"], 0)})
             for t in teams
         ],
-        "fixtures": [_serializar_fixture(fx, nombres) for fx in fixtures],
+        "fixtures": [
+            _serializar_fixture(fx, nombres, await _partidos_por_fixture(tournament_id))
+            for fx in fixtures
+        ],
         "standings": tabla_de_posiciones(teams, fixtures),
     }
 
@@ -353,6 +391,19 @@ async def generate_fixture(tournament_id: str, user=Depends(get_current_user)):
     if len(teams) < 2:
         raise HTTPException(
             status_code=400, detail="Hacen falta al menos 2 equipos para armar el fixture"
+        )
+
+    # Regenerar borra las llaves, y con ellas el enganche de los partidos que
+    # los grupos hayan creado. Esos partidos son suyos — tienen inscriptos,
+    # asistencia y evaluaciones adentro — así que no se tocan: se avisa y listo.
+    con_partido = await db.matches.count_documents({"tournament_id": tournament_id})
+    if con_partido:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ya hay partidos creados desde las llaves de este torneo. "
+                "Desenlazalos antes de regenerar el fixture."
+            ),
         )
 
     ya_jugados = await db.tournament_fixtures.count_documents(
@@ -457,129 +508,35 @@ async def set_fixture_result(
             detail="Esta llave todavía no tiene los dos equipos definidos",
         )
 
-    actualizado = {
-        **fixture,
-        "home_score": data.home_score,
-        "away_score": data.away_score,
-        "status": "jugado",
-    }
-    await db.tournament_fixtures.update_one(
-        {"id": fixture_id},
-        {"$set": {
-            "home_score": data.home_score,
-            "away_score": data.away_score,
-            "status": "jugado",
-        }},
-    )
-
-    ganador = ganador_de(actualizado)
-
-    await _propagar_ganador(
-        fixture.get("next_fixture_id"), fixture.get("next_slot"), ganador
-    )
-
-    await _revisar_final(tournament_id)
-
     profile = await get_my_profile_or_404(user)
+
+    # Toda la lógica vive en el service: escribir el marcador, hacer avanzar la
+    # llave en cascada, cerrar el torneo si corresponde y bajarle la copia a los
+    # partidos que los grupos hayan enlazado. La otra puerta de entrada — cargar
+    # el resultado desde el partido — llama exactamente a lo mismo.
+    try:
+        await aplicar_resultado(
+            fixture,
+            home_score=data.home_score,
+            away_score=data.away_score,
+            home_penalties=data.home_penalties,
+            away_penalties=data.away_penalties,
+            actor=profile,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     teams = await _teams_of(tournament_id)
     nombres = {t["id"]: t["name"] for t in teams}
     fixtures = await _fixtures_of(tournament_id)
+    partidos = await _partidos_por_fixture(tournament_id)
     actualizado_doc = await _get_tournament_or_404(tournament_id)
 
     return {
-        "fixtures": [_serializar_fixture(fx, nombres) for fx in fixtures],
+        "fixtures": [_serializar_fixture(fx, nombres, partidos) for fx in fixtures],
         "standings": tabla_de_posiciones(teams, fixtures),
         "tournament": await _serializar_torneo(actualizado_doc, profile, user, teams=teams),
     }
-
-
-async def _propagar_ganador(fixture_id: str | None, slot: str | None, equipo: str | None) -> None:
-    """
-    Sienta a `equipo` en una butaca de la llave siguiente, y limpia en cascada lo
-    que haya quedado abajo si esa butaca cambia de ocupante.
-
-    La cascada es el punto. Antes esto sólo escribía el next_fixture_id
-    INMEDIATO, y con eso alcanza mientras nadie corrija nada. Pero si el torneo
-    ya avanzó dos rondas y se corrige un resultado de octavos que cambia el
-    ganador, el equipo viejo seguía figurando como ganador de cuartos, de semis
-    y hasta como campeón: la llave siguiente ya estaba jugada y su propio avance
-    ya estaba persistido. El torneo quedaba mintiendo sin que nada avisara.
-
-    Ahora, si la butaca cambia de ocupante y esa llave ya estaba jugada, el
-    resultado se borra (se jugó contra otro rival: ya no significa nada) y se
-    sigue hacia abajo desasentando a quien había avanzado desde ahí. Termina
-    solo porque las llaves apuntan siempre hacia adelante.
-
-    `equipo=None` es válido y quiere decir "esta butaca vuelve a estar vacía":
-    pasa cuando un resultado se corrige a empate, que en eliminación no define.
-    """
-    if not fixture_id:
-        return
-
-    siguiente = await db.tournament_fixtures.find_one({"id": fixture_id}, {"_id": 0})
-    if not siguiente:
-        return
-
-    campo = "home_team_id" if slot == "home" else "away_team_id"
-    if siguiente.get(campo) == equipo:
-        return  # nada cambió: no hay por qué tocar lo que ya se jugó
-
-    cambios = {campo: equipo}
-    estaba_jugado = siguiente.get("status") == "jugado"
-    if estaba_jugado:
-        cambios.update({"home_score": None, "away_score": None, "status": "pendiente"})
-
-    await db.tournament_fixtures.update_one({"id": fixture_id}, {"$set": cambios})
-
-    if estaba_jugado:
-        await _propagar_ganador(
-            siguiente.get("next_fixture_id"), siguiente.get("next_slot"), None
-        )
-
-
-async def _revisar_final(tournament_id: str) -> None:
-    """
-    Marca el torneo como finalizado cuando ya no queda nada por jugar.
-
-    En liga y zonas eso es "todos los partidos jugados"; en llaves es "la final
-    tiene ganador". El campeón se guarda en el torneo para no tener que
-    recalcularlo cada vez que alguien abre la pantalla.
-    """
-    fixtures = await _fixtures_of(tournament_id)
-    if not fixtures:
-        return
-
-    tournament = await _get_tournament_or_404(tournament_id)
-    teams = await _teams_of(tournament_id)
-
-    # Todas las ramas escriben estado Y campeón, incluso para "volver atrás":
-    # corregir el resultado de una final ya cargada tiene que DESfinalizar el
-    # torneo, no dejarlo con un campeón viejo que ya no gana nada.
-    final = next((fx for fx in fixtures if fx["stage"] == "final"), None)
-    if final:
-        campeon = ganador_de(final)
-        await db.tournaments.update_one(
-            {"id": tournament_id},
-            {"$set": {
-                "status": "finalizado" if campeon else "eliminatoria",
-                "champion_team_id": campeon,
-            }},
-        )
-        return
-
-    if tournament["format"] == "liga":
-        completo = all(fx["status"] == "jugado" for fx in fixtures)
-        tabla = tabla_de_posiciones(teams, fixtures)
-        campeon = tabla[0]["team_id"] if (completo and tabla) else None
-        await db.tournaments.update_one(
-            {"id": tournament_id},
-            {"$set": {
-                "status": "finalizado" if completo else "fase_grupos",
-                "champion_team_id": campeon,
-            }},
-        )
-    # En zonas_eliminatoria no se finaliza acá: terminar la fase de grupos sólo
-    # habilita generar la eliminatoria (ver /playoffs).
 
 
 @router.post("/{tournament_id}/playoffs")
@@ -662,8 +619,150 @@ async def delete_tournament(tournament_id: str, user=Depends(get_current_user)):
     tournament = await _get_tournament_or_404(tournament_id)
     await _ensure_can_manage(tournament, user)
 
+    fixtures = await _fixtures_of(tournament_id)
+    # Los partidos de los grupos sobreviven al torneo: adentro tienen su gente
+    # anotada, la asistencia y las evaluaciones. Sólo se sueltan.
+    await desenlazar_partidos([fx["id"] for fx in fixtures])
+
     await db.tournament_fixtures.delete_many({"tournament_id": tournament_id})
     await db.tournament_teams.delete_many({"tournament_id": tournament_id})
     await db.tournaments.delete_one({"id": tournament_id})
 
     return {"message": "Torneo borrado"}
+
+
+@router.post("/{tournament_id}/fixtures/{fixture_id}/match")
+async def crear_partido_de_fixture(
+    tournament_id: str,
+    fixture_id: str,
+    data: CreateFixtureMatchRequest,
+    user=Depends(get_current_user),
+):
+    """Crea el partido de MI grupo para esta llave.
+
+    A pedido y por grupo, no automático: una liga de seis equipos son quince
+    llaves, y crear treinta partidos con fecha y cancha inventadas al generar el
+    fixture sería llenarle la lista a todo el mundo de cosas que quizá nunca se
+    jueguen.
+
+    Cada grupo crea el suyo si quiere, así que una llave puede terminar con cero,
+    uno o dos partidos. El que lo crea tiene que organizar ESE grupo: es su
+    plantel el que se va a anotar.
+
+    El partido nace en modo Entrenador, que es exactamente esta situación —
+    nuestro equipo contra un rival que no está en la app.
+    """
+    tournament = await _get_tournament_or_404(tournament_id)
+    profile = await _ensure_can_view(tournament, user)
+
+    fixture = await db.tournament_fixtures.find_one(
+        {"id": fixture_id, "tournament_id": tournament_id}, {"_id": 0}
+    )
+    if not fixture:
+        raise HTTPException(status_code=404, detail="Llave no encontrada")
+    if not fixture.get("home_team_id") or not fixture.get("away_team_id"):
+        raise HTTPException(
+            status_code=400,
+            detail="Esta llave todavía no tiene los dos equipos definidos",
+        )
+    if data.modality not in MODALITY_CAPACITY:
+        raise HTTPException(status_code=400, detail="Modalidad inválida (5-11)")
+
+    teams = await _teams_of(tournament_id)
+    por_id = {t["id"]: t for t in teams}
+    local = por_id.get(fixture["home_team_id"])
+    visitante = por_id.get(fixture["away_team_id"])
+    if not local or not visitante:
+        raise HTTPException(status_code=400, detail="La llave apunta a equipos que ya no están")
+
+    if data.group_id == local["group_id"]:
+        lado, rival = "home", visitante
+    elif data.group_id == visitante["group_id"]:
+        lado, rival = "away", local
+    else:
+        raise HTTPException(status_code=400, detail="Ese grupo no juega esta llave")
+
+    await _ensure_organiza_el_grupo(data.group_id, profile, user)
+
+    ya_existe = await db.matches.count_documents(
+        {"fixture_id": fixture_id, "fixture_side": lado}
+    )
+    if ya_existe:
+        raise HTTPException(
+            status_code=400,
+            detail="Ese grupo ya tiene su partido para esta llave",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    match_id = str(uuid.uuid4())
+    capacidades = capacidades_de("entrenador")
+
+    match_doc = {
+        "id": match_id,
+        "group_id": data.group_id,
+        "organizer_id": profile["id"],
+        "title": (data.title or "").strip() or f"vs {rival['name']}",
+        "modality": data.modality,
+        "date": data.date,
+        "time": data.time,
+        "location": data.location,
+        "maps_link": data.maps_link,
+        "deadline": f"{data.date}T12:00:00+00:00",
+        "status": "abierto",
+        "is_recurring": False,
+        "max_players": MODALITY_CAPACITY[data.modality],
+        "mode": "entrenador",
+        # Un partido de torneo es oficial por definición.
+        "match_type": DEFAULT_MATCH_TYPE,
+        "tracked_stats": resolver_stats_seguidas(capacidades, None),
+        "opponent_name": rival["name"],
+        "fixture_id": fixture_id,
+        "fixture_side": lado,
+        "tournament_id": tournament_id,
+        "result": None,
+        "counted_player_ids": [],
+        "created_at": now,
+    }
+    await db.matches.insert_one(match_doc)
+
+    # Si la llave ya tenía resultado, el partido nace con él puesto.
+    if fixture.get("status") == "jugado":
+        await bajar_a_los_partidos(fixture, profile)
+
+    return {
+        "message": f"Partido creado para {rival['name']}",
+        "match_id": match_id,
+        "fixture_side": lado,
+    }
+
+
+@router.delete("/{tournament_id}/fixtures/{fixture_id}/match/{match_id}")
+async def desenlazar_partido_de_fixture(
+    tournament_id: str,
+    fixture_id: str,
+    match_id: str,
+    user=Depends(get_current_user),
+):
+    """Suelta un partido de su llave. El partido NO se borra.
+
+    Adentro tiene los inscriptos, la asistencia y las evaluaciones del grupo:
+    desenlazar es dejar de contarlo para el torneo, no tirarlo.
+    """
+    tournament = await _get_tournament_or_404(tournament_id)
+    profile = await _ensure_can_view(tournament, user)
+
+    match = await db.matches.find_one(
+        {"id": match_id, "fixture_id": fixture_id}, {"_id": 0}
+    )
+    if not match:
+        raise HTTPException(status_code=404, detail="Ese partido no está enlazado a esta llave")
+
+    await _ensure_organiza_el_grupo(match["group_id"], profile, user)
+    # Sólo este partido: la llave puede tener el del otro grupo enlazado y ese
+    # no es asunto de quien organiza este.
+    await db.matches.update_one(
+        {"id": match_id},
+        {"$unset": {"fixture_id": "", "fixture_side": "", "tournament_id": ""}},
+    )
+
+    return {"message": "Partido desenlazado del torneo"}
