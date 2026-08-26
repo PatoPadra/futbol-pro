@@ -8,8 +8,8 @@ Los dos bugs más serios que aparecieron en la revisión estaban justamente ahí
 se encontraron leyendo código, no ejecutándolo. Estos tests los fijan.
 
 Cómo funciona el armado: las rutas hacen `from database import db` al importarse,
-así que el nombre `db` queda atado en cada módulo. Por eso el fixture parchea
-`db` en CADA módulo que lo usa y no en `database` (ver `mongo_en_memoria`).
+así que el nombre `db` queda atado en cada módulo. El fixture `mongo_en_memoria`
+de conftest.py los parchea a todos de una.
 
 Se llama a las funciones de ruta directamente en vez de pasar por TestClient:
 lo que se quiere probar es la lógica, no el ruteo de FastAPI ni el JWT. El
@@ -21,27 +21,9 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
-from mongomock_motor import AsyncMongoMockClient
 
 import routes_tournaments as rt
-from services import permissions as perms
-from services import profiles as profs
 from services.tournament import ganador_de
-
-
-@pytest.fixture
-def mongo_en_memoria(monkeypatch):
-    """
-    Reemplaza `db` por un Mongo en memoria, limpio para cada test.
-
-    Se parchea en los tres módulos que hacen `from database import db`. Si
-    mañana una ruta de torneo empieza a apoyarse en otro service, hay que
-    sumarlo acá o el test va a estar pegándole al Atlas de verdad.
-    """
-    fake = AsyncMongoMockClient()["test"]
-    for modulo in (rt, perms, profs):
-        monkeypatch.setattr(modulo, "db", fake)
-    return fake
 
 
 async def sembrar_organizador(db, nombre="Pato", role="organizador"):
