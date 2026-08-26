@@ -4,6 +4,10 @@
 .idea/
 .vscode/
 
+# Claude Code: launch.json se versiona (es la config del dev server del
+# proyecto); settings.local.json son los permisos de cada maquina.
+.claude/settings.local.json
+
 # Dependencies
 node_modules/
 /node_modules
