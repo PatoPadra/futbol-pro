@@ -15,6 +15,7 @@ from models import (
     UpdateGroupRequest,
 )
 from services.guest_merge import merge_guest_into_profile
+from services.matches import borrar_partidos
 from services.permissions import (
     ensure_can_delete_group,
     ensure_can_invite_to_group,
@@ -637,22 +638,41 @@ async def merge_guest_member(group_id: str, member_id: str, data: MergeGuestRequ
 
 @router.delete("/{group_id}")
 async def delete_group(group_id: str, user=Depends(get_current_user)):
-    await ensure_can_delete_group(group_id, user)
+    grupo = await ensure_can_delete_group(group_id, user)
+
+    # Un grupo que está jugando un torneo no se puede borrar y listo: quien
+    # borra es organizador de SU grupo, no del torneo, y llevárselo puesto deja
+    # la llave inejecutable para todos los demás equipos. Rechazar es más
+    # honesto que romperle el torneo a otra gente en silencio.
+    equipos = await db.tournament_teams.find(
+        {"group_id": group_id}, {"_id": 0, "tournament_id": 1}
+    ).to_list(50)
+    if equipos:
+        torneo_ids = sorted({e["tournament_id"] for e in equipos})
+        en_juego = await db.tournaments.find(
+            {"id": {"$in": torneo_ids}, "status": {"$ne": "finalizado"}},
+            {"_id": 0, "name": 1},
+        ).to_list(50)
+        if en_juego:
+            nombres = ", ".join(f"«{t.get('name', 'sin nombre')}»" for t in en_juego)
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"«{grupo.get('name', 'Este grupo')}» está jugando {nombres}. "
+                    "Sacalo del torneo antes de borrarlo."
+                ),
+            )
 
     match_ids = [
         m["id"]
         for m in await db.matches.find({"group_id": group_id}, {"_id": 0, "id": 1}).to_list(2000)
     ]
 
-    if match_ids:
-        await db.match_registrations.delete_many({"match_id": {"$in": match_ids}})
-        await db.team_generations.delete_many({"match_id": {"$in": match_ids}})
-        await db.peer_ratings.delete_many({"match_id": {"$in": match_ids}})
-        await db.self_evaluations.delete_many({"match_id": {"$in": match_ids}})
-        await db.stats_final.delete_many({"match_id": {"$in": match_ids}})
-        await db.stats_proposals.delete_many({"match_id": {"$in": match_ids}})
-        await db.matches.delete_many({"group_id": group_id})
+    await borrar_partidos(match_ids)
 
+    # Los torneos que quedan son los ya finalizados: el equipo se va con el
+    # grupo, pero el fixture conserva su marcador y su historia.
+    await db.tournament_teams.delete_many({"group_id": group_id})
     await db.group_members.delete_many({"group_id": group_id})
     await db.group_seed_ratings.delete_many({"group_id": group_id})
     await db.groups.delete_one({"id": group_id})

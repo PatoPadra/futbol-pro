@@ -1,8 +1,11 @@
+from collections import Counter, defaultdict
+
 from fastapi import HTTPException
 
 from constants import (
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
+    TRANSICIONES_PARTIDO,
     capacidades_de,
     jugo_el_partido,
     modo_label,
@@ -11,6 +14,93 @@ from constants import (
 )
 from database import db
 from services.profiles import get_my_profile_or_404
+
+
+def ensure_transicion(actual: str | None, nuevo: str) -> bool:
+    """Deja pasar sólo los cambios de estado que existen en la realidad.
+
+    Devuelve True si hay que escribir, False si el partido ya estaba en ese
+    estado. Esa distinción importa: pedir el estado en el que ya se está no es
+    una transición inválida, es un doble click — y la app tiene botones que la
+    gente toca dos veces. Tratarlo como error sería cambiar un bug de datos por
+    un bug de usabilidad.
+
+    Un partido viejo sin `status` se lee como "abierto", que es como nacían
+    antes de que el campo existiera.
+    """
+    actual = actual or "abierto"
+    if actual == nuevo:
+        return False
+
+    if nuevo not in TRANSICIONES_PARTIDO.get(actual, []):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Un partido {actual} no puede pasar a {nuevo}",
+        )
+    return True
+
+
+# Todo lo que cuelga de un partido. La lista vive acá, una sola vez, porque
+# tenerla escrita en dos rutas es exactamente lo que dejó que divergieran:
+# borrar un partido suelto limpiaba estas ocho y borrar un grupo entero
+# limpiaba seis. Las dos que faltaban eran `match_outcomes` —la que el cálculo
+# de rating lee por player_id— y las notas del organizador.
+COLECCIONES_DE_PARTIDO = (
+    "match_registrations",
+    "team_generations",
+    "peer_ratings",
+    "self_evaluations",
+    "stats_final",
+    "stats_proposals",
+    "match_outcomes",
+    "player_match_notes",
+)
+
+
+async def borrar_partidos(match_ids: list[str]) -> int:
+    """Borra partidos y todo lo que cuelga de ellos. Única cascada del proyecto.
+
+    El orden importa: primero se devuelve el partido jugado a cada perfil, que
+    hay que hacerlo mientras `counted_player_ids` todavía existe, y recién
+    después se borran los documentos.
+
+    Las llaves de torneo NO se tocan: el resultado de una llave vive en el
+    fixture, no en el partido, así que borrar el partido no se lleva puesto el
+    torneo. Lo que sí hay que mirar antes es si el grupo entero está jugando
+    uno; de eso se encarga quien llama.
+    """
+    if not match_ids:
+        return 0
+
+    partidos = await db.matches.find(
+        {"id": {"$in": match_ids}}, {"_id": 0, "id": 1, "counted_player_ids": 1}
+    ).to_list(2000)
+
+    # Un jugador puede haber jugado varios de los partidos que se van, así que
+    # no alcanza con un conjunto: hay que descontar tantas veces como aparezca.
+    conteo = Counter()
+    for partido in partidos:
+        for player_id in partido.get("counted_player_ids") or []:
+            conteo[player_id] += 1
+
+    por_cantidad = defaultdict(list)
+    for player_id, cuantos in conteo.items():
+        por_cantidad[cuantos].append(player_id)
+
+    for cuantos, player_ids in por_cantidad.items():
+        # El `$gte` es la misma red que usa `sincronizar_partidos_jugados`: si
+        # el contador ya venía corto por lo que sea, preferimos no tocarlo antes
+        # que dejarlo en negativo.
+        await db.player_profiles.update_many(
+            {"id": {"$in": sorted(player_ids)}, "matches_played": {"$gte": cuantos}},
+            {"$inc": {"matches_played": -cuantos}},
+        )
+
+    for coleccion in COLECCIONES_DE_PARTIDO:
+        await db[coleccion].delete_many({"match_id": {"$in": match_ids}})
+
+    resultado = await db.matches.delete_many({"id": {"$in": match_ids}})
+    return resultado.deleted_count
 
 
 def etiquetas_de_lados(match: dict, capacidades: dict, group_name: str | None = None) -> dict:

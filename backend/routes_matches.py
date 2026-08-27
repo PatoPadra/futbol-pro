@@ -16,7 +16,13 @@ from constants import (
 )
 from database import db
 from models import CreateMatchRequest, MatchResponse, RegistrationResponse, UpdateMatchRequest
-from services.matches import datos_de_modo, ensure_match_manager, get_match_or_404
+from services.matches import (
+    borrar_partidos,
+    datos_de_modo,
+    ensure_match_manager,
+    ensure_transicion,
+    get_match_or_404,
+)
 from services.permissions import ensure_group_member, ensure_group_organizer
 from services.profiles import get_my_profile_or_404
 
@@ -380,16 +386,8 @@ async def delete_match(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_can_delete_match(match, user)
 
-    await db.match_registrations.delete_many({"match_id": match_id})
-    await db.peer_ratings.delete_many({"match_id": match_id})
-    await db.self_evaluations.delete_many({"match_id": match_id})
-    await db.stats_proposals.delete_many({"match_id": match_id})
-    await db.stats_final.delete_many({"match_id": match_id})
-    await db.team_generations.delete_many({"match_id": match_id})
-    await db.match_outcomes.delete_many({"match_id": match_id})
-    await db.player_match_notes.delete_many({"match_id": match_id})
     # El partido se va, pero la llave del torneo queda: su resultado vive ahí.
-    await db.matches.delete_one({"id": match_id})
+    await borrar_partidos([match_id])
 
     return {"message": "Partido borrado correctamente"}
 
@@ -586,6 +584,13 @@ async def get_registrations(match_id: str, user=Depends(get_current_user)):
 async def close_registrations(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_can_manage_match(match, user)
+
+    # Sin esta guarda, un partido finalizado volvía a "cerrado" y con él se
+    # reabrían los seis endpoints de post-partido sobre datos ya cargados. El
+    # partido quedaba además cerrado con `counted_player_ids` lleno, que es un
+    # estado que no debería poder existir.
+    if not ensure_transicion(match.get("status"), "cerrado"):
+        return {"message": "Las inscripciones ya estaban cerradas"}
 
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "cerrado"}}

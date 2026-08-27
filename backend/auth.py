@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.concurrency import run_in_threadpool
 
 from database import db
 
@@ -15,13 +16,16 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 72
 
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+# bcrypt está hecho para ser lento a propósito: son ~150-300 ms de CPU por
+# hasheo. Adentro de un handler async eso no es "el login tarda un poco", es el
+# event loop parado ese cuarto de segundo, con todas las demás requests
+# esperando. Por eso van por un thread.
+async def hash_password(password: str) -> str:
+    return await run_in_threadpool(pwd_context.hash, password)
 
 
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+async def verify_password(plain: str, hashed: str) -> bool:
+    return await run_in_threadpool(pwd_context.verify, plain, hashed)
 
 
 def create_token(user_id: str, role: str) -> str:

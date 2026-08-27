@@ -90,7 +90,7 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
         {"user_id": user["user_id"]}, {"_id": 0, "photo_public_id": 1}
     )
 
-    uploaded = upload_image_bytes(
+    uploaded = await upload_image_bytes(
         content=content,
         filename=file.filename or "profile.jpg",
         folder="futbol-pro/profiles",
@@ -107,6 +107,6 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
     )
 
     if anterior and anterior.get("photo_public_id"):
-        delete_image(anterior["photo_public_id"])
+        await delete_image(anterior["photo_public_id"])
 
     return {"photo_url": uploaded["photo_url"]}

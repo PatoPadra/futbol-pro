@@ -268,7 +268,37 @@ MATCH_STATUSES = [
     "equipos_confirmados",
     "finalizado",
     "completado",
+    # Estuvo faltando mucho tiempo: `cancelado` se escribe en cancel_match y el
+    # front lo pinta desde siempre, pero el catálogo no lo nombraba. Un catálogo
+    # que no incluye un valor que la base ya tiene no es un catálogo.
+    "cancelado",
 ]
+
+# A qué estados puede pasar un partido desde cada estado.
+#
+# Esto existe porque durante mucho tiempo las rutas escribían el estado nuevo
+# sin mirar nunca el actual, y eso permitía dos cosas que no pasan en la
+# realidad: un partido finalizado volviendo a "cerrado" (y reabriendo los seis
+# endpoints de post-partido sobre datos ya cargados), y un partido abierto
+# saltando a "completado" con gente todavía anotándose.
+#
+# La tabla describe la máquina COMPLETA, pero no todas las rutas la consultan
+# todavía: `finalize` y `cancel` traen sus propias guardas escritas a mano desde
+# antes, y hacen lo mismo. Cuando se unifiquen, el lugar es éste.
+#
+# Los estados terminales tienen lista vacía a propósito: un partido completado o
+# cancelado no va a ningún lado.
+TRANSICIONES_PARTIDO = {
+    "abierto": ["cerrado", "cancelado"],
+    "cerrado": ["equipos_generados", "finalizado", "cancelado"],
+    # Volver a "cerrado" desde los equipos no es un retroceso raro: es lo que
+    # hace quitar a un anotado, que invalida los equipos ya armados.
+    "equipos_generados": ["equipos_confirmados", "cerrado", "finalizado", "cancelado"],
+    "equipos_confirmados": ["cerrado", "finalizado", "cancelado"],
+    "finalizado": ["completado"],
+    "completado": [],
+    "cancelado": [],
+}
 
 
 # ---------------------------------------------------------------------------

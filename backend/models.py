@@ -112,6 +112,32 @@ class ProfileResponse(BaseModel):
     created_at: str
 
 
+class PlayerPublicResponse(BaseModel):
+    """Un jugador visto por OTRO jugador.
+
+    Es ProfileResponse menos la contabilidad interna. `email` es dato personal
+    de otra persona, `photo_public_id` es la llave con la que se borra un asset
+    en Cloudinary, y `user_id`/`created_by` son plomería que la pantalla no usa.
+
+    La pantalla de perfil propio no pasa por acá: pide `/api/profile`, que sí
+    devuelve todo porque son tus datos.
+    """
+
+    id: str
+    name: str
+    photo_url: Optional[str] = None
+    birth_date: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[Gender] = None
+    player_type: str
+    primary_position: Optional[str] = None
+    secondary_positions: List[str] = Field(default_factory=list)
+    unwanted_position: Optional[str] = None
+    matches_played: int = 0
+    estimated_level: Optional[float] = None
+    created_at: Optional[str] = None
+
+
 # Guest
 class CreateGuestRequest(EmailNormalizedModel):
     name: str

@@ -145,7 +145,7 @@ async def register(data: RegisterRequest, request: Request):
     user_doc = {
         "id": user_id,
         "email": data.email,
-        "password_hash": hash_password(data.password),
+        "password_hash": await hash_password(data.password),
         "role": role,
         "created_at": now,
 
@@ -329,7 +329,7 @@ async def login(data: LoginRequest, request: Request):
         await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    if not verify_password(data.password, user["password_hash"]):
+    if not await verify_password(data.password, user["password_hash"]):
         await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 

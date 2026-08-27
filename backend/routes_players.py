@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from auth import get_current_user
 from database import db
-from models import CreateGuestRequest, ProfileResponse
+from models import CreateGuestRequest, PlayerPublicResponse, ProfileResponse
 from rating_calculator import calculate_player_metrics
 from services.player_record import calcular_historial, resultado_del_jugador
+from services.permissions import ensure_comparte_grupo
 from services.score_visibility import get_score_visibility_for_player
 from storage_cloudinary import delete_image, upload_image_bytes
 
@@ -40,11 +41,9 @@ async def list_players(user=Depends(get_current_user)):
     return await db.player_profiles.find({"id": {"$in": player_ids}}, {"_id": 0}).to_list(1000)
 
 
-@router.get("/{player_id}")
+@router.get("/{player_id}", response_model=PlayerPublicResponse)
 async def get_player(player_id: str, user=Depends(get_current_user)):
-    profile = await db.player_profiles.find_one({"id": player_id}, {"_id": 0})
-    if not profile:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
+    profile = await ensure_comparte_grupo(player_id, user)
 
     if profile.get("birth_date"):
         try:
@@ -54,7 +53,10 @@ async def get_player(player_id: str, user=Depends(get_current_user)):
         except ValueError:
             pass
 
-    return profile
+    # `.model_dump()` y no el modelo pelado para que la ruta devuelva un dict,
+    # como el resto de este archivo. El `response_model` sigue siendo el
+    # contrato: lo que no está declarado ahí no sale.
+    return PlayerPublicResponse(**profile).model_dump()
 
 
 @router.get("/{player_id}/history")
@@ -244,7 +246,7 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
     # validar permisos), así que no hace falta otra query.
     public_id_anterior = profile.get("photo_public_id")
 
-    uploaded = upload_image_bytes(
+    uploaded = await upload_image_bytes(
         content=content,
         filename=file.filename or "guest.jpg",
         folder="futbol-pro/guests",
@@ -262,6 +264,6 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
 
     # Recién ahora que la nueva quedó guardada borramos la vieja de Cloudinary.
     if public_id_anterior:
-        delete_image(public_id_anterior)
+        await delete_image(public_id_anterior)
 
     return {"photo_url": uploaded["photo_url"]}
