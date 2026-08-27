@@ -329,11 +329,19 @@ titulo(10, "Huérfanos de merge de invitados y de borrado de grupo");
   print(`  match_outcomes de partidos borrados:             ${outSinPartido}   <-- daño del borrado de grupo`);
   print(`  tournament_teams de grupos borrados:             ${equiposSinGrupo}   <-- torneo inejecutable`);
 
-  const total = outHuerfanos + selfHuerfanas + raterHuerfano + notasHuerfanas + outSinPartido + equiposSinGrupo;
+  // La direccion contraria, que es la que se olvida: un PERFIL apuntando a un
+  // usuario que ya no existe.
+  const idsDeUsuario = db.users.distinct("id");
+  const perfilesSinCuenta = db.player_profiles.countDocuments({
+    user_id: { $type: "string", $nin: idsDeUsuario },
+  });
+  print(`  player_profiles con user_id inexistente:         ${perfilesSinCuenta}   <-- cuenta borrada a mano`);
+
+  const total = outHuerfanos + selfHuerfanas + raterHuerfano + notasHuerfanas + outSinPartido + equiposSinGrupo + perfilesSinCuenta;
   veredicto(
     total === 0,
     "no hay referencias colgadas",
-    `${total} documentos huérfanos. Los match_outcomes huérfanos los sigue leyendo el cálculo de rating por player_id: hay gente arrastrando puntaje de partidos que ya no existen.`
+    `${total} documentos huérfanos (ver el detalle arriba). Los match_outcomes colgados los sigue leyendo el cálculo de rating por player_id, así que ahí hay gente arrastrando puntaje de partidos que ya no existen; los demás son restos que ensucian sin hacer daño.`
   );
 }
 

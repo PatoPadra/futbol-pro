@@ -306,12 +306,24 @@ def main():
         sufijo = f"   <-- {nota}" if nota else ""
         print(f"  {etiqueta:<48} {cantidad}{sufijo}")
 
+    # La direccion contraria, que es la que se olvida: un PERFIL apuntando a un
+    # usuario que ya no existe. Las otras seis miran documentos que nombran a un
+    # perfil muerto; esta mira el perfil mismo. Aparecio en la limpieza de
+    # agosto: un perfil sobreviviente de una cuenta borrada a mano.
+    ids_de_usuario = db.users.distinct("id")
+    perfiles_sin_cuenta = db.player_profiles.count_documents(
+        {"user_id": {"$type": "string", "$nin": ids_de_usuario}}
+    )
+    print(f"  {'player_profiles con user_id inexistente':<48} {perfiles_sin_cuenta}   <-- cuenta borrada a mano")
+    checks.append(("player_profiles con user_id inexistente", perfiles_sin_cuenta, ""))
+
     total_huerfanos = sum(c for _, c, _ in checks)
     veredicto(
         total_huerfanos == 0,
         "no hay referencias colgadas",
-        f"{total_huerfanos} documentos huérfanos. Los match_outcomes huérfanos los sigue leyendo el cálculo de "
-        "rating por player_id: hay gente arrastrando puntaje de partidos que ya no existen.",
+        f"{total_huerfanos} documentos huérfanos (ver el detalle arriba). Los match_outcomes colgados los "
+        "sigue leyendo el cálculo de rating por player_id, así que ahí hay gente arrastrando puntaje de "
+        "partidos que ya no existen; los demás son restos que ensucian sin hacer daño.",
     )
 
     # ---------------------------------------------------------------- #
