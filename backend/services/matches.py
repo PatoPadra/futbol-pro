@@ -9,6 +9,7 @@ from constants import (
     capacidades_de,
     jugo_el_partido,
     modo_label,
+    puede_organizar,
     stats_de,
     tipo_label,
 )
@@ -231,7 +232,7 @@ async def ensure_match_manager(match: dict, user, *, allow_group_organizer: bool
             },
             {"_id": 0},
         )
-        if membership and membership.get("member_role") == "organizador":
+        if membership and puede_organizar(membership.get("member_role")):
             return {"granted_by": "group_organizer", "profile": profile, "membership": membership}
 
     raise HTTPException(

@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from constants import puede_calificar, puede_organizar
 from database import db
 from services.profiles import get_my_profile_or_404
 from utils.mongo import clean_mongo
@@ -41,28 +42,28 @@ async def ensure_group_member(group_id: str, user):
 
 async def ensure_group_organizer(group_id: str, user):
     membership = await ensure_group_member(group_id, user)
-    if user["role"] != "admin" and membership.get("member_role") != "organizador":
+    if user["role"] != "admin" and not puede_organizar(membership.get("member_role")):
         raise HTTPException(status_code=403, detail="Solo el organizador puede hacer esta acción")
     return membership
 
 
 async def ensure_can_manage_group(group_id: str, user):
     membership = await ensure_group_member(group_id, user)
-    if user["role"] != "admin" and membership.get("member_role") != "organizador":
+    if user["role"] != "admin" and not puede_organizar(membership.get("member_role")):
         raise HTTPException(status_code=403, detail="Solo el organizador puede administrar el grupo")
     return membership
 
 
 async def ensure_can_invite_to_group(group_id: str, user):
     membership = await ensure_group_member(group_id, user)
-    if user["role"] != "admin" and membership.get("member_role") != "organizador":
+    if user["role"] != "admin" and not puede_organizar(membership.get("member_role")):
         raise HTTPException(status_code=403, detail="Solo el organizador puede invitar jugadores a este grupo")
     return membership
 
 
 async def ensure_can_rate_group(group_id: str, user):
     membership = await ensure_group_member(group_id, user)
-    if user["role"] != "admin" and membership.get("member_role") not in ["organizador", "frecuente"]:
+    if user["role"] != "admin" and not puede_calificar(membership.get("member_role")):
         raise HTTPException(status_code=403, detail="Solo los jugadores frecuentes u organizadores pueden calificar")
     return membership
 
@@ -73,7 +74,7 @@ async def ensure_can_delete_group(group_id: str, user):
         return group
 
     membership = await ensure_group_member(group_id, user)
-    if membership.get("member_role") != "organizador":
+    if not puede_organizar(membership.get("member_role")):
         raise HTTPException(status_code=403, detail="Solo el organizador puede borrar el grupo")
 
     profile = await get_my_profile_or_404(user)

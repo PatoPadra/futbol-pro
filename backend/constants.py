@@ -288,6 +288,80 @@ MATCH_STATUSES = [
 #
 # Los estados terminales tienen lista vacía a propósito: un partido completado o
 # cancelado no va a ningún lado.
+# ---------------------------------------------------------------------------
+# Roles y estados que NO tenían catálogo
+# ---------------------------------------------------------------------------
+#
+# Modo, tipo y asistencia tienen catálogo acá y un `Literal` en models.py que un
+# `assert` mantiene sincronizado, así que agregar un valor nuevo es imposible de
+# hacer mal. Estos cuatro no lo tenían: las listas estaban escritas a mano en
+# ocho lugares distintos y nadie las hablaba entre sí.
+#
+# OJO CON LA PALABRA "ORGANIZADOR". Hay dos ejes de rol y usan el mismo nombre
+# para cosas distintas:
+#
+#   users.role                → admin | jugador          (quién sos en la app)
+#   group_members.member_role → organizador | frecuente | invitado
+#                                                        (qué podés hacer EN ESE GRUPO)
+#
+# El backend siempre autorizó por el segundo, que es el correcto: alguien puede
+# organizar un grupo y ser jugador común en otro. Que los dos ejes compartieran
+# la palabra es lo que llevó al front a leer el equivocado.
+GROUP_MEMBER_ROLES = [
+    {
+        "id": "organizador",
+        "name": "Organizador",
+        "description": "Administra el grupo: invita, cambia roles, crea partidos.",
+        "puede_organizar": True,
+        "puede_calificar": True,
+    },
+    {
+        "id": "frecuente",
+        "name": "Jugador frecuente",
+        "description": "Juega seguido. Puede calificar a sus compañeros.",
+        "puede_organizar": False,
+        "puede_calificar": True,
+    },
+    {
+        "id": "invitado",
+        "name": "Invitado",
+        "description": "Lo sumó alguien para una fecha suelta.",
+        "puede_organizar": False,
+        "puede_calificar": False,
+    },
+]
+
+GROUP_MEMBER_ROLE_IDS = [r["id"] for r in GROUP_MEMBER_ROLES]
+GROUP_MEMBER_ROLE_MAP = {r["id"]: r for r in GROUP_MEMBER_ROLES}
+
+DEFAULT_GROUP_MEMBER_ROLE = "frecuente"
+
+# Estado de una inscripción a un partido. "baja" es un borrado lógico: la fila
+# queda para saber que la persona estuvo anotada y se dio de baja.
+REGISTRATION_STATUSES = ["titular", "suplente", "baja"]
+
+# Estado de una membresía. "inactivo" es el equivalente para los grupos.
+MEMBERSHIP_STATUSES = ["activo", "inactivo"]
+
+# Una generación de equipos nace en borrador y se confirma.
+TEAM_GENERATION_STATUSES = ["borrador", "confirmado"]
+
+
+def rol_de_grupo(member_role: str | None) -> dict:
+    """El rol de grupo, con default para las membresías viejas sin el campo."""
+    return GROUP_MEMBER_ROLE_MAP.get(member_role or DEFAULT_GROUP_MEMBER_ROLE, GROUP_MEMBER_ROLE_MAP[DEFAULT_GROUP_MEMBER_ROLE])
+
+
+def puede_organizar(member_role: str | None) -> bool:
+    """Si este rol de grupo administra el grupo y crea partidos en él."""
+    return rol_de_grupo(member_role)["puede_organizar"]
+
+
+def puede_calificar(member_role: str | None) -> bool:
+    """Si este rol de grupo puede ponerle puntaje a sus compañeros."""
+    return rol_de_grupo(member_role)["puede_calificar"]
+
+
 TRANSICIONES_PARTIDO = {
     "abierto": ["cerrado", "cancelado"],
     "cerrado": ["equipos_generados", "finalizado", "cancelado"],

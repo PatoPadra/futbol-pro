@@ -7,7 +7,9 @@ from auth import get_current_user
 from constants import (
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
+    GROUP_MEMBER_ROLE_IDS,
     MODALITY_CAPACITY,
+    puede_organizar,
     capacidades_de,
     modo_disponible,
     modo_label,
@@ -30,7 +32,7 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 
 def normalize_registration_type(value: str | None):
-    if value in {"organizador", "frecuente", "invitado"}:
+    if value in set(GROUP_MEMBER_ROLE_IDS):
         return value
     return None
 
@@ -328,7 +330,7 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
         "titular_count": titular_count,
         "suplente_count": suplente_count,
         "my_registration": my_registration,
-        "can_manage": user["role"] == "admin" or (profile and profile.get("id") == match.get("organizer_id")) or membership.get("member_role") == "organizador",
+        "can_manage": user["role"] == "admin" or (profile and profile.get("id") == match.get("organizer_id")) or puede_organizar(membership.get("member_role")),
         "can_delete": user["role"] == "admin",
     }
 

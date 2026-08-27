@@ -38,10 +38,23 @@ INDEX_SPEC = {
     "users": [
         ({"keys": [("id", ASCENDING)]}),
         ({"keys": [("verification_token", ASCENDING)], "sparse": True}),
+        # La unicidad del email vivía sólo en código (un find_one antes del
+        # insert), lo que deja una ventana para que dos altas concurrentes con
+        # el mismo mail entren las dos.
+        ({"keys": [("email", ASCENDING)], "unique": True}),
     ],
     "player_profiles": [
         {"keys": [("id", ASCENDING)]},
-        {"keys": [("user_id", ASCENDING)]},
+        # Un usuario, un perfil. Con dos, `find_one({"user_id": ...})` devuelve
+        # uno arbitrario y el historial de esa persona queda partido al medio
+        # según cuál salga. El filtro parcial es por `$type` y no `sparse`
+        # porque los invitados tienen `user_id: None` explícito, no ausente:
+        # con sparse entrarían todos al índice y colisionarían entre ellos.
+        {
+            "keys": [("user_id", ASCENDING)],
+            "unique": True,
+            "partial": {"user_id": {"$type": "string"}},
+        },
         {"keys": [("email", ASCENDING)]},
     ],
     "groups": [
@@ -49,6 +62,10 @@ INDEX_SPEC = {
     ],
     "group_members": [
         {"keys": [("id", ASCENDING)]},
+        # Una membresía por persona por grupo. Sin filtrar por status a
+        # propósito: `add_group_member` reusa el documento existente cuando
+        # alguien vuelve, así que el par tiene que ser único esté activo o no.
+        {"keys": [("group_id", ASCENDING), ("player_id", ASCENDING)], "unique": True},
         {"keys": [("group_id", ASCENDING), ("status", ASCENDING)]},
         {"keys": [("group_id", ASCENDING), ("player_id", ASCENDING), ("status", ASCENDING)]},
         {"keys": [("player_id", ASCENDING), ("status", ASCENDING)]},
@@ -65,6 +82,19 @@ INDEX_SPEC = {
     ],
     "match_registrations": [
         {"keys": [("id", ASCENDING)]},
+        # Una inscripción viva por jugador por partido. El doble tap en el
+        # celular con red lenta no es el caso borde, es el caso normal: sin
+        # esto el jugador se cuenta dos veces en el cupo, aparece dos veces en
+        # el balanceador y suma dos partidos jugados.
+        #
+        # `$in` y no `$ne: "baja"`: los filtros parciales no aceptan `$ne`. Las
+        # bajas quedan fuera del índice, que es lo que se quiere — alguien se
+        # puede dar de baja y volver a anotar.
+        {
+            "keys": [("match_id", ASCENDING), ("player_id", ASCENDING)],
+            "unique": True,
+            "partial": {"status": {"$in": ["titular", "suplente"]}},
+        },
         # 19 queries: el endpoint más caliente de la app.
         {"keys": [("match_id", ASCENDING), ("status", ASCENDING)]},
         {"keys": [("match_id", ASCENDING), ("player_id", ASCENDING), ("status", ASCENDING)]},
@@ -76,10 +106,14 @@ INDEX_SPEC = {
         {"keys": [("rated_player_id", ASCENDING)]},
     ],
     "self_evaluations": [
-        {"keys": [("match_id", ASCENDING), ("player_id", ASCENDING)]},
+        # Una autoevaluación por jugador por partido: el endpoint hace upsert
+        # sobre esta clave.
+        {"keys": [("match_id", ASCENDING), ("player_id", ASCENDING)], "unique": True},
     ],
     "stats_final": [
-        {"keys": [("match_id", ASCENDING), ("player_id", ASCENDING)]},
+        # Una fila confirmada por jugador por partido. La carga borra todas las
+        # del partido y reescribe, así que el par nunca se repite.
+        {"keys": [("match_id", ASCENDING), ("player_id", ASCENDING)], "unique": True},
         {"keys": [("player_id", ASCENDING)]},
     ],
     "stats_proposals": [
@@ -88,7 +122,9 @@ INDEX_SPEC = {
         {"keys": [("player_id", ASCENDING)]},
     ],
     "team_generations": [
-        {"keys": [("match_id", ASCENDING)]},
+        # Una generación por partido. Era una convención sostenida por un
+        # `delete_many` antes del insert; ahora la sostiene la base.
+        {"keys": [("match_id", ASCENDING)], "unique": True},
         {"keys": [("assignments.player_id", ASCENDING)]},
     ],
     # Rate limiting: el TTL hace que Mongo borre solo los intentos viejos.
@@ -115,7 +151,12 @@ INDEX_SPEC = {
     # Notas privadas del organizador. Las dos lecturas que existen son "las
     # mías de este partido" y "las mías sobre este jugador".
     "player_match_notes": [
-        {"keys": [("match_id", ASCENDING), ("author_id", ASCENDING)]},
+        # La clave del upsert. Sirve además como prefijo para "mis notas de
+        # este partido", así que reemplaza al índice suelto que había.
+        {
+            "keys": [("match_id", ASCENDING), ("author_id", ASCENDING), ("player_id", ASCENDING)],
+            "unique": True,
+        },
         {"keys": [("author_id", ASCENDING), ("player_id", ASCENDING)]},
     ],
     # El resultado convertido en puntaje. Se lee siempre por jugador (para
@@ -125,33 +166,14 @@ INDEX_SPEC = {
         {"keys": [("player_id", ASCENDING)]},
     ],
     "group_seed_ratings": [
-        {"keys": [("group_id", ASCENDING), ("rater_id", ASCENDING)]},
+        # Un puntaje inicial por evaluador y evaluado dentro del grupo.
+        {
+            "keys": [("group_id", ASCENDING), ("rater_id", ASCENDING), ("rated_player_id", ASCENDING)],
+            "unique": True,
+        },
         {"keys": [("rated_player_id", ASCENDING)]},
     ],
 }
-
-
-async def _ensure_unique_email_index() -> None:
-    """
-    users.email UNIQUE: hoy la unicidad se chequea sólo en código (un find_one
-    antes del insert en routes_auth), lo que deja una ventana para que dos altas
-    concurrentes con el mismo mail entren las dos. El índice lo cierra en la base.
-
-    Si ya hay duplicados (típicamente por mayúsculas, de antes de que se
-    normalizara el email), createIndex aborta con E11000 y el índice NO se crea.
-    Eso NO debe impedir que la app levante: avisamos fuerte y seguimos.
-    """
-    try:
-        await db.users.create_index([("email", ASCENDING)], unique=True, name="email_unique")
-    except (DuplicateKeyError, OperationFailure) as e:
-        logger.warning(
-            "No se pudo crear el índice único de users.email: %s. "
-            "Casi seguro hay emails duplicados en la base (revisá los que difieren "
-            "sólo en mayúsculas). Hay que resolverlos a mano y reiniciar. "
-            "Mientras tanto la app funciona, pero el registro sigue expuesto a la "
-            "condición de carrera de alta duplicada.",
-            e,
-        )
 
 
 async def backfill_match_defaults() -> None:
@@ -257,22 +279,86 @@ async def _backfill_estadisticas() -> None:
         )
 
 
+async def _indice_existente_con_las_mismas_claves(collection_name: str, keys: list):
+    """El índice ya creado que usa exactamente este patrón de claves, si lo hay."""
+    buscado = dict(keys)
+    async for existente in db[collection_name].list_indexes():
+        if existente["name"] == "_id_":
+            continue
+        if dict(existente["key"]) == buscado:
+            return existente
+    return None
+
+
+async def _crear_indice(collection_name: str, spec: dict) -> bool:
+    """Crea un índice, reemplazando al que estorbe si el nuevo es único.
+
+    Mongo rechaza crear un índice con el mismo patrón de claves y opciones
+    distintas, así que pasar uno existente a `unique` exige borrar el viejo
+    primero. Sólo lo hacemos cuando el nuevo es único: nunca borramos un índice
+    por una diferencia cosmética.
+
+    Ninguna falla acá impide que la app levante — pero se avisa fuerte, porque
+    un índice único que no se creó es una garantía que alguien va a creer que
+    existe. La causa casi siempre es que ya hay duplicados en la base: hay que
+    resolverlos a mano y reiniciar (ver backend/scripts/diagnostico_cierre_etapa.py).
+    """
+    kwargs = {}
+    if spec.get("sparse"):
+        kwargs["sparse"] = True
+    if spec.get("unique"):
+        kwargs["unique"] = True
+    if spec.get("partial"):
+        kwargs["partialFilterExpression"] = spec["partial"]
+    if "expireAfterSeconds" in spec:
+        kwargs["expireAfterSeconds"] = spec["expireAfterSeconds"]
+
+    try:
+        await db[collection_name].create_index(spec["keys"], **kwargs)
+        return True
+    except DuplicateKeyError as e:
+        logger.warning(
+            "HAY DUPLICADOS: no se pudo crear el índice único %s sobre %s: %s. "
+            "La app funciona, pero esa unicidad NO está garantizada. "
+            "Corré backend/scripts/diagnostico_cierre_etapa.py para verlos.",
+            spec["keys"], collection_name, e,
+        )
+        return False
+    except OperationFailure as e:
+        # 85 IndexOptionsConflict / 86 IndexKeySpecsConflict: ya existe con
+        # otras opciones. Es el caso de los índices que nacieron sin unique.
+        if e.code in (85, 86) and spec.get("unique"):
+            anterior = await _indice_existente_con_las_mismas_claves(collection_name, spec["keys"])
+            if anterior:
+                logger.info(
+                    "Reemplazando el índice %s de %s por su versión única",
+                    anterior["name"], collection_name,
+                )
+                await db[collection_name].drop_index(anterior["name"])
+                return await _crear_indice(collection_name, spec)
+
+        logger.warning(
+            "No se pudo crear el índice %s sobre %s: %s",
+            spec["keys"], collection_name, e,
+        )
+        return False
+
+
 async def ensure_indexes() -> None:
-    """Idempotente: create_index no hace nada si el índice ya existe."""
-    created = 0
+    """Idempotente: create_index no hace nada si el índice ya existe igual."""
+    creados = 0
+    fallados = 0
     for collection_name, specs in INDEX_SPEC.items():
         for spec in specs:
-            try:
-                kwargs = {"sparse": spec.get("sparse", False)}
-                if "expireAfterSeconds" in spec:
-                    kwargs["expireAfterSeconds"] = spec["expireAfterSeconds"]
-                await db[collection_name].create_index(spec["keys"], **kwargs)
-                created += 1
-            except OperationFailure as e:
-                logger.warning(
-                    "No se pudo crear el índice %s sobre %s: %s",
-                    spec["keys"], collection_name, e,
-                )
+            if await _crear_indice(collection_name, spec):
+                creados += 1
+            else:
+                fallados += 1
 
-    await _ensure_unique_email_index()
-    logger.info("Índices verificados (%d definiciones aplicadas)", created)
+    if fallados:
+        logger.warning(
+            "Índices verificados: %d aplicados, %d NO se pudieron crear (ver arriba)",
+            creados, fallados,
+        )
+    else:
+        logger.info("Índices verificados (%d definiciones aplicadas)", creados)

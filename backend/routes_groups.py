@@ -6,12 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
 from database import db
-from constants import DEFAULT_MATCH_MODE, modo_disponible, modo_label
+from constants import (
+    DEFAULT_MATCH_MODE,
+    modo_disponible,
+    modo_label,
+    puede_calificar,
+    puede_organizar,
+)
 from models import (
     AddGroupMemberRequest,
     CreateGroupRequest,
     GroupSeedRatingBatchRequest,
     MergeGuestRequest,
+    UpdateGroupMemberRequest,
     UpdateGroupRequest,
 )
 from services.guest_merge import merge_guest_into_profile
@@ -40,7 +47,7 @@ def normalize_global_role(role: str | None):
 
 
 def build_group_permission(member_role: str | None):
-    return "organizador" if member_role == "organizador" else "miembro"
+    return "organizador" if puede_organizar(member_role) else "miembro"
 
 
 def build_membership_type(member_role: str | None, player_type: str | None = None):
@@ -222,9 +229,14 @@ async def list_groups(user=Depends(get_current_user)):
             "my_group_permission": build_group_permission(member_role),
             "my_membership_type": build_membership_type(member_role, profile.get("player_type")),
             "my_global_role": normalize_global_role(user.get("role")),
-            "can_manage": member_role == "organizador",
-            "can_invite": member_role == "organizador",
-            "can_rate_seed": member_role in ["organizador", "frecuente"],
+            "can_manage": puede_organizar(member_role),
+            "can_invite": puede_organizar(member_role),
+            "can_rate_seed": puede_calificar(member_role),
+            # Quién puede crear un partido EN ESTE GRUPO. Va como booleano
+            # calculado por el backend y no como algo que el front derive del
+            # rol: derivarlo es lo que llevó a mirar el rol global, que usa la
+            # misma palabra para otra cosa.
+            "can_create_match": puede_organizar(member_role),
             "members_count": members_count,
         }))
     return result
@@ -249,9 +261,9 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
         my_member_role = member_role
         my_group_permission = build_group_permission(member_role)
         my_membership_type = build_membership_type(member_role, profile.get("player_type"))
-        can_manage = member_role == "organizador"
-        can_invite = member_role == "organizador"
-        can_rate_seed = member_role in ["organizador", "frecuente"]
+        can_manage = puede_organizar(member_role)
+        can_invite = puede_organizar(member_role)
+        can_rate_seed = puede_calificar(member_role)
 
     members_count = await db.group_members.count_documents({"group_id": group_id, "status": "activo"})
 
@@ -416,7 +428,12 @@ async def add_group_member(group_id: str, data: AddGroupMemberRequest, user=Depe
 
 
 @router.patch("/{group_id}/members/{member_id}")
-async def update_group_member(group_id: str, member_id: str, data: dict, user=Depends(get_current_user)):
+async def update_group_member(
+    group_id: str,
+    member_id: str,
+    data: UpdateGroupMemberRequest,
+    user=Depends(get_current_user),
+):
     await get_group_or_404(group_id)
     await ensure_can_manage_group(group_id, user)
 
@@ -424,22 +441,10 @@ async def update_group_member(group_id: str, member_id: str, data: dict, user=De
     if not member:
         raise HTTPException(status_code=404, detail="Miembro no encontrado")
 
-    allowed_roles = ["organizador", "frecuente", "invitado"]
-    allowed_status = ["activo", "inactivo"]
-
-    update_data = {}
-    if "member_role" in data:
-        if data["member_role"] not in allowed_roles:
-            raise HTTPException(status_code=400, detail="member_role inválido")
-        update_data["member_role"] = data["member_role"]
-
-    if "status" in data:
-        if data["status"] not in allowed_status:
-            raise HTTPException(status_code=400, detail="status inválido")
-        update_data["status"] = data["status"]
-
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No hay cambios para aplicar")
+    # La validación de los valores la hace el modelo contra el catálogo, así que
+    # acá sólo queda decidir qué campos vinieron. `exclude_none` y no
+    # `exclude_unset` porque mandar null explícito tampoco es un cambio.
+    update_data = data.model_dump(exclude_none=True)
 
     await db.group_members.update_one({"id": member_id}, {"$set": update_data})
     updated = await db.group_members.find_one({"id": member_id}, {"_id": 0})
@@ -459,7 +464,7 @@ async def remove_group_member(group_id: str, member_id: str, user=Depends(get_cu
     if user["role"] != "admin" and member["player_id"] == actor_profile["id"]:
         raise HTTPException(status_code=400, detail="No puedes quitarte a ti mismo desde aquí")
 
-    if member.get("member_role") == "organizador":
+    if puede_organizar(member.get("member_role")):
         organizers_count = await db.group_members.count_documents(
             {"group_id": group_id, "status": "activo", "member_role": "organizador"}
         )
