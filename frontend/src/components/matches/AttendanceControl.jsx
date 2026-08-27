@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  * color no es la única señal.
  */
 const TONOS = {
-  presente: 'border-turf bg-turf text-white',
+  presente: 'border-turf bg-turf-btn text-white',
   ausente: 'border-amber-400 bg-amber-400 text-amber-950',
   sin_aviso: 'border-red-400 bg-red-500 text-white',
 };

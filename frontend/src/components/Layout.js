@@ -18,7 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { getDisplayName } from '../utils/user';
-import { isOrganizerRole } from '../utils/permissions';
+import { useCapacidades } from '@/hooks/use-capacidades';
 import { buildPhotoUrl, initialsFromName } from '../utils/photos';
 import PageBackdrop from './media/PageBackdrop';
 
@@ -28,6 +28,8 @@ const FOCUS_RING =
 
 export default function Layout({ children }) {
   const { user, logout, isAuthenticated } = useAuth();
+  // Que puede hacer esta persona sale de sus grupos, no de un rol global.
+  const { puedeCrearPartido, puedeCrearTorneo } = useCapacidades();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,7 +50,9 @@ export default function Layout({ children }) {
     { path: '/mi-perfil', icon: UserCircle, label: 'Perfil' },
   ];
 
-  if (user?.role === 'organizador' || user?.role === 'admin') {
+  // "Organizar" aparece si organizas ALGUN grupo, no por un rol global. Antes
+  // un organizador de grupo no veia ni la pantalla de sus propios grupos.
+  if (puedeCrearPartido || user?.role === 'admin') {
     navItems.splice(2, 0, { path: '/organizador', icon: ClipboardList, label: 'Organizar' });
   }
   if (user?.role === 'admin') {
@@ -106,32 +110,35 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="flex items-center gap-3">
-          {isOrganizerRole(user) && (
-            <>
-              <Button
-                data-testid="create-group-btn"
-                variant="outline"
-                onClick={() => navigate('/grupos/crear')}
-                className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
-              >
-                <Users className="mr-1 h-4 w-4" /> Crear grupo
-              </Button>
-              <Button
-                data-testid="create-tournament-nav-btn"
-                variant="outline"
-                onClick={() => navigate('/torneos/crear')}
-                className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
-              >
-                <Medal className="mr-1 h-4 w-4" /> Crear torneo
-              </Button>
-              <Button
-                data-testid="create-match-btn"
-                onClick={() => navigate('/partidos/crear')}
-                className="h-9 rounded-full bg-turf px-5 text-sm font-bold uppercase tracking-wider text-white shadow-sm shadow-turf/30 hover:bg-turf-dark"
-              >
-                <Plus className="mr-1 h-4 w-4" /> Crear partido
-              </Button>
-            </>
+          {/* Crear grupo lo puede hacer cualquiera desde el alta abierta. Los
+              otros dos dependen de organizar algun grupo — que es lo que el
+              backend valida — y no de un rol global. */}
+          <Button
+            data-testid="create-group-btn"
+            variant="outline"
+            onClick={() => navigate('/grupos/crear')}
+            className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
+          >
+            <Users className="mr-1 h-4 w-4" /> Crear grupo
+          </Button>
+          {puedeCrearTorneo && (
+            <Button
+              data-testid="create-tournament-nav-btn"
+              variant="outline"
+              onClick={() => navigate('/torneos/crear')}
+              className="h-9 rounded-full bg-white/70 px-5 text-sm font-bold uppercase tracking-wider"
+            >
+              <Medal className="mr-1 h-4 w-4" /> Crear torneo
+            </Button>
+          )}
+          {puedeCrearPartido && (
+            <Button
+              data-testid="create-match-btn"
+              onClick={() => navigate('/partidos/crear')}
+              className="h-9 rounded-full bg-turf-btn px-5 text-sm font-bold uppercase tracking-wider text-white shadow-sm shadow-turf/30 hover:bg-turf-btn-dark"
+            >
+              <Plus className="mr-1 h-4 w-4" /> Crear partido
+            </Button>
           )}
           <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/70 py-1.5 pl-1.5 pr-3 text-sm text-slate-600">
             <Avatar className="h-6 w-6">
@@ -189,7 +196,7 @@ export default function Layout({ children }) {
           </div>
 
           <div className="flex flex-col gap-1">
-            {isOrganizerRole(user) && (
+            {(
               <>
                 <button
                   onClick={() => { navigate('/grupos/crear'); setMenuOpen(false); }}
@@ -198,20 +205,24 @@ export default function Layout({ children }) {
                 >
                   <Users className="h-4 w-4" /> Crear grupo
                 </button>
-                <button
-                  onClick={() => { navigate('/torneos/crear'); setMenuOpen(false); }}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-slate-700 hover:bg-white/70 ${FOCUS_RING}`}
-                  data-testid="mobile-create-tournament"
-                >
-                  <Medal className="h-4 w-4" /> Crear torneo
-                </button>
-                <button
-                  onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl bg-turf/10 px-3 text-sm font-semibold text-turf-accessible ring-1 ring-turf/20 ${FOCUS_RING}`}
-                  data-testid="mobile-create-match"
-                >
-                  <Plus className="h-4 w-4" /> Crear partido
-                </button>
+                {puedeCrearTorneo && (
+                  <button
+                    onClick={() => { navigate('/torneos/crear'); setMenuOpen(false); }}
+                    className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-slate-700 hover:bg-white/70 ${FOCUS_RING}`}
+                    data-testid="mobile-create-tournament"
+                  >
+                    <Medal className="h-4 w-4" /> Crear torneo
+                  </button>
+                )}
+                {puedeCrearPartido && (
+                  <button
+                    onClick={() => { navigate('/partidos/crear'); setMenuOpen(false); }}
+                    className={`flex min-h-11 items-center gap-3 rounded-xl bg-turf/10 px-3 text-sm font-semibold text-turf-accessible ring-1 ring-turf/20 ${FOCUS_RING}`}
+                    data-testid="mobile-create-match"
+                  >
+                    <Plus className="h-4 w-4" /> Crear partido
+                  </button>
+                )}
               </>
             )}
             <button

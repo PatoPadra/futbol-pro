@@ -392,7 +392,7 @@ export default function CompleteProfile() {
           shape="pill"
           data-testid="save-profile-btn"
           disabled={loading || positionsLoading}
-          className="h-12 w-full bg-turf text-base text-white shadow-lift-turf hover:bg-turf-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+          className="h-12 w-full bg-turf-btn text-base text-white shadow-lift-turf hover:bg-turf-btn-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {loading ? 'Guardando...' : 'Guardar y Continuar'}

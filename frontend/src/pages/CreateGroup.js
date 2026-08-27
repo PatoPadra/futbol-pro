@@ -49,7 +49,10 @@ export default function CreateGroup() {
         ...(modo ? { default_match_mode: modo } : {}),
       });
       toast.success('¡Grupo creado!');
-      navigate(`/partidos/crear?group_id=${res.data.id}`);
+      // Al grupo, no a crear partido. Crear el partido primero deja un grupo de
+      // una sola persona donde nadie se puede anotar: lo urgente despues de
+      // armar el grupo es sumar a la gente, y ahi esta el link.
+      navigate(`/grupos/${res.data.id}`);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al crear grupo');
     } finally {
@@ -122,7 +125,7 @@ export default function CreateGroup() {
               data-testid="create-group-submit"
               disabled={loading}
               shape="pill"
-              className="h-12 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark disabled:active:scale-100"
+              className="h-12 w-full bg-turf-btn text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark disabled:active:scale-100"
             >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
               {loading ? 'Creando...' : 'Crear grupo'}

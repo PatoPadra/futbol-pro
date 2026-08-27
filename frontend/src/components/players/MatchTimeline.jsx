@@ -132,7 +132,7 @@ function FilaPartido({ h, posMap, canViewPeerScores }) {
     >
       <span
         aria-hidden="true"
-        className="absolute -left-[26px] top-3 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-heading text-sm font-bold leading-none tabular-nums text-slate-700 shadow-sm transition-colors group-hover:border-turf group-hover:bg-turf group-hover:text-white motion-reduce:transition-none"
+        className="absolute -left-[26px] top-3 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-heading text-sm font-bold leading-none tabular-nums text-slate-700 shadow-sm transition-colors group-hover:border-turf group-hover:bg-turf-btn group-hover:text-white motion-reduce:transition-none"
       >
         {partes ? partes.dia : '—'}
       </span>

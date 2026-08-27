@@ -140,7 +140,7 @@ export default function Register() {
             asChild
             shape="pill"
             data-testid="register-success-login-btn"
-            className="w-full h-12 bg-turf hover:bg-turf-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            className="w-full h-12 bg-turf-btn hover:bg-turf-btn-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
           >
             <Link to="/login">Ir a iniciar sesión</Link>
           </Button>
@@ -232,7 +232,7 @@ export default function Register() {
           shape="pill"
           data-testid="register-submit-btn"
           disabled={loading}
-          className="w-full h-12 bg-turf hover:bg-turf-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+          className="w-full h-12 bg-turf-btn hover:bg-turf-btn-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
         >
           {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
           {loading ? 'Creando cuenta...' : 'Registrarme'}

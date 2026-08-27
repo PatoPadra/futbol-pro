@@ -35,6 +35,7 @@ import api from '@/lib/api';
 import { MODALITY_LABELS, MATCH_STATUS_LABELS } from '@/constants/matches';
 import RegistrationCard from '@/components/matches/RegistrationCard';
 import AddGuestDialog from '@/components/matches/AddGuestDialog';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import MatchResultPanel from '@/components/matches/MatchResultPanel';
 import Panel from '@/components/matches/Panel';
 import MetaChip from '@/components/matches/MetaChip';
@@ -124,6 +125,9 @@ export default function MatchDetail() {
   const [addGuestOpen, setAddGuestOpen] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState('');
   const [notas, setNotas] = useState({});
+  // La acción irreversible que está esperando confirmación. Una sola pieza de
+  // estado para las tres (cancelar, borrar, quitar a un anotado).
+  const [pendiente, setPendiente] = useState(null);
   const { attendance: attendanceOptions } = useMatchCatalogs();
 
   const loadData = async ({ keepLoader = false } = {}) => {
@@ -150,6 +154,10 @@ export default function MatchDetail() {
 
   useEffect(() => {
     loadData();
+    // Recarga cuando cambia lo que se mira, no cuando cambia la identidad de
+    // la funcion — que se rehace en cada render. Igual que en los otros doce
+    // efectos de carga de la app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const profileId = user?.profile_id || user?.profile?.id;
@@ -208,6 +216,9 @@ export default function MatchDetail() {
   const handleRegister = () => runAction('register', () => api.post(`/matches/${id}/register`), 'Te anotaste');
   const handleUnregister = () => runAction('unregister', () => api.delete(`/matches/${id}/register`), 'Te diste de baja');
   const handleClose = () => runAction('close', () => api.post(`/matches/${id}/close`), 'Inscripciones cerradas');
+  // Cerrar dejó de ser una puerta de una sola dirección, así que ya no necesita
+  // un diálogo: la salida está a un toque de distancia.
+  const handleReopen = () => runAction('reopen', () => api.post(`/matches/${id}/reopen`), 'Inscripción reabierta');
   const handleGenerateTeams = () => runAction('generate', () => api.post(`/matches/${id}/generate-teams`), 'Equipos generados', { reload: false, onSuccess: () => navigate(`/partidos/${id}/equipos`) });
   const handleFinalize = () => runAction('finalize', () => api.post(`/matches/${id}/finalize`), 'Partido finalizado');
   const handleDuplicate = () => runAction('duplicate', () => api.post(`/matches/${id}/duplicate`), null, { reload: false, onSuccess: (response) => {
@@ -215,17 +226,34 @@ export default function MatchDetail() {
     navigate(`/partidos/${response.data.id}`);
   }});
 
-  const handleCancel = async () => {
-    const confirmed = window.confirm('¿Querés cancelar este partido? Los jugadores seguirán existiendo, pero el partido pasará a estado cancelado.');
-    if (!confirmed) return;
-    await runAction('cancel', () => api.post(`/matches/${id}/cancel`), 'Partido cancelado');
-  };
+  // Las acciones que no se deshacen pasan por ConfirmDialog. Antes eran
+  // `window.confirm` nativos: tipografía del sistema, botón azul del navegador,
+  // y la consecuencia perdida en un párrafo que nadie lee.
+  const handleCancel = () => setPendiente({
+    clave: 'cancel',
+    titulo: '¿Cancelar este partido?',
+    descripcion: 'Se avisa que no se juega, pero el partido queda en el historial.',
+    consecuencias: [
+      'Nadie se puede anotar ni dar de baja.',
+      'Los jugadores anotados y sus datos no se borran.',
+      'No se puede volver a abrir: hay que crear un partido nuevo.',
+    ],
+    textoConfirmar: 'Cancelar partido',
+    onConfirmar: () => runAction('cancel', () => api.post(`/matches/${id}/cancel`), 'Partido cancelado'),
+  });
 
-  const handleDelete = async () => {
-    const confirmed = window.confirm('¿Querés borrar definitivamente este partido? Esta acción elimina inscripciones, estadísticas y equipos generados.');
-    if (!confirmed) return;
-    await runAction('delete', () => api.delete(`/matches/${id}`), 'Partido borrado', { reload: false, onSuccess: () => navigate('/partidos') });
-  };
+  const handleDelete = () => setPendiente({
+    clave: 'delete',
+    titulo: '¿Borrar este partido para siempre?',
+    descripcion: 'Esta acción no se puede deshacer.',
+    consecuencias: [
+      'Se borran las inscripciones, los equipos generados y las estadísticas.',
+      'Se borran las evaluaciones y el puntaje que este partido le dio a cada uno.',
+      'A los que ya lo habían jugado se les descuenta del total de partidos.',
+    ],
+    textoConfirmar: 'Borrar partido',
+    onConfirmar: () => runAction('delete', () => api.delete(`/matches/${id}`), 'Partido borrado', { reload: false, onSuccess: () => navigate('/partidos') }),
+  });
 
   const handleAttendanceChange = async (registration, marca) => {
     const anterior = registration.attendance || null;
@@ -270,16 +298,24 @@ export default function MatchDetail() {
     }
   };
 
-  const handleRemoveRegistration = async (registration) => {
-    const confirmed = window.confirm(`¿Querés quitar a ${registration.player_name} de este partido?`);
-    if (!confirmed) return;
-
-    await runAction(
+  // Quitar a un anotado SÍ se deshace —el backend lo marca de baja, no lo
+  // borra, y se puede volver a anotar— así que va en tono normal y no en rojo.
+  // La regla que el usuario aprende: rojo con lista es lo que no vuelve.
+  const handleRemoveRegistration = (registration) => setPendiente({
+    clave: `remove-${registration.id}`,
+    tono: 'normal',
+    titulo: `¿Quitar a ${registration.player_name}?`,
+    descripcion: 'Se puede volver a anotar mientras la inscripción esté abierta.',
+    consecuencias: registration.status === 'titular'
+      ? ['Si hay suplentes, el primero pasa a titular automáticamente.']
+      : [],
+    textoConfirmar: 'Quitar del partido',
+    onConfirmar: () => runAction(
       `remove-${registration.id}`,
       () => api.delete(`/matches/${id}/registrations/${registration.id}`),
-      null
-    );
-  };
+      null,
+    ),
+  });
 
   const handleShareWhatsApp = () => {
     const url = window.location.href;
@@ -311,7 +347,7 @@ export default function MatchDetail() {
             Puede que haya sido borrado o que el enlace esté mal escrito.
           </p>
           <Link to="/partidos" className="rounded-full focus-visible:outline-none">
-            <Button data-testid="back-to-matches-btn" shape="pill" className="h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20">
+            <Button data-testid="back-to-matches-btn" shape="pill" className="h-11 px-8 bg-turf-btn hover:bg-turf-btn-dark text-white shadow-lg shadow-turf/20">
               <ArrowLeft className="w-4 h-4 mr-2" aria-hidden="true" /> Volver a partidos
             </Button>
           </Link>
@@ -337,7 +373,7 @@ export default function MatchDetail() {
             onClick={() => loadData()}
             data-testid="match-detail-retry-btn"
             shape="pill"
-            className="h-11 px-8 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20"
+            className="h-11 px-8 bg-turf-btn hover:bg-turf-btn-dark text-white shadow-lg shadow-turf/20"
           >
             <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" /> Reintentar
           </Button>
@@ -348,7 +384,15 @@ export default function MatchDetail() {
 
   const spotsLeft = match.max_players - titulars.length;
   const isFull = spotsLeft <= 0;
-  const deadlinePassed = Boolean(match.deadline) && new Date() > new Date(match.deadline);
+  // El horario del partido, como dato. NO bloquea: el que cierra la inscripcion
+  // es el organizador con su boton, y eso es lo unico que el servidor respeta.
+  //
+  // Antes esta variable deshabilitaba el boton de anotarse, y el dato que la
+  // alimentaba era mediodia UTC clavado —las 9 de la mañana en Argentina— que
+  // el backend nunca leyo. O sea que la pantalla decia "cerrada" mientras el
+  // servidor seguia aceptando anotados: dos verdades distintas sobre el mismo
+  // hecho, y la que le tocaba al usuario era la falsa.
+  const yaEmpezo = Boolean(match.deadline) && new Date() > new Date(match.deadline);
   const deadlineLabel = formatDeadline(match.deadline);
   const fillPct = match.max_players
     ? Math.min(100, Math.round((titulars.length / match.max_players) * 100))
@@ -356,21 +400,11 @@ export default function MatchDetail() {
 
   const primaryAction = (() => {
     if (match.status === 'abierto' && !isRegistered) {
-      if (deadlinePassed) {
-        return {
-          label: 'Inscripción cerrada',
-          icon: XCircle,
-          disabled: true,
-          className: 'bg-slate-200 text-slate-600 pointer-events-none',
-          testId: 'registration-closed-notice',
-          description: 'El plazo de inscripción venció. Esperá a que el organizador cierre el partido o abra uno nuevo.',
-        };
-      }
       return {
         label: actionLoading === 'register' ? 'Anotando...' : 'Anotarme',
         icon: UserPlus,
         onClick: handleRegister,
-        className: 'bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/20',
+        className: 'bg-turf-btn hover:bg-turf-btn-dark text-white shadow-lg shadow-turf/20',
         testId: 'register-for-match',
         description: isFull
           ? `No quedan lugares de titular: te anotás como suplente #${suplentes.length + 1}`
@@ -396,9 +430,9 @@ export default function MatchDetail() {
         className: 'border-2 border-slate-200 hover:border-slate-400',
         variant: 'outline',
         testId: 'close-registrations',
-        description: deadlinePassed
-          ? 'El plazo de inscripción ya venció: cerrala para poder armar los equipos.'
-          : `Inscripción abierta hasta ${deadlineLabel || 'el día del partido'}`,
+        description: yaEmpezo
+          ? 'La hora del partido ya pasó: cerrá la inscripción para armar los equipos. Si te apurás, se puede reabrir.'
+          : `El partido es ${deadlineLabel ? `el ${deadlineLabel} hs` : 'pronto'}. Cerrala cuando esté la lista; si cerrás de más, se puede reabrir.`,
       };
     }
     if (isOrganizer && tieneEquipos && ['cerrado', 'equipos_generados'].includes(match.status)) {
@@ -554,7 +588,7 @@ export default function MatchDetail() {
         {match.status === 'abierto' && deadlineLabel && (
           <div
             className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
-              deadlinePassed
+              yaEmpezo
                 ? 'border-amber-200 bg-amber-50 font-semibold text-amber-900'
                 : 'border-slate-200/80 bg-white text-slate-600 shadow-sm'
             }`}
@@ -562,9 +596,9 @@ export default function MatchDetail() {
           >
             <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              {deadlinePassed
-                ? `La inscripción cerró el ${deadlineLabel} hs`
-                : `Inscripción abierta hasta el ${deadlineLabel} hs`}
+              {yaEmpezo
+                ? `El partido era el ${deadlineLabel} hs, y la inscripción sigue abierta`
+                : `Te podés anotar hasta que el organizador cierre la lista. El partido es el ${deadlineLabel} hs`}
             </span>
           </div>
         )}
@@ -895,6 +929,25 @@ export default function MatchDetail() {
                   </Button>
                 )}
 
+                {/* Reabrir. Cerrar la inscripción era una puerta de una sola
+                    dirección: cerrar de más un jueves obligaba a cancelar el
+                    partido y rehacerlo, perdiendo a todos los anotados.
+                    Sólo desde "cerrado": apenas hay equipos armados, quitar
+                    gente tiene su propio camino. */}
+                {match.status === 'cerrado' && (
+                  <Button
+                    variant="outline"
+                    onClick={handleReopen}
+                    disabled={!!actionLoading}
+                    shape="pill"
+                    className="w-full h-11 border-2 border-slate-200 hover:border-slate-400"
+                    data-testid="reopen-registrations"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" aria-hidden="true" />
+                    {actionLoading === 'reopen' ? 'Reabriendo...' : 'Reabrir inscripción'}
+                  </Button>
+                )}
+
                 {match.status !== 'cancelado' && !['finalizado', 'completado'].includes(match.status) && (
                   <Button
                     variant="outline"
@@ -942,6 +995,23 @@ export default function MatchDetail() {
           onRegistered={() => loadData({ keepLoader: true })}
         />
       )}
+
+      <ConfirmDialog
+        abierto={!!pendiente}
+        onCambio={() => setPendiente(null)}
+        titulo={pendiente?.titulo}
+        descripcion={pendiente?.descripcion}
+        consecuencias={pendiente?.consecuencias || []}
+        textoConfirmar={pendiente?.textoConfirmar}
+        tono={pendiente?.tono || 'riesgo'}
+        cargando={!!pendiente && actionLoading === pendiente.clave}
+        onConfirmar={() => {
+          const accion = pendiente?.onConfirmar;
+          setPendiente(null);
+          accion?.();
+        }}
+        testId="match-confirm"
+      />
     </div>
   );
 }

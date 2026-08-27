@@ -47,7 +47,7 @@ export default function FinalCta() {
             asChild
             shape="pill"
             data-testid="cta-register-btn"
-            className="h-14 bg-turf px-10 text-base text-white shadow-lift-turf hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            className="h-14 bg-turf-btn px-10 text-base text-white shadow-lift-turf hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
             <Link to="/registro">
               Crear mi cuenta <ArrowRight className="ml-1" aria-hidden="true" />

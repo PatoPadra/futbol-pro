@@ -1,3 +1,4 @@
+from constants import puede_organizar
 from database import db
 from services.matches import get_match_or_404
 from services.profiles import get_my_profile_or_404
@@ -18,7 +19,7 @@ async def get_score_visibility_for_group(group_id: str, user):
         {"_id": 0},
     )
 
-    is_organizer = bool(membership and membership.get("member_role") == "organizador")
+    is_organizer = bool(membership and puede_organizar(membership.get("member_role")))
     return {
         "can_view_all_scores": is_organizer,
         "can_view_peer_scores": is_organizer,

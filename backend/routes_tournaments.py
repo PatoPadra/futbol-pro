@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
 from constants import (
+    deadline_de,
     DEFAULT_MATCH_TYPE,
     MODALITY_CAPACITY,
     TOURNAMENT_FORMAT_MAP,
@@ -189,11 +190,21 @@ async def _serializar_torneo(tournament: dict, profile: dict, user, teams=None) 
 
 @router.post("")
 async def create_tournament(data: CreateTournamentRequest, user=Depends(get_current_user)):
-    if user["role"] not in ["admin", "organizador"]:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo organizadores o admins pueden crear torneos",
+    # Un torneo lo arma quien organiza algun grupo, no quien tiene un rol global.
+    # Es el mismo criterio que el resto de la app: el rol que manda es el de
+    # adentro del grupo. Igual, cada grupo que se suma al torneo se valida
+    # despues con ensure_group_organizer.
+    if user["role"] != "admin":
+        profile = await get_my_profile_or_404(user)
+        organiza = await db.group_members.find_one(
+            {"player_id": profile["id"], "status": "activo", "member_role": "organizador"},
+            {"_id": 0, "id": 1},
         )
+        if not organiza:
+            raise HTTPException(
+                status_code=403,
+                detail="Para crear un torneo tenes que organizar al menos un grupo",
+            )
 
     nombre = data.name.strip()
     if len(nombre) < 3:
@@ -707,7 +718,7 @@ async def crear_partido_de_fixture(
         "time": data.time,
         "location": data.location,
         "maps_link": data.maps_link,
-        "deadline": f"{data.date}T12:00:00+00:00",
+        "deadline": deadline_de(data.date, data.time),
         "status": "abierto",
         "is_recurring": False,
         "max_players": MODALITY_CAPACITY[data.modality],

@@ -314,7 +314,7 @@ export default function StatsSheet({
                 variant={propuestos.has(player.player_id) ? 'outline' : 'default'}
                 className={cn(
                   'mt-4 min-h-11 w-full rounded-xl text-xs font-bold uppercase tracking-wide',
-                  !propuestos.has(player.player_id) && 'bg-turf text-white hover:bg-turf-dark',
+                  !propuestos.has(player.player_id) && 'bg-turf-btn text-white hover:bg-turf-btn-dark',
                 )}
                 onClick={() => proponer(player.player_id)}
                 disabled={enviando === `stats-${player.player_id}` || !puedeEditar || !filaValida(player.player_id)}
@@ -342,7 +342,7 @@ export default function StatsSheet({
                 onClick={guardarPlanilla}
                 disabled={enviando === 'planilla' || !puedeEditar || !todoValido || players.length === 0}
                 shape="pill"
-                className="min-h-12 w-full bg-turf font-bold uppercase tracking-wider text-white hover:bg-turf-dark"
+                className="min-h-12 w-full bg-turf-btn font-bold uppercase tracking-wider text-white hover:bg-turf-btn-dark"
                 data-testid="save-stats-sheet-btn"
               >
                 {enviando === 'planilla' ? (

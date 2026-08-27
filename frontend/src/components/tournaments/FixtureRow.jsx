@@ -257,7 +257,7 @@ export default function FixtureRow({
             aria-label="Guardar resultado"
             title={valido ? undefined : 'Cargá los goles de los dos equipos'}
             data-testid={`fixture-save-${fixture.id}`}
-            className="h-10 shrink-0 bg-turf px-3 text-white hover:bg-turf-dark"
+            className="h-10 shrink-0 bg-turf-btn px-3 text-white hover:bg-turf-btn-dark"
           >
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           </Button>

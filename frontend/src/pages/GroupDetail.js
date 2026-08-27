@@ -22,6 +22,7 @@ import GroupMembersPanel from '@/components/groups/GroupMembersPanel';
 import GroupModePanel from '@/components/groups/GroupModePanel';
 import GroupNotFound from '@/components/groups/GroupNotFound';
 import HeaderChip from '@/components/groups/HeaderChip';
+import InviteLinkPanel from '@/components/groups/InviteLinkPanel';
 import InviteMemberPanel from '@/components/groups/InviteMemberPanel';
 import LinkGuestDialog from '@/components/groups/LinkGuestDialog';
 import SeedRatingsPanel from '@/components/groups/SeedRatingsPanel';
@@ -312,7 +313,7 @@ export default function GroupDetail() {
               <Link to={`/partidos/crear?group_id=${group.id}`} data-testid="group-create-match-link">
                 <Button
                   shape="pill"
-                  className="h-12 bg-turf px-6 text-white shadow-lg shadow-turf/20 hover:bg-turf-dark"
+                  className="h-12 bg-turf-btn px-6 text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark"
                   data-testid="group-create-match-btn"
                 >
                   <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Crear partido
@@ -364,6 +365,10 @@ export default function GroupDetail() {
           </div>
 
           <div className="space-y-6">
+            {/* El link va ARRIBA del alta por email: es la forma que
+                escala y la que no exige saber el mail de nadie. */}
+            {canInvite && <InviteLinkPanel groupId={id} groupName={group?.name} />}
+
             {canInvite && (
               <InviteMemberPanel
                 onSubmit={handleInviteSubmit(onInviteSubmit)}

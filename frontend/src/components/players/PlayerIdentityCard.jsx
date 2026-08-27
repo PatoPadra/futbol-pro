@@ -164,7 +164,7 @@ const TONOS_CHIP = {
 };
 
 const TONOS_SIGLA = {
-  turf: 'bg-turf text-white',
+  turf: 'bg-turf-btn text-white',
   neutro: 'bg-slate-200 text-slate-700',
   evitar: 'bg-rose-600 text-white',
 };

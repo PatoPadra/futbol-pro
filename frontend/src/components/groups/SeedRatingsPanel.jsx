@@ -113,7 +113,7 @@ export default function SeedRatingsPanel({
         onClick={onSave}
         disabled={saving || rateableMembers.length === 0 || hasRatingErrors}
         shape="pill"
-        className="h-12 w-full bg-turf text-white hover:bg-turf-dark"
+        className="h-12 w-full bg-turf-btn text-white hover:bg-turf-btn-dark"
         data-testid="save-seed-ratings"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

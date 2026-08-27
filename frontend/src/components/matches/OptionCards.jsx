@@ -72,7 +72,7 @@ export default function OptionCards({
               aria-hidden="true"
               className={cn(
                 'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition-colors motion-reduce:transition-none',
-                elegida ? 'border-turf bg-turf text-white' : 'border-slate-300 bg-white',
+                elegida ? 'border-turf bg-turf-btn text-white' : 'border-slate-300 bg-white',
               )}
             >
               {elegida && <Check className="h-3 w-3" strokeWidth={3} />}

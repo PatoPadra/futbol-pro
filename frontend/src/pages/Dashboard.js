@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { useCapacidades } from '@/hooks/use-capacidades';
 import { Button } from '../components/ui/button';
 import { AlertCircle, ArrowRight, CalendarClock, History, RefreshCw } from 'lucide-react';
 
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
+  const { puedeCrearPartido, grupos, cargando: cargandoGrupos } = useCapacidades();
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -50,6 +52,10 @@ export default function Dashboard() {
       return;
     }
     if (user) loadData();
+    // Recarga cuando cambia lo que se mira, no cuando cambia la identidad de
+    // la funcion — que se rehace en cada render. Igual que en los otros doce
+    // efectos de carga de la app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadData = async () => {
@@ -106,7 +112,10 @@ export default function Dashboard() {
     );
   }
 
-  const canCreateMatch = user?.role === 'organizador' || user?.role === 'admin';
+  // Antes: `user?.role === 'organizador'`. El backend nunca autorizo por ahi —
+  // valida con ensure_group_organizer, que mira el rol DENTRO del grupo. Un
+  // organizador de grupo no veia el boton de su propio grupo.
+  const canCreateMatch = puedeCrearPartido;
   const goToCreateMatch = () => navigate('/partidos/crear');
   const { today, tomorrow } = todayAndTomorrow();
 
@@ -146,7 +155,14 @@ export default function Dashboard() {
         </div>
 
         {upcomingMatches.length === 0 ? (
-          <EmptyMatchesCard canCreate={canCreateMatch} onCreateMatch={goToCreateMatch} />
+          <EmptyMatchesCard
+            canCreate={canCreateMatch}
+            onCreateMatch={goToCreateMatch}
+            // Mientras cargan los grupos no afirmamos que no tiene ninguno: el
+            // parpadeo de "empeza por tu grupo" a alguien que si tiene grupo es
+            // peor que esperar medio segundo.
+            sinGrupos={!cargandoGrupos && grupos.length === 0}
+          />
         ) : (
           <>
             <div className={MATCH_RAIL}>

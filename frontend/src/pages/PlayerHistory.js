@@ -332,7 +332,7 @@ export default function PlayerHistory() {
               <Link to="/partidos">
                 <Button
                   shape="pill"
-                  className="h-11 bg-turf px-6 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+                  className="h-11 bg-turf-btn px-6 text-white hover:bg-turf-btn-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
                 >
                   Buscar un partido
                 </Button>

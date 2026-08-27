@@ -355,7 +355,10 @@ async def test_no_se_cargan_estadisticas_de_alguien_que_no_jugo(mongo_en_memoria
         ("diversion", []),
         ("basico", []),
         ("avanzado", CLASSIC_TRACKED_STATS),
-        ("pro", ["goals", "assists"]),
+        # Pro arranca con las tres clásicas: `saves` pasó a default. Antes el
+        # modo que "sigue estadísticas" era el único donde el arquero no tenía
+        # nada que sumar y su bonus era estructuralmente cero.
+        ("pro", ["goals", "assists", "saves"]),
     ],
 )
 async def test_cada_modo_arranca_con_las_estadisticas_que_le_tocan(mongo_en_memoria, mode, esperado):

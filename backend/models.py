@@ -1,15 +1,23 @@
 from typing import Dict, List, Literal, Optional, get_args
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from constants import (
     ATTENDANCE_IDS,
     CLASSIC_TRACKED_STATS,
+    DEFAULT_GROUP_MEMBER_ROLE,
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
+    GENDER_IDS,
+    GROUP_MEMBER_ROLE_IDS,
     MATCH_MODE_IDS,
     MATCH_TYPE_IDS,
+    MEMBERSHIP_STATUSES,
+    REGISTRATION_STATUSES,
+    TEAM_GENERATION_STATUSES,
+    TOURNAMENT_FORMAT_IDS,
     TRACKABLE_STAT_MAP,
+    USER_ROLE_IDS,
 )
 
 # Tope de una estadística en un partido. Como el del marcador, es la red contra
@@ -56,9 +64,27 @@ MatchMode = Literal["diversion", "basico", "avanzado", "pro", "entrenador"]
 MatchType = Literal["oficial", "practica"]
 Attendance = Literal["presente", "ausente", "sin_aviso"]
 
+# Los mismos Literal para los ejes que hasta ahora viajaban como `str` pelado.
+# `member_role` es el que más falta hacía: la lista estaba escrita a mano en ocho
+# lugares y el front terminó leyendo el eje equivocado (el rol global, que usa la
+# misma palabra "organizador" para otra cosa).
+GroupMemberRole = Literal["organizador", "frecuente", "invitado"]
+RegistrationStatus = Literal["titular", "suplente", "baja"]
+MembershipStatus = Literal["activo", "inactivo"]
+TeamGenerationStatus = Literal["borrador", "confirmado"]
+TournamentFormat = Literal["liga", "zonas_eliminatoria", "eliminacion"]
+UserRole = Literal["admin", "jugador"]
+
 assert set(get_args(MatchMode)) == set(MATCH_MODE_IDS), "MatchMode y MATCH_MODES no coinciden"
 assert set(get_args(MatchType)) == set(MATCH_TYPE_IDS), "MatchType y MATCH_TYPES no coinciden"
 assert set(get_args(Attendance)) == set(ATTENDANCE_IDS), "Attendance y ATTENDANCE_STATUSES no coinciden"
+assert set(get_args(Gender)) == set(GENDER_IDS), "Gender y GENDERS no coinciden"
+assert set(get_args(GroupMemberRole)) == set(GROUP_MEMBER_ROLE_IDS), "GroupMemberRole y GROUP_MEMBER_ROLES no coinciden"
+assert set(get_args(RegistrationStatus)) == set(REGISTRATION_STATUSES), "RegistrationStatus y REGISTRATION_STATUSES no coinciden"
+assert set(get_args(MembershipStatus)) == set(MEMBERSHIP_STATUSES), "MembershipStatus y MEMBERSHIP_STATUSES no coinciden"
+assert set(get_args(TeamGenerationStatus)) == set(TEAM_GENERATION_STATUSES), "TeamGenerationStatus y TEAM_GENERATION_STATUSES no coinciden"
+assert set(get_args(TournamentFormat)) == set(TOURNAMENT_FORMAT_IDS), "TournamentFormat y TOURNAMENT_FORMATS no coinciden"
+assert set(get_args(UserRole)) == set(USER_ROLE_IDS), "UserRole y USER_ROLES no coinciden"
 
 
 class EmailNormalizedModel(BaseModel):
@@ -110,6 +136,44 @@ class ProfileResponse(BaseModel):
     created_by: Optional[str] = None
     estimated_level: Optional[float] = None
     created_at: str
+
+
+class PlayerPublicResponse(BaseModel):
+    """Un jugador visto por OTRO jugador.
+
+    Es ProfileResponse menos la contabilidad interna. `email` es dato personal
+    de otra persona, `photo_public_id` es la llave con la que se borra un asset
+    en Cloudinary, y `user_id`/`created_by` son plomería que la pantalla no usa.
+
+    La pantalla de perfil propio no pasa por acá: pide `/api/profile`, que sí
+    devuelve todo porque son tus datos.
+    """
+
+    id: str
+    name: str
+    photo_url: Optional[str] = None
+    birth_date: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[Gender] = None
+    player_type: str
+    primary_position: Optional[str] = None
+    secondary_positions: List[str] = Field(default_factory=list)
+    unwanted_position: Optional[str] = None
+    matches_played: int = 0
+    estimated_level: Optional[float] = None
+    created_at: Optional[str] = None
+
+
+class InvitacionDeGrupo(BaseModel):
+    """Lo que ve alguien al abrir un link de invitacion, antes de entrar."""
+
+    token: str
+    group_id: str
+    group_name: str
+    invitado_por: Optional[str] = None
+    # Si ya es miembro, la pantalla lo lleva al grupo en vez de ofrecerle entrar.
+    ya_soy_miembro: bool = False
+    miembros: int = 0
 
 
 # Guest
@@ -306,6 +370,10 @@ class TeamGenerationResponse(BaseModel):
     status: str
     assignments: List[TeamAssignmentModel]
     balance_score: float
+    # Diferencia entre el mejor y el peor puntaje del plantel. Viaja para que la
+    # pantalla pueda decir "no hay con qué balancear todavía" en vez de mostrar
+    # un porcentaje alto calculado sobre jugadores que valen todos lo mismo.
+    score_spread: float = 0.0
     created_at: str
 
 
@@ -405,7 +473,7 @@ class PlayerNoteRequest(BaseModel):
 
 # Admin
 class UpdateRoleRequest(BaseModel):
-    role: str
+    role: UserRole
 
 
 # Player Metrics
@@ -452,7 +520,7 @@ class GroupResponse(BaseModel):
     created_by: str
     created_at: str
     default_match_mode: str = DEFAULT_MATCH_MODE
-    my_member_role: Optional[str] = None
+    my_member_role: Optional[GroupMemberRole] = None
     members_count: int = 0
 
 
@@ -462,15 +530,33 @@ class AddGroupMemberRequest(EmailNormalizedModel):
     email: Optional[EmailStr] = None
     gender: Optional[Gender] = None
     username: Optional[str] = None
-    member_role: Literal["organizador", "frecuente", "invitado"] = "frecuente"
+    member_role: GroupMemberRole = DEFAULT_GROUP_MEMBER_ROLE
+
+
+class UpdateGroupMemberRequest(BaseModel):
+    """Cambiar el rol o el estado de un miembro.
+
+    Antes el endpoint recibía un `dict` pelado y validaba a mano contra una
+    lista escrita ahí mismo: quedaba fuera del schema de OpenAPI, fuera de los
+    422 del framework, y la lista de roles existía en dos lugares.
+    """
+
+    member_role: Optional[GroupMemberRole] = None
+    status: Optional[MembershipStatus] = None
+
+    @model_validator(mode="after")
+    def _al_menos_uno(self):
+        if self.member_role is None and self.status is None:
+            raise ValueError("Mandá member_role, status, o los dos")
+        return self
 
 
 class GroupMemberResponse(BaseModel):
     id: str
     group_id: str
     player_id: str
-    member_role: str
-    status: str
+    member_role: GroupMemberRole
+    status: MembershipStatus
     invited_by: Optional[str] = None
     created_at: str
     player_name: Optional[str] = None
@@ -526,8 +612,8 @@ class ResendVerificationRequest(EmailNormalizedModel):
 # partidos del torneo son grupo contra grupo. Por eso acá no hay jugadores —
 # el plantel de cada equipo es la lista de miembros de su grupo.
 class CreateTournamentRequest(BaseModel):
-    name: str
-    format: Literal["liga", "zonas_eliminatoria", "eliminacion"]
+    name: str = Field(min_length=3, max_length=80)
+    format: TournamentFormat
     group_ids: List[str] = Field(default_factory=list)
     # Sólo se miran en formato "zonas_eliminatoria".
     zones_count: int = 2

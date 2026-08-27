@@ -382,7 +382,7 @@ export default function PostMatch() {
                     onClick={submitRatings}
                     disabled={submitting === 'ratings' || !myRegistration || otherPlayers.length === 0}
                     shape="pill"
-                    className="min-h-12 w-full bg-turf font-bold uppercase tracking-wider text-white hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                    className="min-h-12 w-full bg-turf-btn font-bold uppercase tracking-wider text-white hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
                   >
                     {submitting === 'ratings' ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

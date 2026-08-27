@@ -89,7 +89,7 @@ export default function LinkGuestDialog({ open, onOpenChange, groupId, targetMem
                   size="sm"
                   onClick={() => setPendingGuest(guest)}
                   disabled={mergingId === guest.player_id}
-                  className="rounded-full bg-turf hover:bg-turf-dark text-white shrink-0"
+                  className="rounded-full bg-turf-btn hover:bg-turf-btn-dark text-white shrink-0"
                   data-testid={`link-guest-confirm-${guest.player_id}`}
                 >
                   {mergingId === guest.player_id ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Link2 className="w-4 h-4 mr-1.5" />}

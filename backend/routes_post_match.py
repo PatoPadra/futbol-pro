@@ -20,6 +20,7 @@ from services.match_outcomes import recalcular_outcomes
 from services.matches import (
     ensure_match_manager,
     ensure_match_participant,
+    ensure_transicion,
     get_match_or_404,
     sincronizar_partidos_jugados,
 )
@@ -709,9 +710,16 @@ async def get_final_stats(match_id: str, user=Depends(get_current_user)):
 
 @router.post("/{match_id}/complete")
 async def complete_match(match_id: str, user=Depends(get_current_user)):
-    """Mark match as fully completed."""
+    """Cierra el partido del todo: ya no se evalúa ni se cargan estadísticas."""
     match = await get_match_or_404(match_id)
     await ensure_group_organizer(match["group_id"], user)
+
+    # Sin esta guarda, un partido ABIERTO saltaba directo a "completado": con
+    # gente todavía anotándose y `counted_player_ids` vacío para siempre, o sea
+    # un partido que nadie jugó según el contador que alimenta el índice de
+    # confianza del rating.
+    if not ensure_transicion(match.get("status"), "completado"):
+        return {"message": "El partido ya estaba completado"}
 
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "completado"}}

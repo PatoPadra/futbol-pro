@@ -297,7 +297,7 @@ export default function CreateGuest() {
                             className={cn(
                               badgeVariants({ variant: selected ? 'default' : 'outline' }),
                               'min-h-11 cursor-pointer text-sm py-1.5 px-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
-                              selected ? 'bg-turf text-white border-turf' : 'border-slate-300 hover:border-turf hover:text-turf-accessible'
+                              selected ? 'bg-turf-btn text-white border-turf' : 'border-slate-300 hover:border-turf hover:text-turf-accessible'
                             )}
                             onClick={() => setValue('primary_position', selected ? '' : p.id, { shouldValidate: true })}
                           >
@@ -349,7 +349,7 @@ export default function CreateGuest() {
               data-testid="create-guest-submit"
               disabled={loading}
               shape="pill"
-              className="h-12 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark"
+              className="h-12 w-full bg-turf-btn text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

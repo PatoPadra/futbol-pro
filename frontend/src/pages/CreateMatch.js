@@ -357,8 +357,8 @@ export default function CreateMatch() {
                   </span>
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  Los que se anoten después del cupo quedan como suplentes. La inscripción cierra el día
-                  del partido al mediodía.
+                  Los que se anoten después del cupo quedan como suplentes. La inscripción
+                  la cerrás vos cuando esté la lista, y si te apurás se puede reabrir.
                 </p>
               </div>
             </Panel>
@@ -589,7 +589,7 @@ export default function CreateMatch() {
                 data-testid="create-match-submit"
                 disabled={loading || loadingGroups || groups.length === 0 || faltaElRival}
                 shape="pill"
-                className="w-full h-12 bg-turf hover:bg-turf-dark text-white shadow-lg shadow-turf/25 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
+                className="w-full h-12 bg-turf-btn hover:bg-turf-btn-dark text-white shadow-lg shadow-turf/25 focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:active:scale-100"
               >
                 <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
                 {loading ? 'Creando...' : 'Crear partido'}

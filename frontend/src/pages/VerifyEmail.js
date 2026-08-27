@@ -205,7 +205,7 @@ export default function VerifyEmail() {
                       disabled={resending}
                       data-testid="resend-verification-submit-btn"
                       shape="pill"
-                      className="h-12 w-full bg-turf text-white hover:bg-turf-dark"
+                      className="h-12 w-full bg-turf-btn text-white hover:bg-turf-btn-dark"
                     >
                       {resending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                       {resending ? 'Reenviando...' : 'Reenviar email de verificación'}
@@ -230,7 +230,7 @@ export default function VerifyEmail() {
                   className={
                     status === 'error' && !resendDone
                       ? 'h-12 w-full border-2 border-slate-300 bg-white text-slate-800 hover:border-slate-800 hover:bg-white hover:text-slate-900'
-                      : 'h-12 w-full bg-turf text-white hover:bg-turf-dark'
+                      : 'h-12 w-full bg-turf-btn text-white hover:bg-turf-btn-dark'
                   }
                 >
                   <Link to="/login">Ir a iniciar sesión</Link>

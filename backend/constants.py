@@ -261,6 +261,28 @@ def coords_de(modality: int, formation: str | None) -> list:
 
 GUEST_TO_REGULAR_THRESHOLD = 4
 
+
+def deadline_de(date: str, time: str | None) -> str:
+    """Hasta cuándo dice la app que se puede anotar.
+
+    Es un dato INFORMATIVO: el que cierra la inscripción es el organizador con
+    su botón, y el backend no valida contra esto. Está escrito acá para que los
+    tres lugares que crean partidos lo armen igual.
+
+    Antes era `{fecha}T12:00:00+00:00`, clavado. Eso son las 9 de la mañana en
+    Argentina, o sea que para un partido de las 20:00 la pantalla anunciaba el
+    cierre once horas antes — y el backend, que nunca leyó el campo, seguía
+    aceptando anotados. Front y backend decían cosas distintas sobre el mismo
+    hecho.
+
+    Ahora es la hora del partido, sin offset inventado: la misma convención con
+    la que ya se guardan `date` y `time`, que son hora local del que juega.
+    """
+    hora = (time or "").strip() or "00:00"
+    if len(hora) == 5:  # HH:MM
+        hora = f"{hora}:00"
+    return f"{date}T{hora}"
+
 MATCH_STATUSES = [
     "abierto",
     "cerrado",
@@ -268,7 +290,139 @@ MATCH_STATUSES = [
     "equipos_confirmados",
     "finalizado",
     "completado",
+    # Estuvo faltando mucho tiempo: `cancelado` se escribe en cancel_match y el
+    # front lo pinta desde siempre, pero el catálogo no lo nombraba. Un catálogo
+    # que no incluye un valor que la base ya tiene no es un catálogo.
+    "cancelado",
 ]
+
+# A qué estados puede pasar un partido desde cada estado.
+#
+# Esto existe porque durante mucho tiempo las rutas escribían el estado nuevo
+# sin mirar nunca el actual, y eso permitía dos cosas que no pasan en la
+# realidad: un partido finalizado volviendo a "cerrado" (y reabriendo los seis
+# endpoints de post-partido sobre datos ya cargados), y un partido abierto
+# saltando a "completado" con gente todavía anotándose.
+#
+# La tabla describe la máquina COMPLETA, pero no todas las rutas la consultan
+# todavía: `finalize` y `cancel` traen sus propias guardas escritas a mano desde
+# antes, y hacen lo mismo. Cuando se unifiquen, el lugar es éste.
+#
+# Los estados terminales tienen lista vacía a propósito: un partido completado o
+# cancelado no va a ningún lado.
+# Rol GLOBAL de una cuenta. Son dos y nada más.
+#
+# Existía un tercero, "organizador", que no hacía nada útil: el backend siempre
+# autorizó por el rol DENTRO del grupo (ver GROUP_MEMBER_ROLES). Lo único que
+# lograba era robarle el nombre al que sí funciona — dos ejes con la misma
+# palabra significando cosas distintas, que es la causa raíz del bug de
+# permisos que tuvo el front durante meses.
+#
+# Con el alta abierta ya no queda ninguna acción que dependa del rol global
+# salvo la administración de la app, así que se fue. La migración de arranque
+# pasa a "jugador" a los que lo tenían: no pierden nada, porque crear grupos ya
+# lo puede hacer cualquiera.
+USER_ROLES = [
+    {"id": "admin", "name": "Administrador", "description": "Administra toda la app."},
+    {"id": "jugador", "name": "Jugador", "description": "Juega, y organiza los grupos donde sea organizador."},
+]
+
+USER_ROLE_IDS = [r["id"] for r in USER_ROLES]
+DEFAULT_USER_ROLE = "jugador"
+
+# Rol global que dejó de existir. Se conserva nombrado para que la migración de
+# arranque lo pueda buscar sin que el valor quede escrito suelto en database.py.
+LEGACY_USER_ROLE = "organizador"
+
+
+# ---------------------------------------------------------------------------
+# Roles y estados que NO tenían catálogo
+# ---------------------------------------------------------------------------
+#
+# Modo, tipo y asistencia tienen catálogo acá y un `Literal` en models.py que un
+# `assert` mantiene sincronizado, así que agregar un valor nuevo es imposible de
+# hacer mal. Estos cuatro no lo tenían: las listas estaban escritas a mano en
+# ocho lugares distintos y nadie las hablaba entre sí.
+#
+# OJO CON LA PALABRA "ORGANIZADOR". Hay dos ejes de rol y usan el mismo nombre
+# para cosas distintas:
+#
+#   users.role                → admin | jugador          (quién sos en la app)
+#   group_members.member_role → organizador | frecuente | invitado
+#                                                        (qué podés hacer EN ESE GRUPO)
+#
+# El backend siempre autorizó por el segundo, que es el correcto: alguien puede
+# organizar un grupo y ser jugador común en otro. Que los dos ejes compartieran
+# la palabra es lo que llevó al front a leer el equivocado.
+GROUP_MEMBER_ROLES = [
+    {
+        "id": "organizador",
+        "name": "Organizador",
+        "description": "Administra el grupo: invita, cambia roles, crea partidos.",
+        "puede_organizar": True,
+        "puede_calificar": True,
+    },
+    {
+        "id": "frecuente",
+        "name": "Jugador frecuente",
+        "description": "Juega seguido. Puede calificar a sus compañeros.",
+        "puede_organizar": False,
+        "puede_calificar": True,
+    },
+    {
+        "id": "invitado",
+        "name": "Invitado",
+        "description": "Lo sumó alguien para una fecha suelta.",
+        "puede_organizar": False,
+        "puede_calificar": False,
+    },
+]
+
+GROUP_MEMBER_ROLE_IDS = [r["id"] for r in GROUP_MEMBER_ROLES]
+GROUP_MEMBER_ROLE_MAP = {r["id"]: r for r in GROUP_MEMBER_ROLES}
+
+DEFAULT_GROUP_MEMBER_ROLE = "frecuente"
+
+# Estado de una inscripción a un partido. "baja" es un borrado lógico: la fila
+# queda para saber que la persona estuvo anotada y se dio de baja.
+REGISTRATION_STATUSES = ["titular", "suplente", "baja"]
+
+# Estado de una membresía. "inactivo" es el equivalente para los grupos.
+MEMBERSHIP_STATUSES = ["activo", "inactivo"]
+
+# Una generación de equipos nace en borrador y se confirma.
+TEAM_GENERATION_STATUSES = ["borrador", "confirmado"]
+
+
+def rol_de_grupo(member_role: str | None) -> dict:
+    """El rol de grupo, con default para las membresías viejas sin el campo."""
+    return GROUP_MEMBER_ROLE_MAP.get(member_role or DEFAULT_GROUP_MEMBER_ROLE, GROUP_MEMBER_ROLE_MAP[DEFAULT_GROUP_MEMBER_ROLE])
+
+
+def puede_organizar(member_role: str | None) -> bool:
+    """Si este rol de grupo administra el grupo y crea partidos en él."""
+    return rol_de_grupo(member_role)["puede_organizar"]
+
+
+def puede_calificar(member_role: str | None) -> bool:
+    """Si este rol de grupo puede ponerle puntaje a sus compañeros."""
+    return rol_de_grupo(member_role)["puede_calificar"]
+
+
+TRANSICIONES_PARTIDO = {
+    "abierto": ["cerrado", "cancelado"],
+    # Volver a "abierto" es reabrir la inscripción. Cerrar de más un jueves era
+    # una puerta de una sola dirección: obligaba a cancelar el partido y
+    # rehacerlo, perdiendo a todos los anotados.
+    "cerrado": ["abierto", "equipos_generados", "finalizado", "cancelado"],
+    # Volver a "cerrado" desde los equipos no es un retroceso raro: es lo que
+    # hace quitar a un anotado, que invalida los equipos ya armados.
+    "equipos_generados": ["equipos_confirmados", "cerrado", "finalizado", "cancelado"],
+    "equipos_confirmados": ["cerrado", "finalizado", "cancelado"],
+    "finalizado": ["completado"],
+    "completado": [],
+    "cancelado": [],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +689,13 @@ TRACKABLE_STATS = [
         "id": "saves",
         "name": "Atajadas",
         "short": "At",
-        "default": False,
+        # Va por default. Estaba en False, así que DEFAULT_TRACKED_STATS quedaba
+        # en goles y asistencias — y el modo Pro, que es el que "sigue
+        # estadísticas", era el ÚNICO donde el arquero no tenía nada que sumar:
+        # su bonus era estructuralmente cero mientras un delantero llegaba al
+        # tope. El modo más completo era el peor para el puesto más difícil de
+        # llenar.
+        "default": True,
         "bonus_weight": 0.15,
         "negative": False,
         "position_dependent": True,

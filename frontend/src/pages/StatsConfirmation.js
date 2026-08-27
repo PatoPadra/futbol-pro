@@ -157,7 +157,7 @@ export default function StatsConfirmation() {
               <Button
                 asChild
                 shape="pill"
-                className="min-h-11 bg-turf px-7 font-bold uppercase tracking-wider text-white hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                className="min-h-11 bg-turf-btn px-7 font-bold uppercase tracking-wider text-white hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 data-testid="empty-go-to-post-match"
               >
                 <Link to={`/partidos/${id}/post-partido`}>Cargar estadísticas</Link>
@@ -183,7 +183,7 @@ export default function StatsConfirmation() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-slate-900">{s.player_name}</p>
-                    <Badge className="min-h-0 shrink-0 gap-1 border-0 bg-turf font-semibold text-white">
+                    <Badge className="min-h-0 shrink-0 gap-1 border-0 bg-turf-btn font-semibold text-white">
                       <CheckCircle className="h-3 w-3" aria-hidden="true" /> Confirmado
                     </Badge>
                   </div>
@@ -287,7 +287,7 @@ export default function StatsConfirmation() {
                             <Button
                               variant={alreadyVoted ? 'outline' : 'default'}
                               className={`min-h-11 shrink-0 rounded-full px-5 text-xs font-bold uppercase tracking-wide ${
-                                alreadyVoted ? '' : 'bg-turf text-white hover:bg-turf-dark'
+                                alreadyVoted ? '' : 'bg-turf-btn text-white hover:bg-turf-btn-dark'
                               }`}
                               onClick={() => handleVote(p.id)}
                               disabled={alreadyVoted || votingId === p.id}

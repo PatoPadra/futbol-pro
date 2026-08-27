@@ -7,7 +7,6 @@ from auth import get_current_user
 from constants import capacidades_de, coords_de, formaciones_de
 from database import db
 from models import ManualAdjustRequest, TeamGenerationResponse
-from rating_calculator import get_player_score_for_balance
 from services.match_outcomes import recalcular_outcomes
 from services.matches import ensure_match_manager, get_match_or_404
 from services.permissions import ensure_group_member
@@ -41,9 +40,19 @@ async def _enrich_assignments(assignments: list[dict]):
     enriched = []
     for assignment in assignments:
         profile = profile_map.get(assignment["player_id"], {})
-        player_score = assignment.get("player_score")
-        if player_score is None:
-            player_score = await get_player_score_for_balance(assignment["player_id"])
+
+        # Un hueco sigue siendo un hueco. Antes acá se recalculaba el puntaje
+        # con el rating de HOY y se devolvía con el mismo nombre que el
+        # congelado: indistinguibles. Como el front devuelve lo que recibe y
+        # `adjust_teams` guardaba eso, el rating post-resultado terminaba
+        # blanqueado como si fuera el de antes del partido — que es exactamente
+        # la circularidad que `match_outcomes` existe para evitar.
+        #
+        # La pantalla ya sabe mostrar "—" cuando no hay dato.
+        try:
+            player_score = round(float(assignment.get("player_score")), 2)
+        except (TypeError, ValueError):
+            player_score = None
 
         enriched.append({
             **assignment,
@@ -51,7 +60,7 @@ async def _enrich_assignments(assignments: list[dict]):
             "player_photo": profile.get("photo_url", assignment.get("player_photo")),
             "player_primary_position": profile.get("primary_position"),
             "player_gender": profile.get("gender", assignment.get("player_gender")),
-            "player_score": round(float(player_score), 2),
+            "player_score": player_score,
             "player_age": _calculate_age(profile.get("birth_date")),
         })
 
@@ -61,8 +70,16 @@ async def _enrich_assignments(assignments: list[dict]):
 def _build_team_summary(assignments: list[dict], team_label: str):
     team_players = [assignment for assignment in assignments if assignment.get("team") == team_label]
     count = len(team_players)
-    total_value = round(sum(float(player.get("player_score") or 0) for player in team_players), 2)
-    avg_value = round(total_value / count, 2) if count else 0.0
+    # Sólo promedia a los que tienen puntaje congelado. Contar un hueco como
+    # cero hundiría el promedio del equipo y haría ver desparejo un reparto que
+    # no lo está, que es peor que informar sobre menos jugadores.
+    puntajes = [
+        float(player["player_score"])
+        for player in team_players
+        if isinstance(player.get("player_score"), (int, float))
+    ]
+    total_value = round(sum(puntajes), 2)
+    avg_value = round(total_value / len(puntajes), 2) if puntajes else 0.0
 
     ages = [player.get("player_age") for player in team_players if player.get("player_age") is not None]
     avg_age = round(sum(ages) / len(ages), 1) if ages else None
@@ -132,6 +149,7 @@ async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
         "status": "borrador",
         "assignments": result["assignments"],
         "balance_score": result["balance_score"],
+        "score_spread": result.get("score_spread", 0.0),
         # Cómo quedó repartido cada género en el momento de generar. Lo que se
         # muestra en pantalla se recalcula (ver _build_team_summary); esto queda
         # para poder auditar el balanceo sin volver a correrlo.
@@ -194,9 +212,27 @@ async def adjust_teams(match_id: str, data: ManualAdjustRequest, user=Depends(ge
     if not gen:
         raise HTTPException(status_code=404, detail="No se han generado equipos")
 
-    update = {
-        "assignments": [assignment.model_dump() for assignment in data.assignments],
+    # El puntaje congelado es dato del servidor y ningún request lo escribe. El
+    # ajuste manual mueve jugadores de equipo, de posición y de banco; no
+    # reescribe cuánto valía cada uno cuando se armaron los equipos.
+    #
+    # Antes se guardaba el `model_dump()` entero, así que bastaba con que el
+    # cliente devolviera otro número — o ninguno, porque el campo es opcional —
+    # para perder el ancla de todo el partido.
+    guardadas = {
+        asignacion["player_id"]: asignacion
+        for asignacion in gen.get("assignments", [])
     }
+    nuevas = []
+    for assignment in data.assignments:
+        payload = assignment.model_dump()
+        payload["player_score"] = guardadas.get(assignment.player_id, {}).get("player_score")
+        # La edad se deriva al leer, y encima cambia con el tiempo: guardarla
+        # dejaba un dato que envejece mal adentro de un documento histórico.
+        payload.pop("player_age", None)
+        nuevas.append(payload)
+
+    update = {"assignments": nuevas}
     if data.formation_a:
         update["formation_a"] = data.formation_a
     if data.formation_b:

@@ -6,15 +6,29 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
 from database import db
-from constants import DEFAULT_MATCH_MODE, modo_disponible, modo_label
+from constants import (
+    DEFAULT_MATCH_MODE,
+    DEFAULT_USER_ROLE,
+    modo_disponible,
+    modo_label,
+    puede_calificar,
+    puede_organizar,
+)
 from models import (
     AddGroupMemberRequest,
     CreateGroupRequest,
     GroupSeedRatingBatchRequest,
     MergeGuestRequest,
+    UpdateGroupMemberRequest,
     UpdateGroupRequest,
 )
 from services.guest_merge import merge_guest_into_profile
+from services.invitations import (
+    crear_invitacion,
+    invitacion_vigente,
+    revocar_invitacion,
+)
+from services.matches import borrar_partidos
 from services.permissions import (
     ensure_can_delete_group,
     ensure_can_invite_to_group,
@@ -31,15 +45,17 @@ router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
 def normalize_global_role(role: str | None):
-    if role == "admin":
-        return "admin"
-    if role == "organizador":
-        return "organizador"
-    return "jugador"
+    """El rol global, que ahora es admin o jugador y nada mas.
+
+    Las cuentas viejas con el rol "organizador" que se elimino caen en jugador,
+    igual que hace la migracion de arranque. No pierden nada: lo que ese rol
+    habilitaba ahora lo puede hacer cualquiera.
+    """
+    return "admin" if role == "admin" else DEFAULT_USER_ROLE
 
 
 def build_group_permission(member_role: str | None):
-    return "organizador" if member_role == "organizador" else "miembro"
+    return "organizador" if puede_organizar(member_role) else "miembro"
 
 
 def build_membership_type(member_role: str | None, player_type: str | None = None):
@@ -111,9 +127,14 @@ async def resolve_target_player(data: AddGroupMemberRequest, inviter_profile: di
 
 @router.post("")
 async def create_group(data: CreateGroupRequest, user=Depends(get_current_user)):
-    if user["role"] not in ["admin", "organizador"]:
-        raise HTTPException(status_code=403, detail="Solo organizadores o admins pueden crear grupos")
-
+    # Cualquiera puede armar su grupo. Antes hacia falta el rol global de
+    # organizador, que solo un admin otorgaba a mano: el que se registraba por su
+    # cuenta completaba todo el alta y aterrizaba en un panel sin ninguna accion
+    # posible, esperando a un organizador que no tenia.
+    #
+    # No hace falta nada mas para que funcione: quien crea el grupo ya se inserta
+    # como organizador DE ESE GRUPO unas lineas mas abajo, y crear partidos ya
+    # valida por ahi (ensure_group_organizer).
     if not modo_disponible(data.default_match_mode):
         raise HTTPException(
             status_code=400,
@@ -221,9 +242,14 @@ async def list_groups(user=Depends(get_current_user)):
             "my_group_permission": build_group_permission(member_role),
             "my_membership_type": build_membership_type(member_role, profile.get("player_type")),
             "my_global_role": normalize_global_role(user.get("role")),
-            "can_manage": member_role == "organizador",
-            "can_invite": member_role == "organizador",
-            "can_rate_seed": member_role in ["organizador", "frecuente"],
+            "can_manage": puede_organizar(member_role),
+            "can_invite": puede_organizar(member_role),
+            "can_rate_seed": puede_calificar(member_role),
+            # Quién puede crear un partido EN ESTE GRUPO. Va como booleano
+            # calculado por el backend y no como algo que el front derive del
+            # rol: derivarlo es lo que llevó a mirar el rol global, que usa la
+            # misma palabra para otra cosa.
+            "can_create_match": puede_organizar(member_role),
             "members_count": members_count,
         }))
     return result
@@ -248,9 +274,9 @@ async def get_group(group_id: str, user=Depends(get_current_user)):
         my_member_role = member_role
         my_group_permission = build_group_permission(member_role)
         my_membership_type = build_membership_type(member_role, profile.get("player_type"))
-        can_manage = member_role == "organizador"
-        can_invite = member_role == "organizador"
-        can_rate_seed = member_role in ["organizador", "frecuente"]
+        can_manage = puede_organizar(member_role)
+        can_invite = puede_organizar(member_role)
+        can_rate_seed = puede_calificar(member_role)
 
     members_count = await db.group_members.count_documents({"group_id": group_id, "status": "activo"})
 
@@ -415,7 +441,12 @@ async def add_group_member(group_id: str, data: AddGroupMemberRequest, user=Depe
 
 
 @router.patch("/{group_id}/members/{member_id}")
-async def update_group_member(group_id: str, member_id: str, data: dict, user=Depends(get_current_user)):
+async def update_group_member(
+    group_id: str,
+    member_id: str,
+    data: UpdateGroupMemberRequest,
+    user=Depends(get_current_user),
+):
     await get_group_or_404(group_id)
     await ensure_can_manage_group(group_id, user)
 
@@ -423,22 +454,10 @@ async def update_group_member(group_id: str, member_id: str, data: dict, user=De
     if not member:
         raise HTTPException(status_code=404, detail="Miembro no encontrado")
 
-    allowed_roles = ["organizador", "frecuente", "invitado"]
-    allowed_status = ["activo", "inactivo"]
-
-    update_data = {}
-    if "member_role" in data:
-        if data["member_role"] not in allowed_roles:
-            raise HTTPException(status_code=400, detail="member_role inválido")
-        update_data["member_role"] = data["member_role"]
-
-    if "status" in data:
-        if data["status"] not in allowed_status:
-            raise HTTPException(status_code=400, detail="status inválido")
-        update_data["status"] = data["status"]
-
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No hay cambios para aplicar")
+    # La validación de los valores la hace el modelo contra el catálogo, así que
+    # acá sólo queda decidir qué campos vinieron. `exclude_none` y no
+    # `exclude_unset` porque mandar null explícito tampoco es un cambio.
+    update_data = data.model_dump(exclude_none=True)
 
     await db.group_members.update_one({"id": member_id}, {"$set": update_data})
     updated = await db.group_members.find_one({"id": member_id}, {"_id": 0})
@@ -458,7 +477,7 @@ async def remove_group_member(group_id: str, member_id: str, user=Depends(get_cu
     if user["role"] != "admin" and member["player_id"] == actor_profile["id"]:
         raise HTTPException(status_code=400, detail="No puedes quitarte a ti mismo desde aquí")
 
-    if member.get("member_role") == "organizador":
+    if puede_organizar(member.get("member_role")):
         organizers_count = await db.group_members.count_documents(
             {"group_id": group_id, "status": "activo", "member_role": "organizador"}
         )
@@ -635,24 +654,95 @@ async def merge_guest_member(group_id: str, member_id: str, data: MergeGuestRequ
     return {"message": f"{merged['name']} fue vinculado a {target_profile['name']}"}
 
 
+@router.get("/{group_id}/invite-link")
+async def ver_link_de_invitacion(group_id: str, user=Depends(get_current_user)):
+    """El link vigente del grupo, si hay uno."""
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+
+    invitacion = await invitacion_vigente(group_id)
+    if not invitacion:
+        return {"token": None, "usos": 0, "created_at": None}
+    return {
+        "token": invitacion["token"],
+        "usos": invitacion.get("usos", 0),
+        "created_at": invitacion.get("created_at"),
+    }
+
+
+@router.post("/{group_id}/invite-link")
+async def crear_link_de_invitacion(
+    group_id: str,
+    rotar: bool = False,
+    user=Depends(get_current_user),
+):
+    """Crea el link, o devuelve el que ya había.
+
+    Con `rotar=true` emite uno nuevo y mata el anterior: es lo que se hace
+    cuando el link se filtró y hay que cortarle el acceso a quien lo tenga
+    guardado.
+    """
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+    profile = await get_my_profile_or_404(user)
+
+    invitacion = await crear_invitacion(group_id, profile["id"], rotar=rotar)
+    return {
+        "token": invitacion["token"],
+        "usos": invitacion.get("usos", 0),
+        "created_at": invitacion.get("created_at"),
+        "rotado": bool(rotar),
+    }
+
+
+@router.delete("/{group_id}/invite-link")
+async def revocar_link_de_invitacion(group_id: str, user=Depends(get_current_user)):
+    """Corta el link sin emitir otro: el grupo vuelve a ser sólo por invitación a mano."""
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+
+    revocado = await revocar_invitacion(group_id)
+    return {"message": "Link desactivado" if revocado else "No había ningún link activo"}
+
+
 @router.delete("/{group_id}")
 async def delete_group(group_id: str, user=Depends(get_current_user)):
-    await ensure_can_delete_group(group_id, user)
+    grupo = await ensure_can_delete_group(group_id, user)
+
+    # Un grupo que está jugando un torneo no se puede borrar y listo: quien
+    # borra es organizador de SU grupo, no del torneo, y llevárselo puesto deja
+    # la llave inejecutable para todos los demás equipos. Rechazar es más
+    # honesto que romperle el torneo a otra gente en silencio.
+    equipos = await db.tournament_teams.find(
+        {"group_id": group_id}, {"_id": 0, "tournament_id": 1}
+    ).to_list(50)
+    if equipos:
+        torneo_ids = sorted({e["tournament_id"] for e in equipos})
+        en_juego = await db.tournaments.find(
+            {"id": {"$in": torneo_ids}, "status": {"$ne": "finalizado"}},
+            {"_id": 0, "name": 1},
+        ).to_list(50)
+        if en_juego:
+            nombres = ", ".join(f"«{t.get('name', 'sin nombre')}»" for t in en_juego)
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"«{grupo.get('name', 'Este grupo')}» está jugando {nombres}. "
+                    "Sacalo del torneo antes de borrarlo."
+                ),
+            )
 
     match_ids = [
         m["id"]
         for m in await db.matches.find({"group_id": group_id}, {"_id": 0, "id": 1}).to_list(2000)
     ]
 
-    if match_ids:
-        await db.match_registrations.delete_many({"match_id": {"$in": match_ids}})
-        await db.team_generations.delete_many({"match_id": {"$in": match_ids}})
-        await db.peer_ratings.delete_many({"match_id": {"$in": match_ids}})
-        await db.self_evaluations.delete_many({"match_id": {"$in": match_ids}})
-        await db.stats_final.delete_many({"match_id": {"$in": match_ids}})
-        await db.stats_proposals.delete_many({"match_id": {"$in": match_ids}})
-        await db.matches.delete_many({"group_id": group_id})
+    await borrar_partidos(match_ids)
 
+    # Los torneos que quedan son los ya finalizados: el equipo se va con el
+    # grupo, pero el fixture conserva su marcador y su historia.
+    await db.tournament_teams.delete_many({"group_id": group_id})
+    await db.group_invitations.delete_many({"group_id": group_id})
     await db.group_members.delete_many({"group_id": group_id})
     await db.group_seed_ratings.delete_many({"group_id": group_id})
     await db.groups.delete_one({"id": group_id})

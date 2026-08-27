@@ -192,3 +192,48 @@ def test_stats_bonus_campos_faltantes_valen_cero():
 def test_stats_bonus_topeado_en_uno():
     stats = [{"goals": 10, "assists": 10, "saves": 10}]
     assert _calculate_stats_bonus(stats) == 1.0
+
+
+# --- el denominador del bonus ----------------------------------------------
+#
+# Antes se dividía por la cantidad de FILAS de estadísticas, y un jugador sin
+# nada que anotar no genera fila. O sea que el bonus premiaba al que tenía el
+# historial incompleto: el goleador del grupo pasaba a ser el que tenía mejor
+# prensa.
+
+
+def test_el_bonus_se_divide_por_partidos_jugados_y_no_por_filas():
+    """El ejemplo exacto de la auditoría, con sus números.
+
+    Dos jugadores con diez partidos recientes cada uno. Al primero le cargaron
+    sólo sus dos mejores (3 goles en cada uno); al segundo, los diez (10 goles
+    en total, o sea que convirtió MÁS). Con el denominador viejo el primero
+    sacaba 0.90 y el segundo 0.30: tres veces más bonus por menos goles.
+    """
+    con_prensa = [{"match_id": f"m{i}", "goals": 3} for i in range(2)]
+    goleador = [{"match_id": f"m{i}", "goals": 1} for i in range(10)]
+
+    bonus_con_prensa = _calculate_stats_bonus(con_prensa, partidos_recientes=10)
+    bonus_goleador = _calculate_stats_bonus(goleador, partidos_recientes=10)
+
+    assert bonus_con_prensa == pytest.approx(0.18)   # 6 goles / 10 partidos * 0.3
+    assert bonus_goleador == pytest.approx(0.30)     # 10 goles / 10 partidos * 0.3
+    assert bonus_goleador > bonus_con_prensa
+
+
+def test_sin_el_dato_de_partidos_se_comporta_como_antes():
+    """Compatibilidad: el argumento es opcional y el default no rompe nada."""
+    stats = [{"match_id": "m1", "goals": 2}, {"match_id": "m2", "goals": 4}]
+    assert _calculate_stats_bonus(stats) == pytest.approx(0.9)
+
+
+def test_nunca_divide_por_menos_filas_de_las_que_hay():
+    """Red: si llegaran más filas que partidos, no inflamos dividiendo por menos."""
+    stats = [{"match_id": f"m{i}", "goals": 1} for i in range(4)]
+    assert _calculate_stats_bonus(stats, partidos_recientes=1) == pytest.approx(0.3)
+
+
+def test_el_arquero_puede_sumar_bonus_por_atajadas():
+    """`saves` pesa 0.15 y ahora viene prendida por default en modo Pro."""
+    stats = [{"match_id": "m1", "saves": 4}]
+    assert _calculate_stats_bonus(stats, partidos_recientes=1) == pytest.approx(0.6)

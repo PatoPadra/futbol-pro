@@ -7,7 +7,10 @@ from auth import get_current_user
 from constants import (
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
+    GROUP_MEMBER_ROLE_IDS,
+    deadline_de,
     MODALITY_CAPACITY,
+    puede_organizar,
     capacidades_de,
     modo_disponible,
     modo_label,
@@ -16,7 +19,13 @@ from constants import (
 )
 from database import db
 from models import CreateMatchRequest, MatchResponse, RegistrationResponse, UpdateMatchRequest
-from services.matches import datos_de_modo, ensure_match_manager, get_match_or_404
+from services.matches import (
+    borrar_partidos,
+    datos_de_modo,
+    ensure_match_manager,
+    ensure_transicion,
+    get_match_or_404,
+)
 from services.permissions import ensure_group_member, ensure_group_organizer
 from services.profiles import get_my_profile_or_404
 
@@ -24,7 +33,7 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 
 
 def normalize_registration_type(value: str | None):
-    if value in {"organizador", "frecuente", "invitado"}:
+    if value in set(GROUP_MEMBER_ROLE_IDS):
         return value
     return None
 
@@ -134,7 +143,7 @@ async def create_match(data: CreateMatchRequest, user=Depends(get_current_user))
 
     await ensure_group_organizer(data.group_id, user)
     max_players = MODALITY_CAPACITY[data.modality]
-    deadline = f"{data.date}T12:00:00+00:00"
+    deadline = deadline_de(data.date, data.time)
     now = datetime.now(timezone.utc).isoformat()
     match_id = str(uuid.uuid4())
 
@@ -322,7 +331,7 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
         "titular_count": titular_count,
         "suplente_count": suplente_count,
         "my_registration": my_registration,
-        "can_manage": user["role"] == "admin" or (profile and profile.get("id") == match.get("organizer_id")) or membership.get("member_role") == "organizador",
+        "can_manage": user["role"] == "admin" or (profile and profile.get("id") == match.get("organizer_id")) or puede_organizar(membership.get("member_role")),
         "can_delete": user["role"] == "admin",
     }
 
@@ -380,16 +389,8 @@ async def delete_match(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_can_delete_match(match, user)
 
-    await db.match_registrations.delete_many({"match_id": match_id})
-    await db.peer_ratings.delete_many({"match_id": match_id})
-    await db.self_evaluations.delete_many({"match_id": match_id})
-    await db.stats_proposals.delete_many({"match_id": match_id})
-    await db.stats_final.delete_many({"match_id": match_id})
-    await db.team_generations.delete_many({"match_id": match_id})
-    await db.match_outcomes.delete_many({"match_id": match_id})
-    await db.player_match_notes.delete_many({"match_id": match_id})
     # El partido se va, pero la llave del torneo queda: su resultado vive ahí.
-    await db.matches.delete_one({"id": match_id})
+    await borrar_partidos([match_id])
 
     return {"message": "Partido borrado correctamente"}
 
@@ -587,10 +588,40 @@ async def close_registrations(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)
     await ensure_can_manage_match(match, user)
 
+    # Sin esta guarda, un partido finalizado volvía a "cerrado" y con él se
+    # reabrían los seis endpoints de post-partido sobre datos ya cargados. El
+    # partido quedaba además cerrado con `counted_player_ids` lleno, que es un
+    # estado que no debería poder existir.
+    if not ensure_transicion(match.get("status"), "cerrado"):
+        return {"message": "Las inscripciones ya estaban cerradas"}
+
     await db.matches.update_one(
         {"id": match_id}, {"$set": {"status": "cerrado"}}
     )
     return {"message": "Inscripciones cerradas"}
+
+
+@router.post("/{match_id}/reopen")
+async def reopen_registrations(match_id: str, user=Depends(get_current_user)):
+    """Vuelve a abrir la inscripción de un partido cerrado.
+
+    Cerrar era una puerta de una sola dirección: no había endpoint ni pantalla
+    para deshacerlo, así que cerrar de más un jueves obligaba a cancelar el
+    partido y rehacerlo, perdiendo a todos los anotados.
+
+    Sólo desde "cerrado", que es el único estado donde reabrir no contradice
+    nada: apenas se generan los equipos ya hay trabajo hecho encima de la lista
+    de anotados, y quitar a alguien a esa altura tiene su propio camino (que
+    borra los equipos y vuelve a dejar el partido cerrado).
+    """
+    match = await get_match_or_404(match_id)
+    await ensure_can_manage_match(match, user)
+
+    if not ensure_transicion(match.get("status"), "abierto"):
+        return {"message": "La inscripción ya estaba abierta"}
+
+    await db.matches.update_one({"id": match_id}, {"$set": {"status": "abierto"}})
+    return {"message": "Inscripción reabierta"}
 
 
 @router.post("/{match_id}/cancel")
@@ -662,7 +693,7 @@ async def duplicate_match(match_id: str, user=Depends(get_current_user)):
 
     new_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    deadline = f"{next_date_str}T12:00:00+00:00"
+    deadline = deadline_de(next_date_str, match.get("time"))
 
     new_match = {
         "id": new_id,

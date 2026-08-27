@@ -289,7 +289,7 @@ export default function MatchResultPanel({
                 onClick={guardar}
                 disabled={guardando || !valido}
                 shape="pill"
-                className="h-11 flex-1 bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark disabled:active:scale-100"
+                className="h-11 flex-1 bg-turf-btn text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark disabled:active:scale-100"
                 data-testid="save-result-btn"
               >
                 {guardando ? (

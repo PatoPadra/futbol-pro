@@ -186,7 +186,7 @@ export default function CreateTournament() {
                           aria-hidden="true"
                           className={cn(
                             'grid h-9 w-9 shrink-0 place-items-center rounded-xl',
-                            activo ? 'bg-turf text-white' : 'bg-slate-100 text-slate-600',
+                            activo ? 'bg-turf-btn text-white' : 'bg-slate-100 text-slate-600',
                           )}
                         >
                           {activo ? <Check className="h-4 w-4" /> : <Users className="h-4 w-4" />}
@@ -304,7 +304,7 @@ export default function CreateTournament() {
           disabled={guardando || cargandoGrupos}
           shape="pill"
           data-testid="create-tournament-submit"
-          className="h-12 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark disabled:active:scale-100"
+          className="h-12 w-full bg-turf-btn text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark disabled:active:scale-100"
         >
           {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trophy className="mr-2 h-4 w-4" />}
           {guardando ? 'Creando…' : 'Crear torneo'}

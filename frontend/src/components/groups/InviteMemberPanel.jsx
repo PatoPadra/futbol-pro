@@ -166,7 +166,7 @@ export default function InviteMemberPanel({
           type="submit"
           disabled={saving}
           shape="pill"
-          className="h-12 w-full bg-turf text-white hover:bg-turf-dark"
+          className="h-12 w-full bg-turf-btn text-white hover:bg-turf-btn-dark"
           data-testid="group-invite-submit"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
