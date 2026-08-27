@@ -1,10 +1,17 @@
 from datetime import datetime, timezone
+import math
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth import get_current_user
-from constants import TRACKABLE_STAT_MAP, capacidades_de, stats_de, valores_de_stats
+from constants import (
+    COBERTURA_MINIMA_DE_EVALUACION,
+    TRACKABLE_STAT_MAP,
+    capacidades_de,
+    stats_de,
+    valores_de_stats,
+)
 from database import db
 from models import (
     PeerRatingBatchRequest,
@@ -363,6 +370,27 @@ async def submit_ratings(match_id: str, data: PeerRatingBatchRequest, user=Depen
 
     if not valid_ratings:
         raise HTTPException(status_code=400, detail="No hay evaluaciones validas para guardar")
+
+    # NO PODÉS ELEGIR A QUIÉN CALIFICAR.
+    #
+    # Sin esto, tres amigos se ponían 10 entre ellos, no calificaban a nadie
+    # más, y se llevaban casi dos puntos de ventaja sobre un jugador honesto —
+    # que en el balanceador es medio jugador de diferencia.
+    #
+    # El umbral no es el 100% a propósito: siempre hay alguien que se fue antes
+    # o con quien no te cruzaste. Pero calificar a tres de doce ya no es "no me
+    # acuerdo del resto", es elegir.
+    companeros = len(valid_player_ids - {profile["id"]})
+    minimo = math.ceil(companeros * COBERTURA_MINIMA_DE_EVALUACION)
+    if companeros and len(valid_ratings) < minimo:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Calificá al menos a {minimo} de los {companeros} que jugaron con vos. "
+                "Si evaluás sólo a algunos, las notas dicen más de a quién elegiste "
+                "que de cómo jugaron."
+            ),
+        )
 
     now = datetime.now(timezone.utc).isoformat()
 

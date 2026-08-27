@@ -318,13 +318,19 @@ async def test_pero_las_evaluaciones_entre_pares_siguen_andando(mongo_en_memoria
     })
     await db.matches.update_one({"id": partido.id}, {"$set": {"status": "finalizado"}})
 
+    # Se califica a todo el plantel y no a uno solo: desde el arreglo de
+    # colusión hay que cubrir al menos el 60% de los que jugaron. Lo que este
+    # test cuida es que el modo Entrenador NO bloquee las evaluaciones, no que
+    # se pueda calificar a uno y listo.
     await rpm.submit_ratings(
         partido.id,
-        PeerRatingBatchRequest(ratings=[{"rated_player_id": ids[0], "score": 9}]),
+        PeerRatingBatchRequest(ratings=[
+            {"rated_player_id": pid, "score": 7 + (i % 3)} for i, pid in enumerate(ids)
+        ]),
         user=user,
     )
 
-    assert await db.peer_ratings.count_documents({"match_id": partido.id}) == 1
+    assert await db.peer_ratings.count_documents({"match_id": partido.id}) == len(ids)
 
 
 def test_las_capacidades_del_modo_dicen_lo_que_hace():

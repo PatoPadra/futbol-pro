@@ -4,6 +4,9 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from constants import (
+    DESVIO_MINIMO,
+    ESCALA_NORMALIZADA,
+    MINIMO_PARA_NORMALIZAR,
     MAX_STATS_BONUS,
     SPLIT_MIN_MATCHES,
     TRACKABLE_STAT_MAP,
@@ -183,6 +186,22 @@ async def calculate_player_metrics(player_id: str) -> dict:
         ).to_list(len(match_ids))
         tipo_por_partido = {m["id"]: m.get("match_type") for m in partidos}
 
+    # Todas las evaluaciones de esos partidos, no sólo las de este jugador: para
+    # saber si un 8 es generoso o exigente hace falta ver el resto de las notas
+    # que puso ese mismo evaluador esa misma noche.
+    #
+    # Es una consulta más, con $in sobre match_id, que va por el prefijo del
+    # índice (match_id, rater_id) que ya existe.
+    todas_del_partido = []
+    if match_ids:
+        todas_del_partido = await db.peer_ratings.find(
+            {"match_id": {"$in": match_ids}},
+            {"_id": 0, "match_id": 1, "rater_id": 1, "score": 1},
+        ).to_list(len(match_ids) * 40)
+
+    all_match_ratings = _normalizar_por_evaluador(all_match_ratings, todas_del_partido)
+    recent_match_ratings = _normalizar_por_evaluador(recent_match_ratings, todas_del_partido)
+
     combined_ratings = [
         # Una evaluación de una práctica pesa menos que una de un oficial, con el
         # mismo mecanismo con el que una evaluación inicial pesa menos que una de
@@ -276,6 +295,61 @@ def _default_metrics(player_id: str) -> dict:
         "total_assists": 0,
         "total_saves": 0,
     }
+
+
+def _normalizar_por_evaluador(ratings_del_jugador: list, todas_del_partido: list) -> list:
+    """Pone a todos los evaluadores en la misma escala antes de promediar.
+
+    Cada evaluador tiene su vara: hay quien reparte nueves y quien no pasa de
+    siete. Sin corregir eso, la nota de un jugador depende de a quién le tocó
+    evaluarlo — y, peor, inflar a todo el mundo se vuelve una forma barata de
+    subirle el puntaje a un amigo.
+
+    La corrección es la de siempre: se centra cada nota en la media de ESE
+    evaluador EN ESE PARTIDO y se lleva su dispersión a una escala común. Un
+    evaluador que pone 10, 10, 10 tiene desvío cero: sus tres notas colapsan al
+    centro, que es lo que corresponde — quien no distingue no aporta
+    información, ni a favor ni en contra.
+
+    Sólo se normaliza a partir de MINIMO_PARA_NORMALIZAR notas del mismo
+    evaluador en el mismo partido. Con dos no hay dispersión que estimar, y
+    inventarla sería peor que usar el número crudo.
+
+    Devuelve una lista nueva; no toca la de entrada.
+    """
+    if not ratings_del_jugador:
+        return []
+
+    por_evaluador: dict[tuple, list] = {}
+    for rating in todas_del_partido:
+        clave = (rating.get("match_id"), rating.get("rater_id"))
+        score = rating.get("score")
+        if clave[0] is None or clave[1] is None or score is None:
+            continue
+        por_evaluador.setdefault(clave, []).append(float(score))
+
+    escalas = {}
+    for clave, scores in por_evaluador.items():
+        if len(scores) < MINIMO_PARA_NORMALIZAR:
+            continue
+        media = sum(scores) / len(scores)
+        varianza = sum((s - media) ** 2 for s in scores) / len(scores)
+        escalas[clave] = (media, math.sqrt(varianza))
+
+    normalizados = []
+    for rating in ratings_del_jugador:
+        clave = (rating.get("match_id"), rating.get("rater_id"))
+        score = rating.get("score")
+        escala = escalas.get(clave)
+        if score is None or not escala:
+            normalizados.append(rating)
+            continue
+
+        media, desvio = escala
+        ajustado = 5.0 + (float(score) - media) * (ESCALA_NORMALIZADA / max(DESVIO_MINIMO, desvio))
+        normalizados.append({**rating, "score": min(10.0, max(1.0, ajustado))})
+
+    return normalizados
 
 
 def _weighted_average(ratings: list) -> float:
