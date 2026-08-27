@@ -1,5 +1,5 @@
 """
-Tests de las tres correcciones deportivas del balanceador.
+Tests de las cuatro correcciones deportivas del balanceador.
 
 1. **Al arco va el que menos juega.** `GK` es el primer puesto de toda
    formación y el desempate entre candidatos del mismo fit era por puntaje
@@ -16,6 +16,12 @@ Tests de las tres correcciones deportivas del balanceador.
 3. **El spread.** Un 97% de balance sobre un plantel donde todos valen lo mismo
    no es un buen reparto: es una cuenta hecha sobre nada. Ahora viaja el dato
    para que la pantalla pueda decirlo.
+
+4. **Con plantel incompleto no habia arqueros.** Faltar uno es la norma, no la
+   excepcion, y era el caso peor atendido: con 9 anotados en un F5 el reparto
+   cae en la rama sin puestos, donde nada garantizaba que cada equipo tuviera
+   arco. El unico arquero del grupo podia quedar de un lado y el otro equipo
+   jugaba con el arco vacio.
 """
 
 import pytest
@@ -207,3 +213,138 @@ def test_un_grupo_nuevo_tiene_spread_casi_cero():
 def test_un_solo_jugador_no_tiene_spread():
     assert _spread_de([jugador("solo", 7.0)]) == 0.0
     assert _spread_de([]) == 0.0
+
+
+# --------------------------------------------------------------------- #
+# 4. El arquero cuando falta gente
+# --------------------------------------------------------------------- #
+#
+# Faltar uno es la norma, no la excepcion, y era el caso peor atendido: con 9
+# anotados en un F5 el balanceador cae en la rama sin puestos, y ahi no habia
+# ninguna garantia de que cada equipo tuviera arquero. El unico arquero del
+# grupo podia quedar de un lado y el otro equipo jugaba con el arco vacio.
+
+
+def arqueros_por_equipo(resultado):
+    salida = {"A": [], "B": []}
+    for a in resultado["assignments"]:
+        if a["position"] == "GK":
+            salida[a["team"]].append(a["player_id"])
+    return salida
+
+
+def equipo_de(resultado, player_id):
+    return next(a["team"] for a in resultado["assignments"] if a["player_id"] == player_id)
+
+
+def test_cada_equipo_termina_con_un_arquero():
+    """El caso central: nueve jugadores en un F5, 5 contra 4."""
+    players = [jugador(f"j{i}", 5 + (i % 4)) for i in range(9)]
+
+    res = _balance_small_format(players, "m1", 5)
+    arqueros = arqueros_por_equipo(res)
+
+    assert len(arqueros["A"]) == 1
+    assert len(arqueros["B"]) == 1
+
+
+def test_con_dos_arqueros_naturales_va_uno_a_cada_lado():
+    """Antes podian caer los dos del mismo lado sin que nada se quejara."""
+    players = [
+        jugador("arq1", 6.0, "GK"),
+        jugador("arq2", 6.0, "GK"),
+    ] + [jugador(f"j{i}", 5 + (i % 3)) for i in range(8)]
+
+    res = _balance_small_format(players, "m1", 5)
+
+    assert equipo_de(res, "arq1") != equipo_de(res, "arq2")
+    arqueros = arqueros_por_equipo(res)
+    assert sorted(arqueros["A"] + arqueros["B"]) == ["arq1", "arq2"]
+
+
+def test_con_un_solo_arquero_el_otro_equipo_designa_al_mas_flojo():
+    players = [jugador("arquero", 6.0, "GK")] + [
+        jugador("crack", 9.0), jugador("bueno", 8.0), jugador("normal", 7.0),
+        jugador("flojo", 6.5), jugador("masflojo", 2.0),
+    ]
+
+    res = _balance_small_format(players, "m1", 5)
+    arqueros = arqueros_por_equipo(res)
+    equipo_del_arquero = equipo_de(res, "arquero")
+    otro = "B" if equipo_del_arquero == "A" else "A"
+
+    assert arqueros[equipo_del_arquero] == ["arquero"]
+    # Del otro lado ataja alguien, y no es el mejor que tienen.
+    assert len(arqueros[otro]) == 1
+    designado = arqueros[otro][0]
+    companeros = [
+        a["player_id"] for a in res["assignments"]
+        if a["team"] == otro and a["player_id"] != designado
+    ]
+    puntajes = {p["id"]: p["score"] for p in players}
+    assert all(puntajes[designado] <= puntajes[c] for c in companeros)
+
+
+def test_quien_no_quiere_atajar_no_es_designado():
+    players = [
+        jugador("nolequiero", 1.0, no_deseada="GK"),
+        jugador("resignado", 2.0),
+    ] + [jugador(f"j{i}", 6 + i) for i in range(6)]
+
+    res = _balance_small_format(players, "m1", 5)
+    designados = arqueros_por_equipo(res)
+    todos = designados["A"] + designados["B"]
+
+    assert "nolequiero" not in todos
+
+
+def test_mover_un_arquero_no_rompe_el_balance_de_genero():
+    """La razon por la que el arreglo es una pasada POSTERIOR y no una reserva.
+
+    Reservar dos arqueros antes de repartir habria roto la garantia de que cada
+    genero queda partido al medio, que es lo que consigue el reparto por bolsas.
+    """
+    players = [
+        jugador("arq1", 6.0, "GK", genero="masculino"),
+        jugador("arq2", 6.0, "GK", genero="masculino"),
+    ] + [jugador(f"m{i}", 5 + i, genero="masculino") for i in range(4)] \
+      + [jugador(f"f{i}", 5 + i, genero="femenino") for i in range(4)]
+
+    res = _balance_small_format(players, "m1", 5)
+
+    por_equipo = {"A": {"masculino": 0, "femenino": 0}, "B": {"masculino": 0, "femenino": 0}}
+    genero_de = {p["id"]: p["gender"] for p in players}
+    for a in res["assignments"]:
+        por_equipo[a["team"]][genero_de[a["player_id"]]] += 1
+
+    assert abs(por_equipo["A"]["femenino"] - por_equipo["B"]["femenino"]) <= 1
+    assert abs(por_equipo["A"]["masculino"] - por_equipo["B"]["masculino"]) <= 1
+
+
+def test_el_balance_se_recalcula_despues_de_mover_al_arquero():
+    """Las sumas del bucle quedan viejas si hubo intercambio."""
+    players = [
+        jugador("arq1", 9.0, "GK"),
+        jugador("arq2", 1.0, "GK"),
+    ] + [jugador(f"j{i}", 5.0) for i in range(6)]
+
+    res = _balance_small_format(players, "m1", 5)
+
+    sumas = {"A": 0.0, "B": 0.0}
+    puntajes = {p["id"]: p["score"] for p in players}
+    for a in res["assignments"]:
+        sumas[a["team"]] += puntajes[a["player_id"]]
+
+    esperado = _balance_de(sumas["A"], 4, sumas["B"], 4)
+    assert res["balance_score"] == pytest.approx(round(esperado, 4))
+
+
+def test_un_picadito_de_dos_contra_dos_no_nombra_arquero():
+    """Por debajo de tres por lado ya no es un partido con arco."""
+    players = [jugador(f"j{i}", 5.0) for i in range(4)]
+
+    res = _balance_small_format(players, "m1", 5)
+    arqueros = arqueros_por_equipo(res)
+
+    assert arqueros["A"] == []
+    assert arqueros["B"] == []

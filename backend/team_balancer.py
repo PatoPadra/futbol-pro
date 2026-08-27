@@ -264,12 +264,30 @@ def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
                 sum_b += mejor["score"]
                 sum_a += peor["score"]
 
+    # Cada equipo con su arquero. Va acá y no antes de repartir para no romper
+    # el balance de género que el reparto por bolsas acaba de conseguir.
+    _equilibrar_arqueros(team_a, team_b)
+
+    arqueros = {
+        equipo: _puesto_de_arquero(plantel)
+        for equipo, plantel in (("A", team_a), ("B", team_b))
+    }
+
     assignments = [
-        _assignment(p, equipo, p.get("primary_position") or "JUG")
+        _assignment(
+            p,
+            equipo,
+            "GK" if p["id"] == arqueros[equipo] else (p.get("primary_position") or "JUG"),
+        )
         for equipo, plantel in (("A", team_a), ("B", team_b))
         for p in plantel
     ]
 
+    # Las sumas se recalculan de las listas finales: `_equilibrar_arqueros` puede
+    # haber intercambiado dos jugadores, y las que se venían acumulando en el
+    # bucle quedarían desactualizadas.
+    sum_a = sum(p["score"] for p in team_a)
+    sum_b = sum(p["score"] for p in team_b)
     balance_score = _balance_de(sum_a, len(team_a), sum_b, len(team_b))
 
     return {
@@ -281,6 +299,88 @@ def _balance_small_format(players: list, match_id: str, modality: int) -> dict:
         "score_spread": _spread_de(players),
         "gender_split": _gender_split(team_a, team_b),
     }
+
+
+# Con cuánta gente por lado tiene sentido nombrar un arquero. Por debajo de esto
+# ya no es un partido con arco, es un picadito.
+MINIMO_PARA_ARQUERO = 3
+
+
+def _es_arquero(player: dict) -> bool:
+    return player.get("primary_position") == "GK"
+
+
+def _quiere_atajar(player: dict) -> bool:
+    """Nadie que haya marcado el arco como puesto no deseado va al arco."""
+    return player.get("unwanted_position") != "GK"
+
+
+def _equilibrar_arqueros(team_a: list, team_b: list) -> None:
+    """Si los arqueros naturales quedaron todos de un lado, pasa uno al otro.
+
+    Muta las listas. Se llama DESPUÉS de repartir y no antes a propósito: el
+    reparto por bolsas de género es lo que garantiza que cada género quede
+    partido al medio, y reservar dos arqueros antes lo rompería. Acá se toca lo
+    mínimo, y el intercambio se elige para no deshacer lo ya logrado — mismo
+    género primero, y de esos el de puntaje más parecido.
+
+    Sin esto, en un plantel con un solo arquero (que es lo normal) el otro
+    equipo jugaba con el arco vacío, y con dos podían caer los dos del mismo
+    lado sin que nada se quejara.
+    """
+    if len(team_a) < MINIMO_PARA_ARQUERO or len(team_b) < MINIMO_PARA_ARQUERO:
+        return
+
+    arqueros_a = [p for p in team_a if _es_arquero(p)]
+    arqueros_b = [p for p in team_b if _es_arquero(p)]
+
+    if (arqueros_a and arqueros_b) or (not arqueros_a and not arqueros_b):
+        # O están bien repartidos, o no hay ninguno y los dos equipos van a
+        # tener que designar a alguien. En ninguno de los dos casos hay nada
+        # que mover.
+        return
+
+    if len(arqueros_a) + len(arqueros_b) < 2:
+        # Hay un solo arquero natural en todo el plantel: no alcanza para los
+        # dos arcos, así que moverlo sólo cambiaría de lado el problema.
+        return
+
+    origen, destino = (team_a, team_b) if arqueros_a else (team_b, team_a)
+    arqueros = arqueros_a or arqueros_b
+    # Se va el peor de los arqueros de sobra: el mejor se queda atajando donde ya está.
+    sale = min(arqueros, key=lambda p: p["score"])
+
+    candidatos = [p for p in destino if not _es_arquero(p)] or list(destino)
+    misma_bolsa = [p for p in candidatos if _bolsa_de_genero(p) == _bolsa_de_genero(sale)]
+    entra = min(misma_bolsa or candidatos, key=lambda p: abs(p["score"] - sale["score"]))
+
+    origen.remove(sale)
+    destino.remove(entra)
+    origen.append(entra)
+    destino.append(sale)
+
+
+def _puesto_de_arquero(plantel: list) -> str | None:
+    """Quién ataja en este equipo. Devuelve el player_id, o None si no hay arco.
+
+    Si hay arqueros naturales, ataja el mejor: es un puesto de especialista y
+    no tiene sentido mandar al arco al peor de dos que saben.
+
+    Si no hay ninguno, ataja el de MENOR puntaje entre los que no lo rechazaron.
+    Es el mismo criterio que en las formaciones: los mejores se quedan en la
+    cancha, y el arco lo cubre quien menos pierde el equipo estando ahí.
+    """
+    if len(plantel) < MINIMO_PARA_ARQUERO:
+        return None
+
+    naturales = [p for p in plantel if _es_arquero(p)]
+    if naturales:
+        return max(naturales, key=lambda p: p["score"])["id"]
+
+    dispuestos = [p for p in plantel if _quiere_atajar(p)]
+    # Si TODOS marcaron el arco como no deseado, alguien tiene que ir igual:
+    # un equipo sin arquero no es una opción.
+    return min(dispuestos or plantel, key=lambda p: p["score"])["id"]
 
 
 def _assignment(player: dict, team: str, position: str, role: str = DEFAULT_LINEUP_ROLE) -> dict:
