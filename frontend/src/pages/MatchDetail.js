@@ -154,6 +154,10 @@ export default function MatchDetail() {
 
   useEffect(() => {
     loadData();
+    // Recarga cuando cambia lo que se mira, no cuando cambia la identidad de
+    // la funcion — que se rehace en cada render. Igual que en los otros doce
+    // efectos de carga de la app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const profileId = user?.profile_id || user?.profile?.id;

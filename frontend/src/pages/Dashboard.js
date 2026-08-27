@@ -52,6 +52,10 @@ export default function Dashboard() {
       return;
     }
     if (user) loadData();
+    // Recarga cuando cambia lo que se mira, no cuando cambia la identidad de
+    // la funcion — que se rehace en cada render. Igual que en los otros doce
+    // efectos de carga de la app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadData = async () => {
