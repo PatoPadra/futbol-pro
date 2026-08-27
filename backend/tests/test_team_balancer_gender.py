@@ -132,11 +132,19 @@ class TestReparto:
         assert abs(sumas[0] - sumas[1]) < 4
 
     def test_sin_generos_cargados_se_comporta_como_antes(self):
-        """Nadie declaró nada: una sola bolsa, y el reparto sigue siendo por nivel."""
+        """Nadie declaró nada: una sola bolsa, y el reparto sigue siendo por nivel.
+
+        El umbral bajó de 0.95 a 0.90 porque cambió la fórmula, no el reparto.
+        El balance ahora mide la brecha de PROMEDIOS: estos diez jugadores van
+        de 10 a 1, se reparten 27 contra 28, y 0.2 puntos de diferencia por
+        jugador dan 0.9333. La fórmula vieja dividía por la suma total y daba
+        0.9818 — el mismo reparto, leído más generosamente cuanta más gente
+        hubiera.
+        """
         players = [jugador(i, 10 - i) for i in range(10)]
         res = _balance_small_format(players, "m1", 5)
 
-        assert res["balance_score"] > 0.95
+        assert res["balance_score"] > 0.90
         assert conteo_por_equipo(res["assignments"], None) == {"A": 5, "B": 5}
 
     def test_el_reparto_es_determinista(self):

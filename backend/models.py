@@ -355,6 +355,10 @@ class TeamGenerationResponse(BaseModel):
     status: str
     assignments: List[TeamAssignmentModel]
     balance_score: float
+    # Diferencia entre el mejor y el peor puntaje del plantel. Viaja para que la
+    # pantalla pueda decir "no hay con qué balancear todavía" en vez de mostrar
+    # un porcentaje alto calculado sobre jugadores que valen todos lo mismo.
+    score_spread: float = 0.0
     created_at: str
 
 

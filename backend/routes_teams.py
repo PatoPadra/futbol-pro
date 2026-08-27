@@ -149,6 +149,7 @@ async def generate_match_teams(match_id: str, user=Depends(get_current_user)):
         "status": "borrador",
         "assignments": result["assignments"],
         "balance_score": result["balance_score"],
+        "score_spread": result.get("score_spread", 0.0),
         # Cómo quedó repartido cada género en el momento de generar. Lo que se
         # muestra en pantalla se recalcula (ver _build_team_summary); esto queda
         # para poder auditar el balanceo sin volver a correrlo.

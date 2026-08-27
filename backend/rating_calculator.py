@@ -219,7 +219,16 @@ async def calculate_player_metrics(player_id: str) -> dict:
     seed_floor = 0.3 + min(seed_count, 5) * 0.05
     effective_confidence = max(confidence_index, seed_floor if seed_count else 0.3)
 
-    stats_bonus = _calculate_stats_bonus(recent_stats)
+    # Los partidos recientes en los que hay CUALQUIER evidencia de que el
+    # jugador estuvo: una evaluación, un resultado o una fila de estadísticas.
+    # Es el denominador honesto del bonus — ver _calculate_stats_bonus.
+    partidos_recientes = len({
+        doc["match_id"]
+        for doc in (*recent_match_ratings, *recent_outcomes, *recent_stats)
+        if doc.get("match_id")
+    })
+
+    stats_bonus = _calculate_stats_bonus(recent_stats, partidos_recientes)
     final_score = compute_final_score(recent_rating, effective_confidence, stats_bonus)
 
     # Acumulado de TODAS las estadísticas que el jugador tenga cargadas. Los
@@ -343,17 +352,24 @@ def _acumular_stats(filas: list) -> dict:
     return totales
 
 
-def _calculate_stats_bonus(recent_stats: list) -> float:
+def _calculate_stats_bonus(recent_stats: list, partidos_recientes: int = 0) -> float:
     """Bonus por estadísticas, con los pesos que declara el catálogo.
 
-    Antes eran tres números escritos acá (0.3 / 0.2 / 0.15). Ahora cada
-    estadística trae el suyo en TRACKABLE_STATS, y las que no deben mover el
-    puntaje pesan cero — que es la mayoría, y por buenas razones (ver el
+    Cada estadística trae su peso en TRACKABLE_STATS, y las que no deben mover
+    el puntaje pesan cero — que es la mayoría, y por buenas razones (ver el
     comentario largo del catálogo en constants.py).
 
-    La cuenta de goles, asistencias y atajadas da exactamente lo mismo que antes:
-    los pesos son los mismos y se sigue promediando por partido jugado con
-    estadísticas cargadas. Un historial ya guardado no cambia de valor.
+    EL DENOMINADOR SON LOS PARTIDOS JUGADOS, NO LAS FILAS CARGADAS. Antes se
+    dividía por `len(recent_stats)`, o sea por la cantidad de filas de
+    estadísticas — y un jugador sin nada que anotar no genera fila. El efecto
+    era exactamente el contrario al buscado: el que tenía cargados sólo sus dos
+    buenos partidos (3 goles en cada uno) sacaba (6/2)*0.3 = 0.90, y el que
+    tenía los diez cargados con 10 goles en total sacaba (10/10)*0.3 = 0.30.
+    Tres veces más bonus por menos goles. El goleador del grupo pasaba a ser el
+    que tenía mejor prensa.
+
+    El `max` con la cantidad de filas es una red: si por lo que sea llegan más
+    filas que partidos, no queremos inflar dividiendo por menos.
 
     El techo importa más que nunca: sin él, un partido con ocho métricas
     prendidas pesaría distinto que uno con dos por el sólo hecho de contar más
@@ -362,7 +378,7 @@ def _calculate_stats_bonus(recent_stats: list) -> float:
     if not recent_stats:
         return 0.0
 
-    match_count = len(recent_stats)
+    match_count = max(partidos_recientes, len(recent_stats))
     totales = _acumular_stats(recent_stats)
 
     raw_bonus = sum(

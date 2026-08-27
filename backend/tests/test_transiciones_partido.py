@@ -156,3 +156,48 @@ async def test_cerrar_dos_veces_no_rompe(mongo_en_memoria):
     await rm.close_registrations(match_id, user=user)
 
     assert await estado(db, match_id) == "cerrado"
+
+
+@pytest.mark.asyncio
+async def test_se_puede_reabrir_una_inscripcion_cerrada(mongo_en_memoria):
+    """Cerrar dejó de ser una puerta de una sola dirección."""
+    db = mongo_en_memoria
+    user, match_id = await sembrar(db, "cerrado")
+
+    await rm.reopen_registrations(match_id, user=user)
+
+    assert await estado(db, match_id) == "abierto"
+
+
+@pytest.mark.asyncio
+async def test_no_se_reabre_un_partido_con_equipos_ya_generados(mongo_en_memoria):
+    """A esa altura ya hay trabajo hecho encima de la lista de anotados."""
+    db = mongo_en_memoria
+    user, match_id = await sembrar(db, "equipos_generados")
+
+    with pytest.raises(HTTPException) as exc:
+        await rm.reopen_registrations(match_id, user=user)
+
+    assert exc.value.status_code == 409
+    assert await estado(db, match_id) == "equipos_generados"
+
+
+@pytest.mark.asyncio
+async def test_no_se_reabre_un_partido_finalizado(mongo_en_memoria):
+    db = mongo_en_memoria
+    user, match_id = await sembrar(db, "finalizado")
+
+    with pytest.raises(HTTPException) as exc:
+        await rm.reopen_registrations(match_id, user=user)
+
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_reabrir_dos_veces_no_rompe(mongo_en_memoria):
+    db = mongo_en_memoria
+    user, match_id = await sembrar(db, "abierto")
+
+    await rm.reopen_registrations(match_id, user=user)
+
+    assert await estado(db, match_id) == "abierto"

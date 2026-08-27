@@ -600,6 +600,29 @@ async def close_registrations(match_id: str, user=Depends(get_current_user)):
     return {"message": "Inscripciones cerradas"}
 
 
+@router.post("/{match_id}/reopen")
+async def reopen_registrations(match_id: str, user=Depends(get_current_user)):
+    """Vuelve a abrir la inscripción de un partido cerrado.
+
+    Cerrar era una puerta de una sola dirección: no había endpoint ni pantalla
+    para deshacerlo, así que cerrar de más un jueves obligaba a cancelar el
+    partido y rehacerlo, perdiendo a todos los anotados.
+
+    Sólo desde "cerrado", que es el único estado donde reabrir no contradice
+    nada: apenas se generan los equipos ya hay trabajo hecho encima de la lista
+    de anotados, y quitar a alguien a esa altura tiene su propio camino (que
+    borra los equipos y vuelve a dejar el partido cerrado).
+    """
+    match = await get_match_or_404(match_id)
+    await ensure_can_manage_match(match, user)
+
+    if not ensure_transicion(match.get("status"), "abierto"):
+        return {"message": "La inscripción ya estaba abierta"}
+
+    await db.matches.update_one({"id": match_id}, {"$set": {"status": "abierto"}})
+    return {"message": "Inscripción reabierta"}
+
+
 @router.post("/{match_id}/cancel")
 async def cancel_match(match_id: str, user=Depends(get_current_user)):
     match = await get_match_or_404(match_id)

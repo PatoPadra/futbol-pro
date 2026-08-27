@@ -364,7 +364,10 @@ def puede_calificar(member_role: str | None) -> bool:
 
 TRANSICIONES_PARTIDO = {
     "abierto": ["cerrado", "cancelado"],
-    "cerrado": ["equipos_generados", "finalizado", "cancelado"],
+    # Volver a "abierto" es reabrir la inscripción. Cerrar de más un jueves era
+    # una puerta de una sola dirección: obligaba a cancelar el partido y
+    # rehacerlo, perdiendo a todos los anotados.
+    "cerrado": ["abierto", "equipos_generados", "finalizado", "cancelado"],
     # Volver a "cerrado" desde los equipos no es un retroceso raro: es lo que
     # hace quitar a un anotado, que invalida los equipos ya armados.
     "equipos_generados": ["equipos_confirmados", "cerrado", "finalizado", "cancelado"],
@@ -639,7 +642,13 @@ TRACKABLE_STATS = [
         "id": "saves",
         "name": "Atajadas",
         "short": "At",
-        "default": False,
+        # Va por default. Estaba en False, así que DEFAULT_TRACKED_STATS quedaba
+        # en goles y asistencias — y el modo Pro, que es el que "sigue
+        # estadísticas", era el ÚNICO donde el arquero no tenía nada que sumar:
+        # su bonus era estructuralmente cero mientras un delantero llegaba al
+        # tope. El modo más completo era el peor para el puesto más difícil de
+        # llenar.
+        "default": True,
         "bonus_weight": 0.15,
         "negative": False,
         "position_dependent": True,
