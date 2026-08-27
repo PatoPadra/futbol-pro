@@ -9,8 +9,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // El relleno usa `turf-btn` (#00873D, 4.63:1 con blanco) y no
+        // `primary`, que es el verde de marca y da 2.24:1. El anillo de foco SÍ
+        // sigue siendo `primary`: ahí el verde brillante se ve mejor sobre
+        // fondo claro, y oscurecerlo iría en contra de lo que se busca.
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+          "bg-turf-btn text-white shadow hover:bg-turf-btn-dark",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline:

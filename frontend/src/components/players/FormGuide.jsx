@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 const RESULTADOS = {
   ganado: {
     icono: Check,
-    chip: 'border-turf bg-turf text-white',
+    chip: 'border-turf bg-turf-btn text-white',
     label: 'Ganado',
   },
   empatado: {

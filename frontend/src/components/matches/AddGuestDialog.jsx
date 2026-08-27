@@ -149,7 +149,7 @@ export default function AddGuestDialog({ open, onOpenChange, matchId, groupId, r
                   onClick={() => registerGuest(m.player_id)}
                   disabled={registeringId === m.player_id}
                   shape="pill"
-                  className="h-11 min-w-20 shrink-0 bg-turf text-white hover:bg-turf-dark focus-visible:ring-turf"
+                  className="h-11 min-w-20 shrink-0 bg-turf-btn text-white hover:bg-turf-btn-dark focus-visible:ring-turf"
                   data-testid={`add-guest-confirm-${m.player_id}`}
                 >
                   {registeringId === m.player_id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Anotar'}

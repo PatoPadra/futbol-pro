@@ -83,7 +83,7 @@ export default function MatchesList() {
             onClick={loadMatches}
             data-testid="matches-list-retry-btn"
             shape="pill"
-            className="h-11 bg-turf px-8 text-white shadow-lg shadow-turf/20 hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+            className="h-11 bg-turf-btn px-8 text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
           >
             <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" /> Reintentar
           </Button>
@@ -118,7 +118,7 @@ export default function MatchesList() {
             <Link to="/partidos/crear" className="rounded-full focus-visible:outline-none">
               <Button
                 shape="pill"
-                className="h-11 bg-turf px-5 text-white shadow-lg shadow-turf/25 hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                className="h-11 bg-turf-btn px-5 text-white shadow-lg shadow-turf/25 hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                 data-testid="matches-list-create-btn"
               >
                 <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Crear partido
@@ -149,7 +149,7 @@ export default function MatchesList() {
                   <Link to="/partidos/crear" className="rounded-full focus-visible:outline-none">
                     <Button
                       shape="pill"
-                      className="h-11 bg-turf px-6 text-white shadow-lg shadow-turf/25 hover:bg-turf-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                      className="h-11 bg-turf-btn px-6 text-white shadow-lg shadow-turf/25 hover:bg-turf-btn-dark focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     >
                       <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Crear un partido
                     </Button>

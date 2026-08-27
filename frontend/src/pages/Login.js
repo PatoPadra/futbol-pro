@@ -130,7 +130,7 @@ export default function Login() {
           shape="pill"
           data-testid="login-submit-btn"
           disabled={loading}
-          className="w-full h-12 bg-turf hover:bg-turf-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+          className="w-full h-12 bg-turf-btn hover:bg-turf-btn-dark text-white text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
         >
           {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
           {loading ? 'Ingresando...' : 'Ingresar'}

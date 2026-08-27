@@ -35,7 +35,7 @@ const LINEAS = [
 /** Tonos del estado seleccionado. El no seleccionado es siempre el mismo. */
 const TONOS = {
   turf: {
-    on: 'border-turf bg-turf text-white shadow-lift-turf',
+    on: 'border-turf bg-turf-btn text-white shadow-lift-turf',
     onSigla: 'bg-white/20 text-white',
     ring: 'focus-visible:ring-turf',
     hover: 'hover:border-turf/60 hover:bg-turf/5',

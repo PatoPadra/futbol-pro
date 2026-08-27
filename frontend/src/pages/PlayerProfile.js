@@ -279,7 +279,7 @@ export default function PlayerProfile({ isSelf }) {
               <Button
                 shape="pill"
                 onClick={handleSave}
-                className="h-11 bg-turf px-5 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+                className="h-11 bg-turf-btn px-5 text-white hover:bg-turf-btn-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
                 data-testid="save-edit-btn"
               >
                 <Save className="mr-1 h-4 w-4" /> Guardar
@@ -456,7 +456,7 @@ export default function PlayerProfile({ isSelf }) {
                   <Link to="/partidos">
                     <Button
                       shape="pill"
-                      className="h-11 bg-turf px-6 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+                      className="h-11 bg-turf-btn px-6 text-white hover:bg-turf-btn-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
                       data-testid="find-match-cta"
                     >
                       Buscar partidos

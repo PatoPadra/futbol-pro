@@ -60,6 +60,23 @@ module.exports = {
           dark: "#009624",
           light: "#69F0AE",
         },
+        // El verde de RELLENO cuando hay texto blanco encima.
+        //
+        // #00C853 con blanco da 2.24:1 y #009624 da ~3.4:1: los dos fallan AA
+        // para texto normal, y casi todos estos casos son text-sm o más chico.
+        // Es el escenario de uso real de la app — un celular al sol en una
+        // cancha — así que no es una sutileza de auditoría.
+        //
+        // #00873D da 4.63:1 con blanco y sigue leyéndose como el mismo verde,
+        // más profundo. Llegar a AAA (7:1) habría exigido #00612C, verde
+        // botella, que ya no es la marca.
+        //
+        // `turf` sigue siendo el de marca para superficies decorativas grandes,
+        // gradientes, barras y marcas de agua, donde no hay texto encima.
+        "turf-btn": {
+          DEFAULT: "#00873D",
+          dark: "#006B30",
+        },
         // Accessible text/icon variant of `turf`. The brand DEFAULT (#00C853) is
         // ~2.2:1 against white/off-white and fails WCAG AA for text/icon use.
         // Use `turf-accessible` for text-turf/icon-turf color anywhere it sits

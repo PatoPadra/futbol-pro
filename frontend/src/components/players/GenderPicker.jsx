@@ -41,7 +41,7 @@ export default function GenderPicker({
               'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2',
               'disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none',
               activo
-                ? 'border-turf bg-turf text-white shadow-lift-turf'
+                ? 'border-turf bg-turf-btn text-white shadow-lift-turf'
                 : 'border-slate-200 hover:border-turf/60 hover:bg-turf/5',
             )}
           >

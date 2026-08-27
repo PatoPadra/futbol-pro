@@ -109,7 +109,7 @@ export default function LandingNav() {
             shape="pill"
             data-testid="landing-nav-register"
             className={cn(
-              'hidden bg-turf px-6 text-white hover:bg-turf-dark sm:inline-flex focus-visible:ring-2 focus-visible:ring-offset-2',
+              'hidden bg-turf-btn px-6 text-white hover:bg-turf-btn-dark sm:inline-flex focus-visible:ring-2 focus-visible:ring-offset-2',
               anillo,
             )}
           >

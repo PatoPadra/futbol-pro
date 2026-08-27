@@ -28,7 +28,7 @@ export default function GroupNotFound({ onRetry }) {
             <Link to="/dashboard">
               <Button
                 shape="pill"
-                className="h-12 bg-turf px-6 text-white hover:bg-turf-dark"
+                className="h-12 bg-turf-btn px-6 text-white hover:bg-turf-btn-dark"
                 data-testid="group-not-found-back"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Volver al inicio

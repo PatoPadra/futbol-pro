@@ -105,7 +105,7 @@ export default function PlayerNoteField({ nota, playerName, disabled, onSave }) 
           onClick={guardar}
           disabled={guardando}
           shape="pill"
-          className="h-9 flex-1 bg-turf text-xs font-bold uppercase tracking-wide text-white hover:bg-turf-dark"
+          className="h-9 flex-1 bg-turf-btn text-xs font-bold uppercase tracking-wide text-white hover:bg-turf-btn-dark"
           data-testid={`save-note-${playerName}`}
         >
           {guardando ? (

@@ -75,7 +75,7 @@ export default function GroupModePanel({ group, onSaved }) {
         onClick={guardar}
         disabled={!cambio || guardando}
         shape="pill"
-        className="h-11 w-full bg-turf text-white shadow-lg shadow-turf/20 hover:bg-turf-dark disabled:active:scale-100"
+        className="h-11 w-full bg-turf-btn text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark disabled:active:scale-100"
         data-testid="save-group-mode-btn"
       >
         {guardando ? (

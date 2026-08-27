@@ -53,7 +53,7 @@ export default function HowItWorks() {
                 delay={i * 140}
                 className="flex flex-col items-center text-center"
               >
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-turf text-2xl font-heading font-bold text-white shadow-lift-turf ring-8 ring-slate-50">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-turf-btn text-2xl font-heading font-bold text-white shadow-lift-turf ring-8 ring-slate-50">
                   {i + 1}
                 </span>
                 <span className="mt-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white ring-1 ring-slate-200">

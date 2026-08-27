@@ -231,13 +231,23 @@ export default function GeneratedTeams() {
   };
 
   const balancePct = Math.round((teams?.balance_score || 0) * 100);
+  // Diferencia entre el mejor y el peor puntaje del plantel. Cuando es casi
+  // cero, el balance esta calculado sobre jugadores que valen todos lo mismo y
+  // el porcentaje no significa nada (ver BalanceMeter).
+  const scoreSpread = teams?.score_spread;
+  const balanceACiegas = typeof scoreSpread === 'number' && scoreSpread < 0.5;
+
   // Los chips del encabezado van sobre foto: el tono se marca con un punto de
   // color y el texto queda blanco, que es lo unico que llega a 4.5:1 ahi.
-  const balanceDotClass = balancePct >= 85
-    ? 'bg-turf-light'
-    : balancePct >= 70
-      ? 'bg-orange-light'
-      : 'bg-slate-300';
+  // Los cortes acompañan a los del BalanceMeter, que bajaron cuando el backend
+  // paso a medir brecha de promedios en vez de brecha de sumas.
+  const balanceDotClass = balanceACiegas
+    ? 'bg-slate-300'
+    : balancePct >= 90
+      ? 'bg-turf-light'
+      : balancePct >= 75
+        ? 'bg-orange-light'
+        : 'bg-amber-300';
 
   const cancelEdit = () => {
     setEditMode(false);
@@ -261,7 +271,7 @@ export default function GeneratedTeams() {
               data-testid="empty-back-to-match"
               onClick={() => navigate(`/partidos/${id}`)}
               shape="pill"
-              className="bg-turf hover:bg-turf-dark text-white px-8"
+              className="bg-turf-btn hover:bg-turf-btn-dark text-white px-8"
             >
               Volver al partido
             </Button>
@@ -492,7 +502,7 @@ export default function GeneratedTeams() {
               {!esDT && (
                 <HeaderChip testId="balance-badge">
                   <span aria-hidden="true" className={`h-2 w-2 rounded-full ${balanceDotClass}`} />
-                  Balance: {balancePct}%
+                  {balanceACiegas ? 'Balance: sin datos' : `Balance: ${balancePct}%`}
                 </HeaderChip>
               )}
               {esDT && banco.length > 0 && (
@@ -527,7 +537,7 @@ export default function GeneratedTeams() {
             <div className="flex flex-wrap gap-3">
               {teams.status !== 'confirmado' && !editMode && (
                 <>
-                  <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} shape="pill" className="bg-turf hover:bg-turf-dark text-white px-6 shadow-lg shadow-turf/20 min-h-11">
+                  <Button data-testid="confirm-teams-btn" onClick={handleConfirm} disabled={!!actionLoading} shape="pill" className="bg-turf-btn hover:bg-turf-btn-dark text-white px-6 shadow-lg shadow-turf/20 min-h-11">
                     {actionLoading === 'confirm' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />} Confirmar
                   </Button>
                   <Button data-testid="edit-teams-btn" variant="outline" shape="pill" onClick={() => setEditMode(true)} disabled={!!actionLoading} className="px-6 min-h-11 bg-white">
@@ -540,7 +550,7 @@ export default function GeneratedTeams() {
               )}
               {editMode && (
                 <>
-                  <Button data-testid="save-adjustments-btn" onClick={handleSaveAdjustments} disabled={!!actionLoading} shape="pill" className="bg-turf hover:bg-turf-dark text-white px-6 shadow-lg shadow-turf/20 min-h-11">
+                  <Button data-testid="save-adjustments-btn" onClick={handleSaveAdjustments} disabled={!!actionLoading} shape="pill" className="bg-turf-btn hover:bg-turf-btn-dark text-white px-6 shadow-lg shadow-turf/20 min-h-11">
                     {actionLoading === 'save' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} Guardar Cambios
                   </Button>
                   <Button data-testid="cancel-edit-btn" variant="outline" shape="pill" onClick={cancelEdit} disabled={!!actionLoading} className="px-6 min-h-11 bg-white">
@@ -647,6 +657,7 @@ export default function GeneratedTeams() {
             pct={balancePct}
             valorA={typeof teamSummaryA?.total_value === 'number' ? teamSummaryA.total_value : undefined}
             valorB={typeof teamSummaryB?.total_value === 'number' ? teamSummaryB.total_value : undefined}
+            spread={scoreSpread}
             testId="balance-meter"
           />
         )}

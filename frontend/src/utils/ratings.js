@@ -43,7 +43,9 @@ export function getRatingTone(value) {
       bg: 'bg-turf/10',
       ring: 'ring-turf/20',
       border: 'border-turf/20',
-      solid: 'bg-turf',
+      // `solid` siempre lleva texto blanco encima (ver RatingBadge), así que va
+      // el verde de relleno accesible y no el de marca.
+      solid: 'bg-turf-btn',
       label: 'Bueno',
     };
   }
@@ -53,7 +55,7 @@ export function getRatingTone(value) {
     bg: 'bg-turf/15',
     ring: 'ring-turf/40',
     border: 'border-turf/30',
-    solid: 'bg-turf-dark',
+    solid: 'bg-turf-btn-dark',
     label: 'Muy bueno',
   };
 }

@@ -21,6 +21,7 @@ import Reveal from '@/components/common/Reveal';
 import StandingsTable from '@/components/tournaments/StandingsTable';
 import FixtureRow from '@/components/tournaments/FixtureRow';
 import FixtureMatchDialog from '@/components/tournaments/FixtureMatchDialog';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { estadoDe, formatoDe } from '@/constants/torneos';
 import { cn } from '@/lib/utils';
 
@@ -141,7 +142,12 @@ export default function TournamentDetail() {
     }
   };
 
+  // Una sola pieza de estado para las cuatro acciones que no se deshacen. El
+  // dialogo se arma desde `CONFIRMACIONES` con lo que hay que perder escrito.
+  const [pendiente, setPendiente] = useState(null);
+
   const generarFixture = async () => {
+    setPendiente(null);
     setAccion('fixture');
     try {
       await api.post(`/tournaments/${id}/fixture`);
@@ -155,6 +161,7 @@ export default function TournamentDetail() {
   };
 
   const generarLlaves = async () => {
+    setPendiente(null);
     setAccion('playoffs');
     try {
       const res = await api.post(`/tournaments/${id}/playoffs`);
@@ -168,6 +175,7 @@ export default function TournamentDetail() {
   };
 
   const sacarEquipo = async (teamId, nombre) => {
+    setPendiente(null);
     setAccion(`team-${teamId}`);
     try {
       await api.delete(`/tournaments/${id}/teams/${teamId}`);
@@ -181,6 +189,7 @@ export default function TournamentDetail() {
   };
 
   const borrarTorneo = async () => {
+    setPendiente(null);
     setAccion('delete');
     try {
       await api.delete(`/tournaments/${id}`);
@@ -198,7 +207,7 @@ export default function TournamentDetail() {
     return (
       <div className="page-container mx-auto max-w-md text-center" data-testid="tournament-error">
         <p className="mt-10 text-slate-700">{error}</p>
-        <Button shape="pill" onClick={() => navigate('/torneos')} className="mt-4 h-11 bg-turf px-5 text-white">
+        <Button shape="pill" onClick={() => navigate('/torneos')} className="mt-4 h-11 bg-turf-btn px-5 text-white">
           Volver a torneos
         </Button>
       </div>
@@ -252,10 +261,20 @@ export default function TournamentDetail() {
         acciones={puedeGestionar && fixtures.length === 0 ? (
           <Button
             shape="pill"
-            onClick={generarFixture}
+            onClick={() => setPendiente({
+              clave: 'fixture',
+              titulo: '¿Generar el fixture?',
+              descripcion: 'Se arman todos los cruces del torneo con los equipos que hay ahora.',
+              consecuencias: [
+                'La lista de equipos queda congelada: después no se puede sumar ni sacar a nadie.',
+                'Si ya había un fixture, se reemplaza junto con los resultados cargados.',
+              ],
+              textoConfirmar: 'Generar fixture',
+              onConfirmar: generarFixture,
+            })}
             disabled={accion === 'fixture' || equipos.length < 2}
             data-testid="generate-fixture-btn"
-            className="h-11 bg-turf px-5 text-white hover:bg-turf-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
+            className="h-11 bg-turf-btn px-5 text-white hover:bg-turf-btn-dark focus-visible:ring-white focus-visible:ring-offset-transparent"
           >
             {accion === 'fixture'
               ? <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -321,7 +340,17 @@ export default function TournamentDetail() {
                         size="sm"
                         variant="ghost"
                         shape="pill"
-                        onClick={() => sacarEquipo(equipo.id, equipo.name)}
+                        onClick={() => setPendiente({
+                          clave: `team-${equipo.id}`,
+                          titulo: `¿Sacar a ${equipo.name} del torneo?`,
+                          descripcion: 'El grupo deja de participar de este torneo.',
+                          consecuencias: [
+                            'Se pierden los cruces y resultados que tuviera en este torneo.',
+                            'El grupo y sus partidos propios no se tocan.',
+                          ],
+                          textoConfirmar: 'Sacar del torneo',
+                          onConfirmar: () => sacarEquipo(equipo.id, equipo.name),
+                        })}
                         disabled={accion === `team-${equipo.id}`}
                         aria-label={`Sacar ${equipo.name} del torneo`}
                         data-testid={`remove-team-${equipo.id}`}
@@ -384,7 +413,17 @@ export default function TournamentDetail() {
             </p>
             <Button
               shape="pill"
-              onClick={generarLlaves}
+              onClick={() => setPendiente({
+                clave: 'playoffs',
+                titulo: '¿Generar las llaves?',
+                descripcion: 'Se arma la eliminación directa con los clasificados de la fase de grupos.',
+                consecuencias: [
+                  'La fase de grupos se da por cerrada.',
+                  'Si ya había llaves, se reemplazan junto con sus resultados.',
+                ],
+                textoConfirmar: 'Generar llaves',
+                onConfirmar: generarLlaves,
+              })}
               disabled={accion === 'playoffs'}
               data-testid="generate-playoffs-btn"
               className="h-11 bg-orange px-5 text-white hover:bg-orange/90"
@@ -432,6 +471,21 @@ export default function TournamentDetail() {
           />
         )}
 
+        {/* Las cuatro acciones que no se deshacen pasan por acá. Antes se
+            disparaban con un solo clic, en la pantalla con más datos cargados a
+            mano de toda la app. */}
+        <ConfirmDialog
+          abierto={!!pendiente}
+          onCambio={() => setPendiente(null)}
+          titulo={pendiente?.titulo}
+          descripcion={pendiente?.descripcion}
+          consecuencias={pendiente?.consecuencias || []}
+          textoConfirmar={pendiente?.textoConfirmar}
+          cargando={!!pendiente && accion === pendiente.clave}
+          onConfirmar={pendiente?.onConfirmar}
+          testId="tournament-confirm"
+        />
+
         {puedeGestionar && (
           <PanelSection
             icono={Trash2}
@@ -443,7 +497,17 @@ export default function TournamentDetail() {
             <Button
               variant="outline"
               shape="pill"
-              onClick={borrarTorneo}
+              onClick={() => setPendiente({
+                clave: 'delete',
+                titulo: `¿Borrar «${torneo?.name || 'este torneo'}»?`,
+                descripcion: 'Esta acción no se puede deshacer.',
+                consecuencias: [
+                  'Se borran todos los cruces y los resultados cargados.',
+                  'Los grupos y sus partidos propios no se tocan.',
+                ],
+                textoConfirmar: 'Borrar torneo',
+                onConfirmar: borrarTorneo,
+              })}
               disabled={accion === 'delete'}
               data-testid="delete-tournament-btn"
               className="h-11 border-red-200 bg-white px-5 text-red-600 hover:bg-red-50"

@@ -435,7 +435,7 @@ export default function AdminPanel() {
               className={`h-11 rounded-full font-bold uppercase tracking-wide ${
                 isHighImpact
                   ? 'bg-orange-accessible text-white hover:bg-orange-accessible/90'
-                  : 'bg-turf text-white hover:bg-turf-dark'
+                  : 'bg-turf-btn text-white hover:bg-turf-btn-dark'
               }`}
               data-testid="admin-role-confirm"
             >

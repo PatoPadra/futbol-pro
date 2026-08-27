@@ -170,7 +170,7 @@ export default function OrganizerPanel() {
               <Button
                 onClick={() => navigate('/partidos/crear')}
                 shape="pill"
-                className="bg-turf px-5 text-white hover:bg-turf-dark"
+                className="bg-turf-btn px-5 text-white hover:bg-turf-btn-dark"
                 data-testid="org-create-match"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" /> Nuevo Partido
@@ -209,7 +209,7 @@ export default function OrganizerPanel() {
                     <Button
                       onClick={() => navigate('/grupos/crear')}
                       shape="pill"
-                      className="bg-turf px-6 text-white hover:bg-turf-dark"
+                      className="bg-turf-btn px-6 text-white hover:bg-turf-btn-dark"
                       data-testid="org-groups-empty-create"
                     >
                       Crear tu primer grupo
@@ -318,7 +318,7 @@ export default function OrganizerPanel() {
                     <Button
                       onClick={() => navigate('/partidos/crear')}
                       shape="pill"
-                      className="bg-turf px-6 text-white hover:bg-turf-dark"
+                      className="bg-turf-btn px-6 text-white hover:bg-turf-btn-dark"
                       data-testid="org-active-matches-empty-create"
                     >
                       Crear Partido

@@ -155,7 +155,7 @@ export default function FixtureMatchDialog({ open, onOpenChange, fixture, opcion
             onClick={crear}
             disabled={!completo || creando}
             shape="pill"
-            className="h-11 w-full bg-turf text-white hover:bg-turf-dark disabled:active:scale-100"
+            className="h-11 w-full bg-turf-btn text-white hover:bg-turf-btn-dark disabled:active:scale-100"
             data-testid="fixture-match-create"
           >
             {creando ? (

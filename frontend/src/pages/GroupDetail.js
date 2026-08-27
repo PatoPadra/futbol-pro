@@ -312,7 +312,7 @@ export default function GroupDetail() {
               <Link to={`/partidos/crear?group_id=${group.id}`} data-testid="group-create-match-link">
                 <Button
                   shape="pill"
-                  className="h-12 bg-turf px-6 text-white shadow-lg shadow-turf/20 hover:bg-turf-dark"
+                  className="h-12 bg-turf-btn px-6 text-white shadow-lg shadow-turf/20 hover:bg-turf-btn-dark"
                   data-testid="group-create-match-btn"
                 >
                   <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Crear partido

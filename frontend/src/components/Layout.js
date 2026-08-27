@@ -127,7 +127,7 @@ export default function Layout({ children }) {
               <Button
                 data-testid="create-match-btn"
                 onClick={() => navigate('/partidos/crear')}
-                className="h-9 rounded-full bg-turf px-5 text-sm font-bold uppercase tracking-wider text-white shadow-sm shadow-turf/30 hover:bg-turf-dark"
+                className="h-9 rounded-full bg-turf-btn px-5 text-sm font-bold uppercase tracking-wider text-white shadow-sm shadow-turf/30 hover:bg-turf-btn-dark"
               >
                 <Plus className="mr-1 h-4 w-4" /> Crear partido
               </Button>

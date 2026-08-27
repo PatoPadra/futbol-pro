@@ -9,7 +9,7 @@ import PageLoader from '@/components/common/PageLoader';
 import EmptyState from '@/components/common/EmptyState';
 import Reveal from '@/components/common/Reveal';
 import { useAuth } from '@/contexts/AuthContext';
-import { isOrganizerRole } from '@/utils/permissions';
+import { useCapacidades } from '@/hooks/use-capacidades';
 import { estadoDe, formatoDe } from '@/constants/torneos';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +25,7 @@ export default function TournamentsList() {
   const { user } = useAuth();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { puedeCrearTorneo } = useCapacidades();
   const [error, setError] = useState(false);
 
   const cargar = useCallback(() => {
@@ -38,7 +39,9 @@ export default function TournamentsList() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const puedeCrear = isOrganizerRole(user);
+  // Los torneos los arma quien organiza algun grupo, no quien tiene el rol
+  // global. Es el mismo criterio que aplica el backend.
+  const puedeCrear = puedeCrearTorneo;
 
   if (loading) return <div data-testid="tournaments-loading"><PageLoader /></div>;
 
@@ -89,7 +92,7 @@ export default function TournamentsList() {
               shape="pill"
               onClick={() => navigate('/torneos/crear')}
               data-testid="empty-create-tournament-btn"
-              className="h-12 bg-turf px-6 text-white shadow-lift-turf hover:bg-turf-dark"
+              className="h-12 bg-turf-btn px-6 text-white shadow-lift-turf hover:bg-turf-btn-dark"
             >
               <Plus className="mr-1 h-4 w-4" /> Crear el primero
             </Button>

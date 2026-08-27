@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { useCapacidades } from '@/hooks/use-capacidades';
 import { Button } from '../components/ui/button';
 import { AlertCircle, ArrowRight, CalendarClock, History, RefreshCw } from 'lucide-react';
 
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
+  const { puedeCrearPartido } = useCapacidades();
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -106,7 +108,10 @@ export default function Dashboard() {
     );
   }
 
-  const canCreateMatch = user?.role === 'organizador' || user?.role === 'admin';
+  // Antes: `user?.role === 'organizador'`. El backend nunca autorizo por ahi —
+  // valida con ensure_group_organizer, que mira el rol DENTRO del grupo. Un
+  // organizador de grupo no veia el boton de su propio grupo.
+  const canCreateMatch = puedeCrearPartido;
   const goToCreateMatch = () => navigate('/partidos/crear');
   const { today, tomorrow } = todayAndTomorrow();
 
