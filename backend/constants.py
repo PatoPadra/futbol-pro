@@ -261,6 +261,48 @@ def coords_de(modality: int, formation: str | None) -> list:
 
 GUEST_TO_REGULAR_THRESHOLD = 4
 
+# ---------------------------------------------------------------------------
+# Anticolusión en las evaluaciones entre pares
+# ---------------------------------------------------------------------------
+#
+# EL PROBLEMA. Nada exigía calificar a un mínimo de compañeros ni normalizaba
+# por evaluador, así que tres amigos que se ponían 10 entre ellos y no
+# calificaban a nadie más llegaban a 8.21, contra 6.29 de un jugador honesto al
+# que sus doce compañeros le ponían 7. Casi dos puntos comprados — y en el
+# balanceador eso es medio jugador de diferencia.
+#
+# DOS MECANISMOS, CON PAPELES DISTINTOS:
+#
+#   1. Cobertura mínima: no podés elegir a quién calificar. O evaluás a la mayor
+#      parte de los que jugaron, o no cuenta ninguna. Ataca la mitad de
+#      "no calificaban a nadie más".
+#
+#   2. Normalización por evaluador: tu escala se centra en la de todos, así que
+#      inflar a todo el mundo no te da ninguna ventaja. Ataca la mitad de
+#      "se ponían 10".
+#
+# El segundo es el que más pesa: sin él, el primero sólo obliga al colusor a
+# poner notas bajas a los demás, que es peor todavía.
+
+# Qué proporción de los que jugaron hay que calificar para que la tanda cuente.
+# 0.6 y no más alto porque siempre hay alguien que se fue antes o con quien no
+# se cruzó en la cancha.
+COBERTURA_MINIMA_DE_EVALUACION = 0.6
+
+# Con menos de esto no se puede estimar la escala de un evaluador: dos números
+# no tienen dispersión que valga. Esas evaluaciones se usan crudas.
+MINIMO_PARA_NORMALIZAR = 3
+
+# A cuánto se lleva la dispersión de cada evaluador. 1.5 sobre una escala de 1 a
+# 10 deja el grueso de las notas entre 3.5 y 6.5 antes de mezclarse con el resto
+# de la evidencia, que es un rango razonable para "de mal a bien".
+ESCALA_NORMALIZADA = 1.5
+
+# Piso del divisor. Sin esto, un evaluador que le pone lo mismo a todos tiene
+# desvío 0 y la cuenta explota. Con el piso, sus notas colapsan al centro — que
+# es exactamente lo que corresponde: quien no distingue no aporta información.
+DESVIO_MINIMO = 0.5
+
 
 def deadline_de(date: str, time: str | None) -> str:
     """Hasta cuándo dice la app que se puede anotar.

@@ -161,6 +161,20 @@ async def register(data: RegisterRequest, request: Request):
     # Si alguien te anotó como invitado antes de que tuvieras cuenta, y usó el
     # mismo email, recuperamos ese perfil (foto, posición, nivel) y su historial
     # de partidos/calificaciones en vez de arrancar de cero.
+    #
+    # PERO SÓLO CON EL EMAIL VERIFICADO. Heredar un perfil de invitado es
+    # heredar la identidad deportiva de otra persona: su foto, su nivel
+    # estimado y todos sus partidos. Hacerlo con el email sin probar significa
+    # que cualquiera que sepa que "juan@gmail.com" fue anotado como invitado en
+    # algún grupo se registra con ese mail y se queda con el historial de Juan.
+    #
+    # Mientras el alta era cerrada —sólo entraba quien un organizador agregaba a
+    # mano— esto no se podía explotar. Con el alta abierta, sí.
+    #
+    # Así que acá sólo se MIRA si hay un candidato, y la fusión se hace al
+    # verificar (ver `_vincular_invitado_por_email`). Con la verificación
+    # apagada no se fusiona nada automáticamente: el organizador sigue teniendo
+    # el camino manual, que es una decisión humana y no un dato adivinable.
     matched_guest = await db.player_profiles.find_one(
         {"email": data.email, "player_type": "invitado", "user_id": None},
         {"_id": 0},
@@ -189,9 +203,15 @@ async def register(data: RegisterRequest, request: Request):
     await db.player_profiles.insert_one(profile_doc)
 
     linked_guest_history = False
-    if matched_guest:
-        merged = await merge_guest_into_profile(matched_guest["id"], profile_id)
-        linked_guest_history = merged is not None
+    if matched_guest and not EMAIL_VERIFICATION_ENABLED:
+        # Sin verificación no hay forma de probar que el email es tuyo, así que
+        # el historial ajeno no se toca. Los datos del perfil (foto, posición)
+        # que se copiaron arriba son los que el propio organizador cargó para
+        # vos: eso no es historial de otro.
+        logger.info(
+            "Hay un invitado con este email, pero la verificación está apagada: "
+            "el historial no se vincula solo. El organizador puede hacerlo a mano."
+        )
 
     verification_sent = False
 
@@ -260,9 +280,48 @@ async def verify_email(token: str = Query(...)):
         },
     )
 
+    # Recién ahora sabemos que el email es de esta persona, así que recién ahora
+    # se le puede dar el historial que quedó a nombre de ese email.
+    vinculado = await _vincular_invitado_por_email(user["id"], user["email"])
+
     return VerifyEmailResponse(
-        message="Cuenta verificada correctamente. Ya podés iniciar sesión."
+        message=(
+            "Cuenta verificada. Recuperamos los partidos que habías jugado como invitado."
+            if vinculado
+            else "Cuenta verificada correctamente. Ya podés iniciar sesión."
+        )
     )
+
+
+async def _vincular_invitado_por_email(user_id: str, email: str) -> bool:
+    """Le da a una cuenta recién verificada el historial que tenía como invitado.
+
+    Vive acá y no en el registro porque heredar un perfil de invitado es heredar
+    la identidad deportiva de otro: sin probar que el email es tuyo, cualquiera
+    que conozca esa dirección se queda con el historial ajeno.
+
+    Si hay más de un invitado con el mismo email —dos organizadores que anotaron
+    a la misma persona por separado— se fusionan todos, del más viejo al más
+    nuevo. Antes se tomaba sólo uno con `find_one` y la otra mitad del historial
+    quedaba como un invitado fantasma que esa persona no iba a ver nunca.
+    """
+    perfil = await db.player_profiles.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+    if not perfil:
+        return False
+
+    invitados = await db.player_profiles.find(
+        {"email": email, "player_type": "invitado", "user_id": None},
+        {"_id": 0, "id": 1, "created_at": 1},
+    ).to_list(10)
+    if not invitados:
+        return False
+
+    invitados.sort(key=lambda g: g.get("created_at") or "")
+    vinculado = False
+    for invitado in invitados:
+        if await merge_guest_into_profile(invitado["id"], perfil["id"]):
+            vinculado = True
+    return vinculado
 
 
 @router.post("/resend-verification", response_model=VerifyEmailResponse)

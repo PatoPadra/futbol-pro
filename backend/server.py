@@ -137,7 +137,11 @@ from database import (
 
 ADMIN_EMAILS = ["padrapatricio@gmail.com"]
 
-REQUIRED_ENV_VARS = ("MONGO_URL", "DB_NAME", "JWT_SECRET")
+# CORS_ORIGINS entra acá porque su default es "*" con allow_credentials=True, o
+# sea que cualquier sitio puede hacerle pedidos autenticados a la API. Mientras
+# el alta era cerrada el daño era acotado; con el alta abierta, no. Preferimos
+# que el deploy no levante antes que levantar con la puerta abierta.
+REQUIRED_ENV_VARS = ("MONGO_URL", "DB_NAME", "JWT_SECRET", "CORS_ORIGINS")
 
 
 def _validar_entorno():
@@ -157,10 +161,49 @@ def _validar_entorno():
             + ". Configuralas en backend/.env (local) o en el panel del hosting."
         )
 
+    if os.environ.get("CORS_ORIGINS", "").strip() == "*":
+        logger.warning(
+            "CORS_ORIGINS está en '*' con allow_credentials=True: cualquier sitio "
+            "puede hacerle pedidos autenticados a esta API. Poné los dominios "
+            "concretos del front, separados por coma."
+        )
+
+
+def _avisar_si_falta_verificacion():
+    """La verificación de email apagada es una decisión, pero no puede ser un olvido.
+
+    Sin verificar, cualquiera se registra con un email que no controla. Lo que
+    eso ya NO permite es quedarse con el historial de otro: la vinculación
+    automática del perfil de invitado se movió detrás de la verificación (ver
+    routes_auth). Pero siguen entrando cuentas falsas, y con el alta abierta eso
+    ahora significa grupos falsos.
+
+    Si la verificación está prendida pero falta la key de Brevo, es peor que
+    apagada: los mails no salen y NADIE puede entrar. Eso sí es motivo para no
+    levantar.
+    """
+    habilitada = os.environ.get("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
+
+    if habilitada and not os.environ.get("BREVO_API_KEY"):
+        raise RuntimeError(
+            "EMAIL_VERIFICATION_ENABLED está en true pero falta BREVO_API_KEY: "
+            "los mails de verificación no se pueden enviar y nadie podría activar "
+            "su cuenta. Configurá la key, o apagá la verificación."
+        )
+
+    if not habilitada:
+        logger.warning(
+            "La verificación por email está APAGADA: cualquiera puede registrarse "
+            "con una dirección que no le pertenece. La vinculación automática de "
+            "invitados queda deshabilitada por eso. Para prenderla, configurá "
+            "BREVO_API_KEY y poné EMAIL_VERIFICATION_ENABLED=true."
+        )
+
 
 @app.on_event("startup")
 async def startup():
     _validar_entorno()
+    _avisar_si_falta_verificacion()
 
     try:
         await ensure_indexes()
