@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 import random
 import uuid
 
-from constants import POSITION_IDS
+from constants import USER_ROLE_IDS
+from services.account import anonimizar_cuenta
 
 
 
@@ -30,7 +31,7 @@ async def update_user_role(
     data: UpdateRoleRequest,
     user=Depends(require_roles(["admin"])),
 ):
-    if data.role not in ["admin", "organizador", "jugador"]:
+    if data.role not in USER_ROLE_IDS:
         raise HTTPException(status_code=400, detail="Rol inválido")
 
     existing = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -205,3 +206,25 @@ async def seed_test_players_for_match(
         "titular_count": titular_count,
         "suplente_count": suplente_count,
     }
+
+
+@router.delete("/users/{user_id}")
+async def dar_de_baja_usuario(user_id: str, user=Depends(require_roles(["admin"]))):
+    """Un admin da de baja una cuenta ajena.
+
+    Mismo mecanismo que la baja propia: se anonimiza, no se borra. Ver
+    services/account.py.
+    """
+    if user_id == user["user_id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Para darte de baja a vos mismo usá tu perfil, así no te quedás sin admin por accidente",
+        )
+
+    resultado = await anonimizar_cuenta(user_id, motivo="admin")
+    if not resultado:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if resultado["ya_estaba"]:
+        return {"message": "Esa cuenta ya estaba dada de baja"}
+
+    return {"message": "Cuenta dada de baja y datos personales borrados"}

@@ -1,7 +1,10 @@
 from constants import (
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
+    DEFAULT_USER_ROLE,
+    LEGACY_USER_ROLE,
     capacidades_de,
+    deadline_de,
     resolver_stats_seguidas,
     valores_de_stats,
 )
@@ -165,6 +168,13 @@ INDEX_SPEC = {
         {"keys": [("match_id", ASCENDING)]},
         {"keys": [("player_id", ASCENDING)]},
     ],
+    # Invitaciones por link. El token es la llave de entrada al grupo, asi que
+    # va unico: dos invitaciones con el mismo token serian dos puertas que
+    # abren la misma cerradura sin que nadie sepa cual es cual.
+    "group_invitations": [
+        {"keys": [("token", ASCENDING)], "unique": True},
+        {"keys": [("group_id", ASCENDING), ("revoked_at", ASCENDING)]},
+    ],
     "group_seed_ratings": [
         # Un puntaje inicial por evaluador y evaluado dentro del grupo.
         {
@@ -235,7 +245,45 @@ async def backfill_match_defaults() -> None:
             len(ya_jugados),
         )
 
+    await _backfill_roles_y_deadlines()
     await _backfill_estadisticas()
+
+
+async def _backfill_roles_y_deadlines() -> None:
+    """Baja el rol global que se elimino, y recalcula los deadlines clavados.
+
+    Los dos son idempotentes: el filtro no vuelve a encontrar nada despues de la
+    primera corrida.
+
+    El rol "organizador" dejo de existir (ver USER_ROLES). Nadie pierde nada al
+    pasar a "jugador": lo que ese rol habilitaba —crear grupos y torneos— ahora
+    depende del rol DENTRO del grupo, y quien organizaba grupos los sigue
+    organizando.
+
+    Los deadlines viejos son todos `{fecha}T12:00:00+00:00`, o sea las 9 de la
+    manana en Argentina, para partidos que en general se juegan a la noche. Se
+    recalculan desde la hora real del partido.
+    """
+    degradados = await db.users.update_many(
+        {"role": LEGACY_USER_ROLE}, {"$set": {"role": DEFAULT_USER_ROLE}}
+    )
+    if degradados.modified_count:
+        logger.info(
+            "Migracion de roles: %d cuentas pasaron de organizador a jugador",
+            degradados.modified_count,
+        )
+
+    clavados = await db.matches.find(
+        {"deadline": {"$regex": "T12:00:00\+00:00$"}},
+        {"_id": 0, "id": 1, "date": 1, "time": 1},
+    ).to_list(5000)
+    for match in clavados:
+        await db.matches.update_one(
+            {"id": match["id"]},
+            {"$set": {"deadline": deadline_de(match["date"], match.get("time"))}},
+        )
+    if clavados:
+        logger.info("Migracion de deadlines: %d partidos recalculados", len(clavados))
 
 
 async def _backfill_estadisticas() -> None:

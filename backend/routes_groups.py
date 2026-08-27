@@ -8,6 +8,7 @@ from auth import get_current_user
 from database import db
 from constants import (
     DEFAULT_MATCH_MODE,
+    DEFAULT_USER_ROLE,
     modo_disponible,
     modo_label,
     puede_calificar,
@@ -22,6 +23,11 @@ from models import (
     UpdateGroupRequest,
 )
 from services.guest_merge import merge_guest_into_profile
+from services.invitations import (
+    crear_invitacion,
+    invitacion_vigente,
+    revocar_invitacion,
+)
 from services.matches import borrar_partidos
 from services.permissions import (
     ensure_can_delete_group,
@@ -39,11 +45,13 @@ router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
 def normalize_global_role(role: str | None):
-    if role == "admin":
-        return "admin"
-    if role == "organizador":
-        return "organizador"
-    return "jugador"
+    """El rol global, que ahora es admin o jugador y nada mas.
+
+    Las cuentas viejas con el rol "organizador" que se elimino caen en jugador,
+    igual que hace la migracion de arranque. No pierden nada: lo que ese rol
+    habilitaba ahora lo puede hacer cualquiera.
+    """
+    return "admin" if role == "admin" else DEFAULT_USER_ROLE
 
 
 def build_group_permission(member_role: str | None):
@@ -119,9 +127,14 @@ async def resolve_target_player(data: AddGroupMemberRequest, inviter_profile: di
 
 @router.post("")
 async def create_group(data: CreateGroupRequest, user=Depends(get_current_user)):
-    if user["role"] not in ["admin", "organizador"]:
-        raise HTTPException(status_code=403, detail="Solo organizadores o admins pueden crear grupos")
-
+    # Cualquiera puede armar su grupo. Antes hacia falta el rol global de
+    # organizador, que solo un admin otorgaba a mano: el que se registraba por su
+    # cuenta completaba todo el alta y aterrizaba en un panel sin ninguna accion
+    # posible, esperando a un organizador que no tenia.
+    #
+    # No hace falta nada mas para que funcione: quien crea el grupo ya se inserta
+    # como organizador DE ESE GRUPO unas lineas mas abajo, y crear partidos ya
+    # valida por ahi (ensure_group_organizer).
     if not modo_disponible(data.default_match_mode):
         raise HTTPException(
             status_code=400,
@@ -641,6 +654,57 @@ async def merge_guest_member(group_id: str, member_id: str, data: MergeGuestRequ
     return {"message": f"{merged['name']} fue vinculado a {target_profile['name']}"}
 
 
+@router.get("/{group_id}/invite-link")
+async def ver_link_de_invitacion(group_id: str, user=Depends(get_current_user)):
+    """El link vigente del grupo, si hay uno."""
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+
+    invitacion = await invitacion_vigente(group_id)
+    if not invitacion:
+        return {"token": None, "usos": 0, "created_at": None}
+    return {
+        "token": invitacion["token"],
+        "usos": invitacion.get("usos", 0),
+        "created_at": invitacion.get("created_at"),
+    }
+
+
+@router.post("/{group_id}/invite-link")
+async def crear_link_de_invitacion(
+    group_id: str,
+    rotar: bool = False,
+    user=Depends(get_current_user),
+):
+    """Crea el link, o devuelve el que ya había.
+
+    Con `rotar=true` emite uno nuevo y mata el anterior: es lo que se hace
+    cuando el link se filtró y hay que cortarle el acceso a quien lo tenga
+    guardado.
+    """
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+    profile = await get_my_profile_or_404(user)
+
+    invitacion = await crear_invitacion(group_id, profile["id"], rotar=rotar)
+    return {
+        "token": invitacion["token"],
+        "usos": invitacion.get("usos", 0),
+        "created_at": invitacion.get("created_at"),
+        "rotado": bool(rotar),
+    }
+
+
+@router.delete("/{group_id}/invite-link")
+async def revocar_link_de_invitacion(group_id: str, user=Depends(get_current_user)):
+    """Corta el link sin emitir otro: el grupo vuelve a ser sólo por invitación a mano."""
+    await get_group_or_404(group_id)
+    await ensure_can_invite_to_group(group_id, user)
+
+    revocado = await revocar_invitacion(group_id)
+    return {"message": "Link desactivado" if revocado else "No había ningún link activo"}
+
+
 @router.delete("/{group_id}")
 async def delete_group(group_id: str, user=Depends(get_current_user)):
     grupo = await ensure_can_delete_group(group_id, user)
@@ -678,6 +742,7 @@ async def delete_group(group_id: str, user=Depends(get_current_user)):
     # Los torneos que quedan son los ya finalizados: el equipo se va con el
     # grupo, pero el fixture conserva su marcador y su historia.
     await db.tournament_teams.delete_many({"group_id": group_id})
+    await db.group_invitations.delete_many({"group_id": group_id})
     await db.group_members.delete_many({"group_id": group_id})
     await db.group_seed_ratings.delete_many({"group_id": group_id})
     await db.groups.delete_one({"id": group_id})

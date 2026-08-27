@@ -17,6 +17,7 @@ from routes_post_match import router as post_match_router
 from routes_players import router as players_router
 from routes_admin import router as admin_router
 from routes_groups import router as groups_router
+from routes_invitations import router as invitations_router
 from routes_notes import router as notes_router
 from routes_tournaments import router as tournaments_router
 
@@ -38,6 +39,7 @@ app.include_router(post_match_router)
 app.include_router(players_router)
 app.include_router(admin_router)
 app.include_router(groups_router)
+app.include_router(invitations_router)
 app.include_router(notes_router)
 app.include_router(tournaments_router)
 

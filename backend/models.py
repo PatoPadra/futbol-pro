@@ -17,6 +17,7 @@ from constants import (
     TEAM_GENERATION_STATUSES,
     TOURNAMENT_FORMAT_IDS,
     TRACKABLE_STAT_MAP,
+    USER_ROLE_IDS,
 )
 
 # Tope de una estadística en un partido. Como el del marcador, es la red contra
@@ -72,6 +73,7 @@ RegistrationStatus = Literal["titular", "suplente", "baja"]
 MembershipStatus = Literal["activo", "inactivo"]
 TeamGenerationStatus = Literal["borrador", "confirmado"]
 TournamentFormat = Literal["liga", "zonas_eliminatoria", "eliminacion"]
+UserRole = Literal["admin", "jugador"]
 
 assert set(get_args(MatchMode)) == set(MATCH_MODE_IDS), "MatchMode y MATCH_MODES no coinciden"
 assert set(get_args(MatchType)) == set(MATCH_TYPE_IDS), "MatchType y MATCH_TYPES no coinciden"
@@ -82,6 +84,7 @@ assert set(get_args(RegistrationStatus)) == set(REGISTRATION_STATUSES), "Registr
 assert set(get_args(MembershipStatus)) == set(MEMBERSHIP_STATUSES), "MembershipStatus y MEMBERSHIP_STATUSES no coinciden"
 assert set(get_args(TeamGenerationStatus)) == set(TEAM_GENERATION_STATUSES), "TeamGenerationStatus y TEAM_GENERATION_STATUSES no coinciden"
 assert set(get_args(TournamentFormat)) == set(TOURNAMENT_FORMAT_IDS), "TournamentFormat y TOURNAMENT_FORMATS no coinciden"
+assert set(get_args(UserRole)) == set(USER_ROLE_IDS), "UserRole y USER_ROLES no coinciden"
 
 
 class EmailNormalizedModel(BaseModel):
@@ -159,6 +162,18 @@ class PlayerPublicResponse(BaseModel):
     matches_played: int = 0
     estimated_level: Optional[float] = None
     created_at: Optional[str] = None
+
+
+class InvitacionDeGrupo(BaseModel):
+    """Lo que ve alguien al abrir un link de invitacion, antes de entrar."""
+
+    token: str
+    group_id: str
+    group_name: str
+    invitado_por: Optional[str] = None
+    # Si ya es miembro, la pantalla lo lleva al grupo en vez de ofrecerle entrar.
+    ya_soy_miembro: bool = False
+    miembros: int = 0
 
 
 # Guest
@@ -458,7 +473,7 @@ class PlayerNoteRequest(BaseModel):
 
 # Admin
 class UpdateRoleRequest(BaseModel):
-    role: str
+    role: UserRole
 
 
 # Player Metrics

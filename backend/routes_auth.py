@@ -329,6 +329,13 @@ async def login(data: LoginRequest, request: Request):
         await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
+    if user.get("deleted_at"):
+        # Cuenta dada de baja. Se contesta lo mismo que a una contraseña
+        # equivocada, y por la misma razón: quien prueba emails ajenos no tiene
+        # que poder averiguar cuáles existieron alguna vez.
+        await record_attempt(rate_key)
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
     if not await verify_password(data.password, user["password_hash"]):
         await record_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")

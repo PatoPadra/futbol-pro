@@ -5,6 +5,7 @@ from models import ProfileUpdate, ProfileResponse
 from datetime import datetime, timezone
 from pathlib import Path
 
+from services.account import anonimizar_cuenta
 from storage_cloudinary import delete_image, upload_image_bytes
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -110,3 +111,21 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
         await delete_image(anterior["photo_public_id"])
 
     return {"photo_url": uploaded["photo_url"]}
+
+
+@router.delete("")
+async def darme_de_baja(user=Depends(get_current_user)):
+    """Doy de baja mi propia cuenta.
+
+    No borra la fila: la anonimiza. Si se borrara, los partidos que esta persona
+    jugó quedarían con un jugador menos y el historial de sus compañeros
+    empezaría a mentir. Ver services/account.py.
+    """
+    resultado = await anonimizar_cuenta(user["user_id"], motivo="propia")
+    if not resultado:
+        raise HTTPException(status_code=404, detail="La cuenta no existe")
+
+    return {
+        "message": "Tu cuenta fue dada de baja. Tus datos personales se borraron y "
+                   "los partidos que jugaste siguen contando para tus compañeros.",
+    }

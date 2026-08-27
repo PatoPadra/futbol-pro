@@ -65,10 +65,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     payload = decode_token(credentials.credentials)
 
     user_id = payload["sub"]
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1})
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1, "deleted_at": 1})
     if not user:
         # Cuenta borrada (o token de otra base): el token no debe seguir sirviendo.
         raise HTTPException(status_code=401, detail="La cuenta ya no existe")
+    if user.get("deleted_at"):
+        # Dada de baja. La fila sigue existiendo para no romper el historial de
+        # los demás, pero el token que quedó vivo no puede seguir entrando.
+        raise HTTPException(status_code=401, detail="Esta cuenta fue dada de baja")
 
     return {"user_id": user_id, "role": user.get("role", "jugador")}
 

@@ -193,3 +193,61 @@ def test_todo_estado_del_catalogo_esta_en_la_tabla():
     """Un estado sin fila en la tabla no puede salir de ahí nunca más."""
     for estado in MATCH_STATUSES:
         assert estado in TRANSICIONES_PARTIDO, f"{estado} no tiene transiciones declaradas"
+
+
+# --------------------------------------------------------------------- #
+# El rol global, que quedo en dos
+# --------------------------------------------------------------------- #
+
+def test_el_rol_global_organizador_ya_no_existe():
+    """Se fue porque no hacia nada util y le robaba el nombre al que si.
+
+    El backend siempre autorizo por el rol DENTRO del grupo. Tener dos ejes con
+    la palabra "organizador" significando cosas distintas es la causa raiz del
+    bug de permisos que el front arrastro durante meses.
+    """
+    from constants import DEFAULT_USER_ROLE, LEGACY_USER_ROLE, USER_ROLE_IDS
+
+    assert set(USER_ROLE_IDS) == {"admin", "jugador"}
+    assert LEGACY_USER_ROLE not in USER_ROLE_IDS
+    assert DEFAULT_USER_ROLE == "jugador"
+
+
+def test_no_se_puede_asignar_un_rol_global_que_no_existe():
+    from models import UpdateRoleRequest
+
+    with pytest.raises(ValidationError):
+        UpdateRoleRequest(role="organizador")
+
+
+# --------------------------------------------------------------------- #
+# El deadline
+# --------------------------------------------------------------------- #
+
+def test_el_deadline_sale_de_la_hora_del_partido():
+    """Antes era mediodia UTC clavado: las 9 de la mañana en Argentina.
+
+    Para un partido de las 20:00 la pantalla anunciaba el cierre once horas
+    antes, mientras el backend —que nunca leyo el campo— seguia aceptando
+    anotados.
+    """
+    from constants import deadline_de
+
+    assert deadline_de("2026-09-05", "20:30") == "2026-09-05T20:30:00"
+    assert "+00:00" not in deadline_de("2026-09-05", "20:30")
+
+
+def test_un_partido_sin_hora_no_rompe_el_deadline():
+    from constants import deadline_de
+
+    assert deadline_de("2026-09-05", None) == "2026-09-05T00:00:00"
+    assert deadline_de("2026-09-05", "") == "2026-09-05T00:00:00"
+
+
+def test_el_indice_del_token_de_invitacion_es_unico():
+    """El token es la llave de entrada al grupo."""
+    spec = next(
+        s for s in INDEX_SPEC["group_invitations"]
+        if [k for k, _ in s["keys"]] == ["token"]
+    )
+    assert spec.get("unique") is True

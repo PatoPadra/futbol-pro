@@ -8,6 +8,7 @@ from constants import (
     DEFAULT_MATCH_MODE,
     DEFAULT_MATCH_TYPE,
     GROUP_MEMBER_ROLE_IDS,
+    deadline_de,
     MODALITY_CAPACITY,
     puede_organizar,
     capacidades_de,
@@ -142,7 +143,7 @@ async def create_match(data: CreateMatchRequest, user=Depends(get_current_user))
 
     await ensure_group_organizer(data.group_id, user)
     max_players = MODALITY_CAPACITY[data.modality]
-    deadline = f"{data.date}T12:00:00+00:00"
+    deadline = deadline_de(data.date, data.time)
     now = datetime.now(timezone.utc).isoformat()
     match_id = str(uuid.uuid4())
 
@@ -692,7 +693,7 @@ async def duplicate_match(match_id: str, user=Depends(get_current_user)):
 
     new_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    deadline = f"{next_date_str}T12:00:00+00:00"
+    deadline = deadline_de(next_date_str, match.get("time"))
 
     new_match = {
         "id": new_id,

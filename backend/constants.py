@@ -261,6 +261,28 @@ def coords_de(modality: int, formation: str | None) -> list:
 
 GUEST_TO_REGULAR_THRESHOLD = 4
 
+
+def deadline_de(date: str, time: str | None) -> str:
+    """Hasta cuándo dice la app que se puede anotar.
+
+    Es un dato INFORMATIVO: el que cierra la inscripción es el organizador con
+    su botón, y el backend no valida contra esto. Está escrito acá para que los
+    tres lugares que crean partidos lo armen igual.
+
+    Antes era `{fecha}T12:00:00+00:00`, clavado. Eso son las 9 de la mañana en
+    Argentina, o sea que para un partido de las 20:00 la pantalla anunciaba el
+    cierre once horas antes — y el backend, que nunca leyó el campo, seguía
+    aceptando anotados. Front y backend decían cosas distintas sobre el mismo
+    hecho.
+
+    Ahora es la hora del partido, sin offset inventado: la misma convención con
+    la que ya se guardan `date` y `time`, que son hora local del que juega.
+    """
+    hora = (time or "").strip() or "00:00"
+    if len(hora) == 5:  # HH:MM
+        hora = f"{hora}:00"
+    return f"{date}T{hora}"
+
 MATCH_STATUSES = [
     "abierto",
     "cerrado",
@@ -288,6 +310,31 @@ MATCH_STATUSES = [
 #
 # Los estados terminales tienen lista vacía a propósito: un partido completado o
 # cancelado no va a ningún lado.
+# Rol GLOBAL de una cuenta. Son dos y nada más.
+#
+# Existía un tercero, "organizador", que no hacía nada útil: el backend siempre
+# autorizó por el rol DENTRO del grupo (ver GROUP_MEMBER_ROLES). Lo único que
+# lograba era robarle el nombre al que sí funciona — dos ejes con la misma
+# palabra significando cosas distintas, que es la causa raíz del bug de
+# permisos que tuvo el front durante meses.
+#
+# Con el alta abierta ya no queda ninguna acción que dependa del rol global
+# salvo la administración de la app, así que se fue. La migración de arranque
+# pasa a "jugador" a los que lo tenían: no pierden nada, porque crear grupos ya
+# lo puede hacer cualquiera.
+USER_ROLES = [
+    {"id": "admin", "name": "Administrador", "description": "Administra toda la app."},
+    {"id": "jugador", "name": "Jugador", "description": "Juega, y organiza los grupos donde sea organizador."},
+]
+
+USER_ROLE_IDS = [r["id"] for r in USER_ROLES]
+DEFAULT_USER_ROLE = "jugador"
+
+# Rol global que dejó de existir. Se conserva nombrado para que la migración de
+# arranque lo pueda buscar sin que el valor quede escrito suelto en database.py.
+LEGACY_USER_ROLE = "organizador"
+
+
 # ---------------------------------------------------------------------------
 # Roles y estados que NO tenían catálogo
 # ---------------------------------------------------------------------------
