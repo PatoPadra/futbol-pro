@@ -10,6 +10,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import PhotoLightbox from '../components/common/PhotoLightbox';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
   Edit3, Save, X, History, Trophy, UserX, User, Info, IdCard, Compass,
 } from 'lucide-react';
@@ -58,7 +59,7 @@ function confidenceMeta(index) {
 
 export default function PlayerProfile({ isSelf }) {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [metrics, setMetrics] = useState(null);
@@ -66,6 +67,8 @@ export default function PlayerProfile({ isSelf }) {
   const [positions, setPositions] = useState([]);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bajaAbierta, setBajaAbierta] = useState(false);
+  const [dandoDeBaja, setDandoDeBaja] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
 
@@ -120,6 +123,20 @@ export default function PlayerProfile({ isSelf }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerId, isOwn]);
+  const darmeDeBaja = async () => {
+    setDandoDeBaja(true);
+    try {
+      const res = await api.delete('/profile');
+      toast.success(res.data.message);
+      logout();
+      navigate('/');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No pudimos dar de baja tu cuenta');
+      setDandoDeBaja(false);
+      setBajaAbierta(false);
+    }
+  };
+
 
   const handleSave = handleSubmit(async (values) => {
     try {
@@ -487,6 +504,47 @@ export default function PlayerProfile({ isSelf }) {
         name={profile.name}
         photoUrl={profile.photo_url}
         subtitle={profile.player_type === 'frecuente' ? 'Jugador Frecuente' : 'Invitado'}
+      />
+      {/* La baja va al fondo del todo y sin destacar: es una salida, no una
+          accion que haya que ofrecer. Solo en el perfil propio. */}
+      {isOwn && (
+        <div className="mt-10 border-t border-slate-200 pt-6">
+          <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-slate-500">
+            Dar de baja mi cuenta
+          </h2>
+          <p className="mt-2 max-w-prose text-sm text-slate-600">
+            Se borran tus datos personales y no vas a poder volver a entrar con esta
+            cuenta. Los partidos que jugaste siguen contando para tus compañeros:
+            si desaparecieran, los equipos de aquellos sábados quedarían con un
+            jugador menos.
+          </p>
+          <Button
+            variant="outline"
+            shape="pill"
+            onClick={() => setBajaAbierta(true)}
+            className="mt-4 h-11 border-red-200 px-5 text-red-600 hover:bg-red-50"
+            data-testid="delete-account-btn"
+          >
+            Dar de baja mi cuenta
+          </Button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        abierto={bajaAbierta}
+        onCambio={setBajaAbierta}
+        titulo="¿Dar de baja tu cuenta?"
+        descripcion="Esta acción no se puede deshacer."
+        consecuencias={[
+          'Se borran tu nombre, tu email, tu foto y tu fecha de nacimiento.',
+          'No vas a poder volver a entrar con esta cuenta.',
+          'Salís de todos tus grupos y de los partidos que todavía no se jugaron.',
+          'Los partidos que ya jugaste siguen contando para tus compañeros.',
+        ]}
+        textoConfirmar="Dar de baja"
+        cargando={dandoDeBaja}
+        onConfirmar={darmeDeBaja}
+        testId="delete-account-confirm"
       />
     </div>
   );

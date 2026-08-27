@@ -357,8 +357,8 @@ export default function CreateMatch() {
                   </span>
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  Los que se anoten después del cupo quedan como suplentes. La inscripción cierra el día
-                  del partido al mediodía.
+                  Los que se anoten después del cupo quedan como suplentes. La inscripción
+                  la cerrás vos cuando esté la lista, y si te apurás se puede reabrir.
                 </p>
               </div>
             </Panel>

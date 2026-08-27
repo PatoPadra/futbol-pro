@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import '@/App.css';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Toaster } from '@/components/ui/sonner';
 import Layout from '@/components/Layout';
@@ -22,6 +22,7 @@ const MatchesList = lazy(() => import('@/pages/MatchesList'));
 const MatchDetail = lazy(() => import('@/pages/MatchDetail'));
 const CreateGuest = lazy(() => import('@/pages/CreateGuest'));
 const CreateGroup = lazy(() => import('@/pages/CreateGroup'));
+const JoinGroup = lazy(() => import('@/pages/JoinGroup'));
 const GroupDetail = lazy(() => import('@/pages/GroupDetail'));
 const TournamentsList = lazy(() => import('@/pages/TournamentsList'));
 const CreateTournament = lazy(() => import('@/pages/CreateTournament'));
@@ -36,8 +37,12 @@ const AdminPanel = lazy(() => import('@/pages/AdminPanel'));
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="min-h-screen"><PageLoader label="Preparando tu sesión..." /></div>;
-  if (!isAuthenticated) return <Navigate to="/login" />;
+  // Se guarda a dónde iba. Sin esto, quien abre un link de invitación o de
+  // partido sin sesión iniciada termina en el dashboard y el link se perdió —
+  // justo el link que alguien le mandó para que entrara a algún lado.
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   return children;
 }
 
@@ -82,6 +87,9 @@ function AppRoutes() {
       <Route path="/partidos/:id/estadisticas" element={<ProtectedPage><StatsConfirmation /></ProtectedPage>} />
       <Route path="/invitar-jugador" element={<ProtectedPage><CreateGuest /></ProtectedPage>} />
       <Route path="/grupos/crear" element={<ProtectedPage><CreateGroup /></ProtectedPage>} />
+      {/* El link que se comparte, y la version de pegarlo a mano. */}
+      <Route path="/invitacion/:token" element={<ProtectedPage><JoinGroup /></ProtectedPage>} />
+      <Route path="/unirme" element={<ProtectedPage><JoinGroup /></ProtectedPage>} />
       <Route path="/grupos/:id" element={<ProtectedPage><GroupDetail /></ProtectedPage>} />
       <Route path="/torneos" element={<ProtectedPage><TournamentsList /></ProtectedPage>} />
       <Route path="/torneos/crear" element={<ProtectedPage><CreateTournament /></ProtectedPage>} />

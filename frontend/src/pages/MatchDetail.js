@@ -380,7 +380,15 @@ export default function MatchDetail() {
 
   const spotsLeft = match.max_players - titulars.length;
   const isFull = spotsLeft <= 0;
-  const deadlinePassed = Boolean(match.deadline) && new Date() > new Date(match.deadline);
+  // El horario del partido, como dato. NO bloquea: el que cierra la inscripcion
+  // es el organizador con su boton, y eso es lo unico que el servidor respeta.
+  //
+  // Antes esta variable deshabilitaba el boton de anotarse, y el dato que la
+  // alimentaba era mediodia UTC clavado —las 9 de la mañana en Argentina— que
+  // el backend nunca leyo. O sea que la pantalla decia "cerrada" mientras el
+  // servidor seguia aceptando anotados: dos verdades distintas sobre el mismo
+  // hecho, y la que le tocaba al usuario era la falsa.
+  const yaEmpezo = Boolean(match.deadline) && new Date() > new Date(match.deadline);
   const deadlineLabel = formatDeadline(match.deadline);
   const fillPct = match.max_players
     ? Math.min(100, Math.round((titulars.length / match.max_players) * 100))
@@ -388,16 +396,6 @@ export default function MatchDetail() {
 
   const primaryAction = (() => {
     if (match.status === 'abierto' && !isRegistered) {
-      if (deadlinePassed) {
-        return {
-          label: 'Inscripción cerrada',
-          icon: XCircle,
-          disabled: true,
-          className: 'bg-slate-200 text-slate-600 pointer-events-none',
-          testId: 'registration-closed-notice',
-          description: 'El plazo de inscripción venció. Esperá a que el organizador cierre el partido o abra uno nuevo.',
-        };
-      }
       return {
         label: actionLoading === 'register' ? 'Anotando...' : 'Anotarme',
         icon: UserPlus,
@@ -428,9 +426,9 @@ export default function MatchDetail() {
         className: 'border-2 border-slate-200 hover:border-slate-400',
         variant: 'outline',
         testId: 'close-registrations',
-        description: deadlinePassed
-          ? 'El plazo de inscripción ya venció: cerrala para poder armar los equipos. Si te apurás, se puede reabrir.'
-          : `Inscripción abierta hasta ${deadlineLabel || 'el día del partido'}. Si cerrás de más, se puede reabrir.`,
+        description: yaEmpezo
+          ? 'La hora del partido ya pasó: cerrá la inscripción para armar los equipos. Si te apurás, se puede reabrir.'
+          : `El partido es ${deadlineLabel ? `el ${deadlineLabel} hs` : 'pronto'}. Cerrala cuando esté la lista; si cerrás de más, se puede reabrir.`,
       };
     }
     if (isOrganizer && tieneEquipos && ['cerrado', 'equipos_generados'].includes(match.status)) {
@@ -586,7 +584,7 @@ export default function MatchDetail() {
         {match.status === 'abierto' && deadlineLabel && (
           <div
             className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
-              deadlinePassed
+              yaEmpezo
                 ? 'border-amber-200 bg-amber-50 font-semibold text-amber-900'
                 : 'border-slate-200/80 bg-white text-slate-600 shadow-sm'
             }`}
@@ -594,9 +592,9 @@ export default function MatchDetail() {
           >
             <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              {deadlinePassed
-                ? `La inscripción cerró el ${deadlineLabel} hs`
-                : `Inscripción abierta hasta el ${deadlineLabel} hs`}
+              {yaEmpezo
+                ? `El partido era el ${deadlineLabel} hs, y la inscripción sigue abierta`
+                : `Te podés anotar hasta que el organizador cierre la lista. El partido es el ${deadlineLabel} hs`}
             </span>
           </div>
         )}

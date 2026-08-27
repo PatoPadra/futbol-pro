@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,6 +28,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // A dónde iba antes de que lo mandaran a loguearse (lo guarda ProtectedRoute).
+  const volviaA = location.state?.from?.pathname
+    ? `${location.state.from.pathname}${location.state.from.search || ''}`
+    : null;
 
   const {
     register,
@@ -44,7 +49,10 @@ export default function Login() {
     try {
       const res = await login(data.email, data.password);
       toast.success('¡Bienvenido de nuevo!');
-      navigate(res.has_profile ? '/dashboard' : '/completar-perfil');
+      // Si venía de un link (una invitación, un partido compartido), vuelve ahí.
+      // Sin perfil completo no: primero hay que terminar el alta.
+      const destino = res.has_profile ? (volviaA || '/dashboard') : '/completar-perfil';
+      navigate(destino, { replace: true });
     } catch (err) {
       const msg = err.response?.data?.detail || 'No pudimos iniciar tu sesión. Revisá tu email y contraseña.';
       setError(msg);

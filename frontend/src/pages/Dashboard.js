@@ -41,7 +41,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
-  const { puedeCrearPartido } = useCapacidades();
+  const { puedeCrearPartido, grupos, cargando: cargandoGrupos } = useCapacidades();
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -151,7 +151,14 @@ export default function Dashboard() {
         </div>
 
         {upcomingMatches.length === 0 ? (
-          <EmptyMatchesCard canCreate={canCreateMatch} onCreateMatch={goToCreateMatch} />
+          <EmptyMatchesCard
+            canCreate={canCreateMatch}
+            onCreateMatch={goToCreateMatch}
+            // Mientras cargan los grupos no afirmamos que no tiene ninguno: el
+            // parpadeo de "empeza por tu grupo" a alguien que si tiene grupo es
+            // peor que esperar medio segundo.
+            sinGrupos={!cargandoGrupos && grupos.length === 0}
+          />
         ) : (
           <>
             <div className={MATCH_RAIL}>

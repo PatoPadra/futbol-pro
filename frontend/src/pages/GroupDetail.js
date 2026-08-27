@@ -22,6 +22,7 @@ import GroupMembersPanel from '@/components/groups/GroupMembersPanel';
 import GroupModePanel from '@/components/groups/GroupModePanel';
 import GroupNotFound from '@/components/groups/GroupNotFound';
 import HeaderChip from '@/components/groups/HeaderChip';
+import InviteLinkPanel from '@/components/groups/InviteLinkPanel';
 import InviteMemberPanel from '@/components/groups/InviteMemberPanel';
 import LinkGuestDialog from '@/components/groups/LinkGuestDialog';
 import SeedRatingsPanel from '@/components/groups/SeedRatingsPanel';
@@ -364,6 +365,10 @@ export default function GroupDetail() {
           </div>
 
           <div className="space-y-6">
+            {/* El link va ARRIBA del alta por email: es la forma que
+                escala y la que no exige saber el mail de nadie. */}
+            {canInvite && <InviteLinkPanel groupId={id} groupName={group?.name} />}
+
             {canInvite && (
               <InviteMemberPanel
                 onSubmit={handleInviteSubmit(onInviteSubmit)}

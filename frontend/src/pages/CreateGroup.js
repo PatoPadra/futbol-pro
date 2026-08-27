@@ -49,7 +49,10 @@ export default function CreateGroup() {
         ...(modo ? { default_match_mode: modo } : {}),
       });
       toast.success('¡Grupo creado!');
-      navigate(`/partidos/crear?group_id=${res.data.id}`);
+      // Al grupo, no a crear partido. Crear el partido primero deja un grupo de
+      // una sola persona donde nadie se puede anotar: lo urgente despues de
+      // armar el grupo es sumar a la gente, y ahi esta el link.
+      navigate(`/grupos/${res.data.id}`);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al crear grupo');
     } finally {
