@@ -132,7 +132,8 @@ export default function CreateGroup() {
             </Button>
 
             <p className="text-center text-xs leading-relaxed text-slate-600">
-              Solo organizadores y admins pueden crear grupos. Cuando termines te llevamos derecho a
+              Cualquiera puede crear un grupo: al crearlo quedás como organizador y podés sumar al
+              resto con un link, sin que nadie te habilite. Cuando termines te llevamos derecho a
               crear el primer partido, con el grupo ya elegido.
             </p>
           </form>
