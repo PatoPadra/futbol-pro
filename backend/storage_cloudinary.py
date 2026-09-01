@@ -18,6 +18,30 @@ logger = logging.getLogger(__name__)
 cloudinary.config(secure=True)
 
 
+class ImagenNoSubida(Exception):
+    """No se pudo guardar la imagen en Cloudinary.
+
+    Existe para que las rutas puedan distinguir "falló la foto" de cualquier
+    otra cosa y contestar algo legible. Antes no había nada: sin CLOUDINARY_URL
+    el SDK levantaba `ValueError: Must supply api_key` desde adentro del
+    handler, FastAPI devolvía un 500 pelado y al usuario le llegaba
+    "Internal Server Error" en inglés.
+
+    La foto es SIEMPRE opcional. Ninguna operación de verdad —completar el
+    perfil, crear un invitado— puede fallar porque falle esto.
+    """
+
+
+def hay_credenciales() -> bool:
+    """¿Está configurada la cuenta de Cloudinary?
+
+    Sin CLOUDINARY_URL el SDK no se queja al importar ni al configurar: explota
+    recién cuando alguien sube una foto. Preguntarlo antes deja avisar con un
+    mensaje que se entiende en lugar de un error de librería.
+    """
+    return bool(cloudinary.config().api_key)
+
+
 def _subir_sincronico(content: bytes, filename: str, folder: str):
     upload_result = cloudinary.uploader.upload(
         io.BytesIO(content),
@@ -36,7 +60,23 @@ def _subir_sincronico(content: bytes, filename: str, folder: str):
 
 
 async def upload_image_bytes(content: bytes, filename: str, folder: str = "futbol-pro"):
-    return await run_in_threadpool(_subir_sincronico, content, filename, folder)
+    """Sube la imagen y devuelve {photo_url, photo_public_id}.
+
+    Levanta `ImagenNoSubida` ante cualquier problema —cuenta sin configurar,
+    Cloudinary caído, timeout— para que el llamador decida qué hacer. Nunca
+    deja escapar la excepción cruda del SDK.
+    """
+    if not hay_credenciales():
+        logger.error(
+            "CLOUDINARY_URL no está configurada: no se pueden subir imágenes."
+        )
+        raise ImagenNoSubida("El servicio de fotos no está configurado")
+
+    try:
+        return await run_in_threadpool(_subir_sincronico, content, filename, folder)
+    except Exception as e:
+        logger.warning("Error subiendo %s a Cloudinary: %s", filename, e)
+        raise ImagenNoSubida("No pudimos subir la imagen") from e
 
 
 def _borrar_sincronico(public_id: str) -> bool:

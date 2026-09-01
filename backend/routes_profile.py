@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from services.account import anonimizar_cuenta
-from storage_cloudinary import delete_image, upload_image_bytes
+from storage_cloudinary import ImagenNoSubida, delete_image, upload_image_bytes
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
@@ -91,11 +91,22 @@ async def upload_photo(file: UploadFile = File(...), user=Depends(get_current_us
         {"user_id": user["user_id"]}, {"_id": 0, "photo_public_id": 1}
     )
 
-    uploaded = await upload_image_bytes(
-        content=content,
-        filename=file.filename or "profile.jpg",
-        folder="futbol-pro/profiles",
-    )
+    # 503 y no 500: esto es "el servicio de fotos no está disponible", no "la
+    # app se rompió". El mensaje va en castellano porque el front lo muestra
+    # tal cual. Completar el perfil NO depende de esto: la pantalla de alta
+    # guarda los datos primero y la foto después, justamente para que un fallo
+    # acá no se lleve puesta el alta.
+    try:
+        uploaded = await upload_image_bytes(
+            content=content,
+            filename=file.filename or "profile.jpg",
+            folder="futbol-pro/profiles",
+        )
+    except ImagenNoSubida as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. Podés cargarla más tarde desde tu perfil.",
+        ) from e
 
     await db.player_profiles.update_one(
         {"user_id": user["user_id"]},

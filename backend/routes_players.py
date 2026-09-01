@@ -10,7 +10,7 @@ from rating_calculator import calculate_player_metrics
 from services.player_record import calcular_historial, resultado_del_jugador
 from services.permissions import ensure_comparte_grupo
 from services.score_visibility import get_score_visibility_for_player
-from storage_cloudinary import delete_image, upload_image_bytes
+from storage_cloudinary import ImagenNoSubida, delete_image, upload_image_bytes
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -246,11 +246,19 @@ async def upload_guest_photo(player_id: str, file: UploadFile = File(...), user=
     # validar permisos), así que no hace falta otra query.
     public_id_anterior = profile.get("photo_public_id")
 
-    uploaded = await upload_image_bytes(
-        content=content,
-        filename=file.filename or "guest.jpg",
-        folder="futbol-pro/guests",
-    )
+    # Mismo criterio que la foto de perfil: si el servicio de fotos no está,
+    # se avisa con un 503 legible en vez de dejar salir el error del SDK.
+    try:
+        uploaded = await upload_image_bytes(
+            content=content,
+            filename=file.filename or "guest.jpg",
+            folder="futbol-pro/guests",
+        )
+    except ImagenNoSubida as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. El jugador quedó creado igual; probá con la foto más tarde.",
+        ) from e
 
     await db.player_profiles.update_one(
         {"id": player_id},

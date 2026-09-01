@@ -9,7 +9,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
-import { Camera, Loader2, AlertCircle, Users } from 'lucide-react';
+import { Camera, Loader2, AlertCircle, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/common/PageHeader';
 import Reveal from '@/components/common/Reveal';
@@ -36,6 +36,18 @@ const profileSchema = z.object({
 
 const INPUT_BASE =
   'mt-1.5 h-12 bg-slate-50 focus-visible:ring-2 focus-visible:ring-turf/30';
+
+/**
+ * Mensaje mostrable de un error de la API.
+ *
+ * El `detail` de FastAPI es un string en los errores que tiramos nosotros, pero
+ * en los 422 de validación es una LISTA de objetos. Pasársela a `toast` rompe
+ * el render, así que todo lo que no sea string cae al texto por defecto.
+ */
+function mensajeDeError(err, porDefecto) {
+  const detail = err?.response?.data?.detail;
+  return typeof detail === 'string' && detail ? detail : porDefecto;
+}
 
 /**
  * Encabezado de sección del onboarding.
@@ -144,6 +156,18 @@ export default function CompleteProfile() {
 
   const openFilePicker = () => fileInputRef.current?.click();
 
+  // Sin esto no había forma de arrepentirse: una vez elegida la foto, si la
+  // subida fallaba se reintentaba con la misma foto y fallaba igual. La única
+  // salida era recargar la página.
+  const quitarFoto = () => {
+    setPhoto(null);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const selectPrimary = (posId) => {
     setValue('primary_position', posId, { shouldValidate: true });
     setValue('secondary_positions', secondaryPositions.filter(s => s !== posId), { shouldValidate: true });
@@ -166,22 +190,47 @@ export default function CompleteProfile() {
     setValue('unwanted_position', unwantedPosition === posId ? '' : posId, { shouldValidate: true });
   };
 
+  /**
+   * El PERFIL PRIMERO y la foto después.
+   *
+   * Antes la foto se subía antes del PUT, así que un fallo en la subida
+   * —Cloudinary sin configurar, la red del celular, un timeout— cortaba la
+   * función y el perfil no se guardaba nunca, aunque la persona hubiera
+   * completado todo. Combinado con que la foto es el paso 1 y no se podía
+   * quitar, el alta quedaba trabada de verdad: reintentar fallaba igual.
+   *
+   * La foto es opcional y su fallo no puede costar el alta. Va después, y si
+   * se cae se avisa pero se sigue: el perfil ya está guardado.
+   */
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      if (photo) {
-        const fd = new FormData();
-        fd.append('file', photo);
-        await api.post('/profile/photo', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-      }
       await api.put('/profile', data);
       updateUser({ has_profile: true });
-      toast.success('¡Perfil completado!');
+
+      let fotoFallo = false;
+      if (photo) {
+        try {
+          const fd = new FormData();
+          fd.append('file', photo);
+          await api.post('/profile/photo', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } catch (errFoto) {
+          fotoFallo = true;
+          // Mensaje fijo y tranquilizador: lo único que la persona necesita
+          // saber es que su perfil está a salvo. El motivo real ("el servicio
+          // de fotos no está configurado") es información de operaciones, no
+          // algo que un jugador pueda accionar; va a la consola.
+          console.warn('No se pudo subir la foto de perfil:', mensajeDeError(errFoto, errFoto?.message));
+          toast.warning('Guardamos tu perfil. La foto no se pudo subir — la podés cargar después desde tu perfil.');
+        }
+      }
+
+      if (!fotoFallo) toast.success('¡Perfil completado!');
       navigate('/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'No pudimos guardar tu perfil. Intentá de nuevo.');
+      toast.error(mensajeDeError(err, 'No pudimos guardar tu perfil. Intentá de nuevo.'));
     } finally {
       setLoading(false);
     }
@@ -242,7 +291,7 @@ export default function CompleteProfile() {
                   )}
                 </div>
               </label>
-              <div className="text-sm text-slate-600">
+              <div className="min-w-0 text-sm text-slate-600">
                 <p className="font-semibold text-slate-900">
                   {photoPreview ? 'Buena foto' : 'Subí tu foto'}
                 </p>
@@ -251,6 +300,18 @@ export default function CompleteProfile() {
                     ? 'Tocá la imagen si querés cambiarla.'
                     : 'Tocá el cuadro y elegí una imagen de hasta 5 MB.'}
                 </p>
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={quitarFoto}
+                    disabled={loading}
+                    data-testid="photo-remove-btn"
+                    className="-ml-2 mt-1 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 font-semibold text-slate-600 transition-colors hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 disabled:opacity-50 motion-reduce:transition-none"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                    Quitar foto
+                  </button>
+                )}
               </div>
             </div>
           </PasoSeccion>
