@@ -17,6 +17,7 @@ import PositionPicker from '@/components/players/PositionPicker';
 import GenderPicker from '@/components/players/GenderPicker';
 import { GENERO_IDS } from '@/constants/generos';
 import { cn } from '@/lib/utils';
+import { usePrefersReducedMotion } from '@/hooks/use-media-preferences';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
@@ -29,11 +30,20 @@ const profileSchema = z.object({
   // Se pide en el alta y no queda opcional porque el balanceador lo usa para
   // repartir los mixtos. "Prefiero no decir" es la salida para quien no lo
   // quiera declarar, así que pedirlo no obliga a nadie a nada.
-  gender: z.enum(GENERO_IDS, { errorMap: () => ({ message: 'Elegí una opción' }) }),
+  gender: z.enum(GENERO_IDS, { errorMap: () => ({ message: 'Elegí tu género' }) }),
   primary_position: z.string().min(1, 'Seleccioná tu posición principal'),
   secondary_positions: z.array(z.string()).max(3).default([]),
   unwanted_position: z.string().default(''),
 });
+
+/**
+ * Los campos obligatorios en el orden en que se ven en pantalla.
+ *
+ * No es el orden en que `zod` devuelve los errores: `Object.values(errors)[0]`
+ * podía nombrar cualquiera de los cuatro. Al mandar el foco a ese campo,
+ * importa que sea el PRIMERO que la persona se salteó, no uno arbitrario.
+ */
+const CAMPOS_EN_ORDEN = ['name', 'birth_date', 'gender', 'primary_position'];
 
 const INPUT_BASE =
   'mt-1.5 h-12 bg-slate-50 focus-visible:ring-2 focus-visible:ring-turf/30';
@@ -131,6 +141,7 @@ function CampoOpcional({ titulo, ayuda, resumen, abierto, onToggle, testId, chil
 export default function CompleteProfile() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const reducedMotion = usePrefersReducedMotion();
   const [positions, setPositions] = useState([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
   const [positionsError, setPositionsError] = useState(false);
@@ -140,6 +151,10 @@ export default function CompleteProfile() {
   const [verSecundarias, setVerSecundarias] = useState(false);
   const [verNoDeseada, setVerNoDeseada] = useState(false);
   const fileInputRef = useRef(null);
+  // Un contenedor por campo obligatorio, para poder llevar el scroll y el foco
+  // hasta el que falta cuando el formulario no valida.
+  const camposRef = useRef({});
+  const registrarCampo = (nombre) => (el) => { camposRef.current[nombre] = el; };
 
   const {
     register,
@@ -298,9 +313,38 @@ export default function CompleteProfile() {
     }
   };
 
+  /**
+   * Llevar a la persona hasta el campo que falta.
+   *
+   * Antes esto sólo tiraba un toast. En un celular el botón de guardar está al
+   * final del formulario y el campo sin completar podía quedar a dos mil
+   * píxeles hacia arriba: el mensaje decía qué faltaba, pero no dónde, y había
+   * que salir a buscarlo a mano. Ahora el scroll y el foco van al primer campo
+   * incompleto en orden visual.
+   */
   const onInvalid = (formErrors) => {
-    const firstMessage = Object.values(formErrors)[0]?.message;
-    if (firstMessage) toast.error(firstMessage);
+    const campo =
+      CAMPOS_EN_ORDEN.find((c) => formErrors[c]) || Object.keys(formErrors)[0];
+    if (!campo) return;
+
+    toast.error(formErrors[campo]?.message || 'Faltan datos para completar tu perfil.');
+
+    const contenedor = camposRef.current[campo];
+    if (!contenedor) return;
+
+    contenedor.scrollIntoView({
+      behavior: reducedMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
+
+    // Enfocar VA DESPUÉS y a propósito sin `preventScroll`: el scroll que el
+    // navegador hace al enfocar es la red de seguridad por si `scrollIntoView`
+    // no llegara a aplicarse. Cuando sí se aplicó, el campo ya quedó centrado y
+    // enfocar no mueve nada más, porque ese scroll es el mínimo necesario.
+    //
+    // Género y posición principal no son inputs sino grupos de botones, así que
+    // el foco cae en el primer botón del grupo.
+    contenedor.querySelector('input, button, select, textarea')?.focus();
   };
 
   return (
@@ -320,7 +364,7 @@ export default function CompleteProfile() {
         <Reveal from="up" className="block">
           <PasoSeccion paso="1" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad. El género lo usamos para repartir parejo los partidos mixtos.">
             <div className="space-y-4">
-              <div>
+              <div ref={registrarCampo('name')}>
                 <Label htmlFor="name">Nombre</Label>
                 <Input
                   id="name"
@@ -335,7 +379,7 @@ export default function CompleteProfile() {
                   <p className="mt-1 text-xs text-red-600" data-testid="profile-name-error">{errors.name.message}</p>
                 )}
               </div>
-              <div>
+              <div ref={registrarCampo('birth_date')}>
                 <Label htmlFor="birth_date">Fecha de nacimiento</Label>
                 <Input
                   id="birth_date"
@@ -352,7 +396,7 @@ export default function CompleteProfile() {
                   <p className="mt-1 text-xs text-red-600" data-testid="birthdate-error">{errors.birth_date.message}</p>
                 )}
               </div>
-              <div>
+              <div ref={registrarCampo('gender')}>
                 <Label>Género</Label>
                 <p className="mt-1 text-xs text-slate-600">
                   Cuando el partido es mixto, lo usamos para que los dos equipos queden parejos.
@@ -396,7 +440,7 @@ export default function CompleteProfile() {
               </div>
             ) : (
               <div className="space-y-6">
-                <div>
+                <div ref={registrarCampo('primary_position')}>
                   <Label className="text-sm font-semibold">Posición principal</Label>
                   <PositionPicker
                     className="mt-2"
