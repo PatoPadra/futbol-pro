@@ -9,13 +9,14 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
-import { Camera, Loader2, AlertCircle, Users, X } from 'lucide-react';
+import { Camera, ChevronDown, Loader2, AlertCircle, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/common/PageHeader';
 import Reveal from '@/components/common/Reveal';
 import PositionPicker from '@/components/players/PositionPicker';
 import GenderPicker from '@/components/players/GenderPicker';
 import { GENERO_IDS } from '@/constants/generos';
+import { cn } from '@/lib/utils';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 
@@ -80,6 +81,53 @@ function PasoSeccion({ paso, titulo, ayuda, children, testId }) {
   );
 }
 
+/**
+ * Campo opcional plegado.
+ *
+ * POR QUÉ EXISTE: los dos selectores opcionales de posición ocupaban 1408 px de
+ * los 3745 que medía el formulario en un celular — el 38% del alta era campos
+ * que nadie está obligado a llenar. Once opciones desplegadas cada uno, dos
+ * veces, entre la posición principal y el botón de guardar.
+ *
+ * Plegados pasan a ser dos renglones. Quien los quiera, los abre; quien no,
+ * llega al botón. El resumen de lo elegido se muestra cerrado para que nadie
+ * pierda de vista lo que cargó.
+ */
+function CampoOpcional({ titulo, ayuda, resumen, abierto, onToggle, testId, children }) {
+  const panelId = `${testId}-panel`;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={abierto}
+        aria-controls={panelId}
+        data-testid={`${testId}-toggle`}
+        className="flex min-h-[60px] w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-900">{titulo}</span>
+          <span className="mt-0.5 block text-xs text-slate-600">
+            {!abierto && resumen ? resumen : ayuda}
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            'h-5 w-5 shrink-0 text-slate-500 transition-transform motion-reduce:transition-none',
+            abierto && 'rotate-180',
+          )}
+        />
+      </button>
+      {abierto && (
+        <div id={panelId} className="px-4 pb-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CompleteProfile() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -89,6 +137,8 @@ export default function CompleteProfile() {
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [verSecundarias, setVerSecundarias] = useState(false);
+  const [verNoDeseada, setVerNoDeseada] = useState(false);
   const fileInputRef = useRef(null);
 
   const {
@@ -113,6 +163,18 @@ export default function CompleteProfile() {
   const primaryPosition = watch('primary_position');
   const secondaryPositions = watch('secondary_positions') || [];
   const unwantedPosition = watch('unwanted_position');
+
+  /**
+   * Lo elegido, en nombres, para mostrarlo con el campo plegado. Devuelve ''
+   * cuando no hay nada, y el llamador cae en el texto de ayuda.
+   */
+  const nombresDePosiciones = (seleccion) => {
+    const ids = Array.isArray(seleccion) ? seleccion : (seleccion ? [seleccion] : []);
+    if (ids.length === 0) return '';
+    return ids
+      .map((id) => positions.find((p) => p.id === id)?.name || id)
+      .join(', ');
+  };
 
   const loadPositions = useCallback(() => {
     setPositionsLoading(true);
@@ -254,12 +316,154 @@ export default function CompleteProfile() {
       />
 
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-6 space-y-5" noValidate>
-        {/* Foto */}
+        {/* Datos básicos */}
         <Reveal from="up" className="block">
+          <PasoSeccion paso="1" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad. El género lo usamos para repartir parejo los partidos mixtos.">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nombre</Label>
+                <Input
+                  id="name"
+                  data-testid="profile-name-input"
+                  disabled={loading}
+                  autoComplete="name"
+                  aria-invalid={!!errors.name}
+                  className={`${INPUT_BASE} ${errors.name ? 'border-red-300' : ''}`}
+                  {...register('name')}
+                />
+                {errors.name && (
+                  <p className="mt-1 text-xs text-red-600" data-testid="profile-name-error">{errors.name.message}</p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="birth_date">Fecha de nacimiento</Label>
+                <Input
+                  id="birth_date"
+                  type="date"
+                  data-testid="profile-birthdate-input"
+                  disabled={loading}
+                  autoComplete="bday"
+                  max={todayISO()}
+                  aria-invalid={!!errors.birth_date}
+                  className={`${INPUT_BASE} ${errors.birth_date ? 'border-red-300' : ''}`}
+                  {...register('birth_date')}
+                />
+                {errors.birth_date && (
+                  <p className="mt-1 text-xs text-red-600" data-testid="birthdate-error">{errors.birth_date.message}</p>
+                )}
+              </div>
+              <div>
+                <Label>Género</Label>
+                <p className="mt-1 text-xs text-slate-600">
+                  Cuando el partido es mixto, lo usamos para que los dos equipos queden parejos.
+                </p>
+                <GenderPicker
+                  className="mt-2"
+                  value={gender}
+                  onChange={(id) => setValue('gender', id, { shouldValidate: true })}
+                  disabled={loading}
+                />
+                {errors.gender && (
+                  <p className="mt-1 text-xs text-red-600" data-testid="gender-error">{errors.gender.message}</p>
+                )}
+              </div>
+            </div>
+          </PasoSeccion>
+        </Reveal>
+
+        {/* Posiciones */}
+        <Reveal from="up" delay={60} className="block">
+          <PasoSeccion paso="2" titulo="Dónde jugás" ayuda="Es lo que usamos para repartir los equipos parejos.">
+            {positionsLoading ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-slate-600" data-testid="positions-loading">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Cargando posiciones...
+              </div>
+            ) : positionsError ? (
+              <div className="flex flex-col items-center gap-2 rounded-2xl bg-red-50 py-5 text-center" data-testid="positions-error">
+                <AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />
+                <p className="text-sm text-red-600">No pudimos cargar las posiciones.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  shape="pill"
+                  onClick={loadPositions}
+                  data-testid="positions-retry-btn"
+                  className="h-11 bg-white px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
+                >
+                  Reintentar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <Label className="text-sm font-semibold">Posición principal</Label>
+                  <PositionPicker
+                    className="mt-2"
+                    ariaLabel="Posición principal"
+                    opciones={positions}
+                    seleccion={primaryPosition}
+                    testIdPrefix="primary-pos"
+                    onToggle={selectPrimary}
+                    disabled={loading}
+                  />
+                  {errors.primary_position && (
+                    <p className="mt-2 text-xs text-red-600" data-testid="primary-position-error">{errors.primary_position.message}</p>
+                  )}
+                </div>
+
+                {/* Los dos opcionales van plegados: son el 38% del alto del
+                    formulario y ninguno hace falta para jugar. Ver CampoOpcional. */}
+                <div className="space-y-3">
+                  <CampoOpcional
+                    testId="secondary-positions"
+                    titulo="¿Jugás en otra posición?"
+                    ayuda="Sumá hasta 3. Opcional."
+                    resumen={nombresDePosiciones(secondaryPositions)}
+                    abierto={verSecundarias}
+                    onToggle={() => setVerSecundarias((v) => !v)}
+                  >
+                    <PositionPicker
+                      ariaLabel="Posiciones secundarias"
+                      opciones={positions.filter(p => p.id !== primaryPosition)}
+                      seleccion={secondaryPositions}
+                      testIdPrefix="secondary-pos"
+                      onToggle={toggleSecondary}
+                      disabled={loading}
+                      tono="charcoal"
+                    />
+                  </CampoOpcional>
+
+                  <CampoOpcional
+                    testId="unwanted-position"
+                    titulo="¿Hay alguna donde no querés jugar?"
+                    ayuda="El organizador va a evitar ponerte ahí. Opcional."
+                    resumen={nombresDePosiciones(unwantedPosition)}
+                    abierto={verNoDeseada}
+                    onToggle={() => setVerNoDeseada((v) => !v)}
+                  >
+                    <PositionPicker
+                      ariaLabel="Posición no deseada"
+                      opciones={positions}
+                      seleccion={unwantedPosition}
+                      testIdPrefix="unwanted-pos"
+                      onToggle={toggleUnwanted}
+                      disabled={loading}
+                      tono="danger"
+                      marca="cruz"
+                    />
+                  </CampoOpcional>
+                </div>
+              </div>
+            )}
+          </PasoSeccion>
+        </Reveal>
+        {/* Foto */}
+        <Reveal from="up" delay={120} className="block">
           <PasoSeccion
-            paso="1"
+            paso="3"
             titulo="Tu foto"
-            ayuda="Ayuda a que tus compañeros te reconozcan en la cancha. La podés cargar después."
+            ayuda="Opcional. Ayuda a que tus compañeros te reconozcan en la cancha, y la podés cargar después."
           >
             <div className="flex items-center gap-5">
               <label
@@ -317,136 +521,6 @@ export default function CompleteProfile() {
           </PasoSeccion>
         </Reveal>
 
-        {/* Datos básicos */}
-        <Reveal from="up" delay={60} className="block">
-          <PasoSeccion paso="2" titulo="Tus datos" ayuda="Con la fecha de nacimiento calculamos tu edad. El género lo usamos para repartir parejo los partidos mixtos.">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nombre</Label>
-                <Input
-                  id="name"
-                  data-testid="profile-name-input"
-                  disabled={loading}
-                  autoComplete="name"
-                  aria-invalid={!!errors.name}
-                  className={`${INPUT_BASE} ${errors.name ? 'border-red-300' : ''}`}
-                  {...register('name')}
-                />
-                {errors.name && (
-                  <p className="mt-1 text-xs text-red-600" data-testid="profile-name-error">{errors.name.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="birth_date">Fecha de nacimiento</Label>
-                <Input
-                  id="birth_date"
-                  type="date"
-                  data-testid="profile-birthdate-input"
-                  disabled={loading}
-                  autoComplete="bday"
-                  max={todayISO()}
-                  aria-invalid={!!errors.birth_date}
-                  className={`${INPUT_BASE} ${errors.birth_date ? 'border-red-300' : ''}`}
-                  {...register('birth_date')}
-                />
-                {errors.birth_date && (
-                  <p className="mt-1 text-xs text-red-600" data-testid="birthdate-error">{errors.birth_date.message}</p>
-                )}
-              </div>
-              <div>
-                <Label>Género</Label>
-                <p className="mt-1 text-xs text-slate-600">
-                  Cuando el partido es mixto, lo usamos para que los dos equipos queden parejos.
-                </p>
-                <GenderPicker
-                  className="mt-2"
-                  value={gender}
-                  onChange={(id) => setValue('gender', id, { shouldValidate: true })}
-                  disabled={loading}
-                />
-                {errors.gender && (
-                  <p className="mt-1 text-xs text-red-600" data-testid="gender-error">{errors.gender.message}</p>
-                )}
-              </div>
-            </div>
-          </PasoSeccion>
-        </Reveal>
-
-        {/* Posiciones */}
-        <Reveal from="up" delay={120} className="block">
-          <PasoSeccion paso="3" titulo="Dónde jugás" ayuda="Es lo que usamos para repartir los equipos parejos.">
-            {positionsLoading ? (
-              <div className="flex items-center gap-2 py-4 text-sm text-slate-600" data-testid="positions-loading">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Cargando posiciones...
-              </div>
-            ) : positionsError ? (
-              <div className="flex flex-col items-center gap-2 rounded-2xl bg-red-50 py-5 text-center" data-testid="positions-error">
-                <AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />
-                <p className="text-sm text-red-600">No pudimos cargar las posiciones.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  shape="pill"
-                  onClick={loadPositions}
-                  data-testid="positions-retry-btn"
-                  className="h-11 bg-white px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2"
-                >
-                  Reintentar
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <Label className="text-sm font-semibold">Posición principal</Label>
-                  <PositionPicker
-                    className="mt-2"
-                    ariaLabel="Posición principal"
-                    opciones={positions}
-                    seleccion={primaryPosition}
-                    testIdPrefix="primary-pos"
-                    onToggle={selectPrimary}
-                    disabled={loading}
-                  />
-                  {errors.primary_position && (
-                    <p className="mt-2 text-xs text-red-600" data-testid="primary-position-error">{errors.primary_position.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label className="text-sm font-semibold">Posiciones secundarias (máx. 3)</Label>
-                  <p className="mt-1 text-xs text-slate-600">Donde también te la rebuscás. Opcional.</p>
-                  <PositionPicker
-                    className="mt-2"
-                    ariaLabel="Posiciones secundarias"
-                    opciones={positions.filter(p => p.id !== primaryPosition)}
-                    seleccion={secondaryPositions}
-                    testIdPrefix="secondary-pos"
-                    onToggle={toggleSecondary}
-                    disabled={loading}
-                    tono="charcoal"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-sm font-semibold">Posición no deseada (opcional)</Label>
-                  <p className="mt-1 text-xs text-slate-600">El organizador va a evitar ponerte ahí si puede.</p>
-                  <PositionPicker
-                    className="mt-2"
-                    ariaLabel="Posición no deseada"
-                    opciones={positions}
-                    seleccion={unwantedPosition}
-                    testIdPrefix="unwanted-pos"
-                    onToggle={toggleUnwanted}
-                    disabled={loading}
-                    tono="danger"
-                    marca="cruz"
-                  />
-                </div>
-              </div>
-            )}
-          </PasoSeccion>
-        </Reveal>
 
         <Button
           type="submit"
